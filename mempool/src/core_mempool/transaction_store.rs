@@ -739,7 +739,6 @@ impl TransactionStore {
         self.parking_lot_index.size()
     }
 
-    #[cfg(test)]
     pub(crate) fn get_transactions(&self) -> &HashMap<AccountAddress, AccountTransactions> {
         &self.transactions
     }

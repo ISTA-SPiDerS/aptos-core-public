@@ -19,6 +19,7 @@ use aptos_gas::{
     LATEST_GAS_FEATURE_VERSION,
 };
 use aptos_keygen::KeyGen;
+use aptos_state_view::StateView;
 use aptos_state_view::TStateView;
 use aptos_types::{
     access_path::AccessPath,
@@ -32,17 +33,21 @@ use aptos_types::{
     state_store::state_key::StateKey,
     transaction::{
         ExecutionStatus, SignedTransaction, Transaction, TransactionOutput, TransactionStatus,
-        VMValidatorResult,
+        VMValidatorResult, TransactionRegister,
     },
     vm_status::VMStatus,
     write_set::WriteSet,
 };
 use aptos_vm::{
+    adapter_common::{preprocess_transaction, VMAdapter},
     block_executor::BlockAptosVM,
     data_cache::{AsMoveResolver, StorageAdapter},
     move_vm_ext::{MoveVmExt, SessionId},
-    AptosVM, VMExecutor, VMValidator,
+    AptosVM, VMExecutor, VMValidator, logging::AdapterLogSchema,
 };
+use aptos_vm_validator::vm_validator::VMSpeculationResult;
+use aptos_vm_validator::vm_validator::TransactionValidation;
+use aptos_vm_validator::vm_validator::ReadRecorderView;
 use aptos_vm_genesis::{generate_genesis_change_set_for_testing_with_count, GenesisOptions};
 use move_core_types::{
     account_address::AccountAddress,
@@ -52,6 +57,7 @@ use move_core_types::{
 };
 use move_vm_types::gas::UnmeteredGasMeter;
 use num_cpus;
+use aptos_types::transaction::{ExecutionMode, Profiler};
 use serde::Serialize;
 use std::{
     env,
@@ -59,6 +65,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use aptos_types::on_chain_config::OnChainConfigPayload;
 
 static RNG_SEED: [u8; 32] = [9u8; 32];
 
@@ -74,6 +81,51 @@ pub const TRACE_DIR_OUTPUT: &str = "output";
 
 /// Maps block number N to the index of the input and output transactions
 pub type TraceSeqMapping = (usize, Vec<usize>, Vec<usize>);
+
+#[derive(Clone)]
+pub struct FakeValidation {
+    vm: AptosVM,
+    state_view: FakeDataStore,
+}
+
+impl TransactionValidation for FakeValidation {
+    type ValidationInstance = AptosVM;
+
+    fn validate_transaction(&self, txn: SignedTransaction) -> anyhow::Result<VMValidatorResult> {
+        use aptos_vm::VMValidator;
+
+        Ok(self.vm.validate_transaction(txn, &self.state_view))
+    }
+
+    fn restart(&mut self, _config: OnChainConfigPayload) -> anyhow::Result<()> {
+        self.vm = AptosVM::new_for_validation(&self.state_view);
+        Ok(())
+    }
+
+    fn notify_commit(&mut self) {
+    }
+
+    fn speculate_transaction(
+        &self,
+        transaction: &SignedTransaction,
+    ) -> anyhow::Result<(VMSpeculationResult, VMStatus)> {
+        let log_context = AdapterLogSchema::new(self.state_view.id(), 0);
+        let mut read_recorder_view = ReadRecorderView::new_view(&self.state_view);
+        let preprocessed_txn = preprocess_transaction::<AptosVM>(Transaction::UserTransaction(transaction.clone()));
+
+        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn, &read_recorder_view, &log_context).unwrap();
+        let input = read_recorder_view.reads();
+
+        anyhow::Ok((VMSpeculationResult {input, output}, status))
+    }
+
+    fn add_write_set(
+        &mut self,
+        write_set: &WriteSet
+    ) {
+        self.state_view.add_write_set(write_set);
+    }
+}
 
 /// Provides an environment to run a VM instance.
 ///
@@ -348,20 +400,17 @@ impl FakeExecutor {
     /// However, this doesn't apply the results of successful transactions to the data store.
     pub fn execute_block(
         &self,
-        txn_block: Vec<SignedTransaction>,
+        txn_block: TransactionRegister<SignedTransaction>,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
         self.execute_transaction_block(
-            txn_block
-                .into_iter()
-                .map(Transaction::UserTransaction)
-                .collect(),
+            txn_block.map_par_txns(Transaction::UserTransaction)
         )
     }
 
     /// Executes the transaction as a singleton block and applies the resulting write set to the
     /// data store. Panics if execution fails
     pub fn execute_and_apply(&mut self, transaction: SignedTransaction) -> TransactionOutput {
-        let mut outputs = self.execute_block(vec![transaction]).unwrap();
+        let mut outputs = self.execute_block(vec![transaction].into()).unwrap();
         assert!(outputs.len() == 1, "transaction outputs size mismatch");
         let output = outputs.pop().unwrap();
         match output.status() {
@@ -382,14 +431,17 @@ impl FakeExecutor {
 
     pub fn execute_transaction_block_parallel(
         &self,
-        txn_block: Vec<Transaction>,
+        txn_block: TransactionRegister<Transaction>,
+        cores: usize,
+        mode: ExecutionMode,
+        profiler:  &mut Profiler
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
-        BlockAptosVM::execute_block(txn_block, &self.data_store, usize::min(4, num_cpus::get()))
+        BlockAptosVM::execute_block(txn_block, &self.data_store, usize::min(cores, num_cpus::get()), mode, profiler)
     }
 
     pub fn execute_transaction_block(
         &self,
-        txn_block: Vec<Transaction>,
+        txn_block: TransactionRegister<Transaction>,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
         let mut trace_map = TraceSeqMapping::default();
 
@@ -398,17 +450,13 @@ impl FakeExecutor {
             let trace_data_dir = trace_dir.join(TRACE_DIR_DATA);
             trace_map.0 = Self::trace(trace_data_dir.as_path(), self.get_state_view());
             let trace_input_dir = trace_dir.join(TRACE_DIR_INPUT);
-            for txn in &txn_block {
+            for txn in txn_block.txns() {
                 let input_seq = Self::trace(trace_input_dir.as_path(), txn);
                 trace_map.1.push(input_seq);
             }
         }
 
-        let output = AptosVM::execute_block(txn_block.clone(), &self.data_store);
-        if !self.no_parallel_exec {
-            let parallel_output = self.execute_transaction_block_parallel(txn_block);
-            assert_eq!(output, parallel_output);
-        }
+        let output = AptosVM::execute_block(txn_block, self.get_state_view());
 
         if let Some(logger) = &self.executed_output {
             logger.log(format!("{:#?}\n", output).as_str());
@@ -442,7 +490,7 @@ impl FakeExecutor {
     pub fn execute_transaction(&self, txn: SignedTransaction) -> TransactionOutput {
         let txn_block = vec![txn];
         let mut outputs = self
-            .execute_block(txn_block)
+            .execute_block(txn_block.into())
             .expect("The VM should not fail to startup");
         outputs
             .pop()
@@ -484,6 +532,10 @@ impl FakeExecutor {
         &self.data_store
     }
 
+    pub fn get_transaction_validation(&self) -> FakeValidation {
+        FakeValidation {vm: AptosVM::new(self.get_state_view()), state_view: self.data_store.clone()}
+    }
+
     pub fn new_block(&mut self) {
         self.new_block_with_timestamp(self.block_time + 1);
     }
@@ -520,7 +572,7 @@ impl FakeExecutor {
         txn_block.insert(0, Transaction::BlockMetadata(new_block_metadata));
 
         let outputs = self
-            .execute_transaction_block(txn_block)
+            .execute_transaction_block(TransactionRegister::new(txn_block, vec![], vec![]))
             .expect("Must execute transactions");
 
         // Check if we emit the expected event for block metadata, there might be more events for transaction fees.

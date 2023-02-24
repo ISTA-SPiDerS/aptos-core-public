@@ -206,7 +206,7 @@ impl fmt::Display for QuorumStoreRequest {
 #[derive(Debug)]
 pub enum QuorumStoreResponse {
     /// Block to submit to consensus
-    GetBatchResponse(Vec<SignedTransaction>),
+    GetBatchResponse(Vec<SignedTransaction>, Vec<u64>, Vec<Vec<u64>>),
     CommitResponse(),
 }
 

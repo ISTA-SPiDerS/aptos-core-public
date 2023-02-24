@@ -98,7 +98,7 @@ prop_compose! {
         txns in prop::collection::vec(any::<SignedTransaction>(), 0..MAX_PROPOSAL_TRANSACTIONS),
     ) -> BlockType {
         BlockType::Proposal{
-            payload: Payload::DirectMempool(txns),
+            payload: Payload::DirectMempool(txns.into()),
             author,
             failed_authors: Vec::new(),
         }

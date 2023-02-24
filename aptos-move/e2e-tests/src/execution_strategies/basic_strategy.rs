@@ -47,7 +47,7 @@ impl Executor for BasicExecutor {
 
     fn execute_block(&mut self, txns: Block<Self::Txn>) -> ExecutorResult<Self::BlockResult> {
         let mut block = self.strategy.partition(txns);
-        let outputs = self.executor.execute_block(block.remove(0))?;
+        let outputs = self.executor.execute_block(block.remove(0).into())?;
         for output in &outputs {
             self.executor.apply_write_set(output.write_set())
         }

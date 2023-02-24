@@ -74,7 +74,7 @@ fn move_from_across_blocks() {
         Transaction::UserTransaction(remove_resource_txn(&sender, 19, vec![module])),
     ];
     let output = executor
-        .execute_transaction_block(txns)
+        .execute_transaction_block(txns.into())
         .expect("Must execute transactions");
     assert_eq!(
         output[0].status(),
@@ -129,7 +129,7 @@ fn borrow_after_move() {
         Transaction::UserTransaction(borrow_resource_txn(&sender, 15, vec![module])),
     ];
     let output = executor
-        .execute_transaction_block(txns)
+        .execute_transaction_block(txns.into())
         .expect("Must execute transactions");
     assert_eq!(
         output[0].status(),
@@ -182,7 +182,7 @@ fn change_after_move() {
         Transaction::UserTransaction(change_resource_txn(&sender, 15, vec![module.clone()])),
     ];
     let output = executor
-        .execute_transaction_block(txns)
+        .execute_transaction_block(txns.into())
         .expect("Must execute transactions");
     assert_eq!(
         output[0].status(),

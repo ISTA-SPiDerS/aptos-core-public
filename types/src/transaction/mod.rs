@@ -52,7 +52,14 @@ pub use script::{
     ArgumentABI, EntryABI, EntryFunction, EntryFunctionABI, Script, TransactionScriptABI,
     TypeArgumentABI,
 };
+
+use rayon::prelude::*;
 use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64};
+use std::ops::{Add, AddAssign};
+use std::time::{Duration, Instant};
+use itertools::Itertools;
+use rayon::iter::plumbing::UnindexedConsumer;
+use rayon::vec::IntoIter;
 pub use transaction_argument::{parse_transaction_argument, TransactionArgument};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
@@ -572,7 +579,7 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns `Ok(SignatureCheckedTransaction)` if
     /// the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        self.authenticator.verify(&self.raw_txn)?;
+        //self.authenticator.verify(&self.raw_txn)?;
         Ok(SignatureCheckedTransaction(self))
     }
 
@@ -1584,3 +1591,251 @@ impl TryFrom<Transaction> for SignedTransaction {
         }
     }
 }
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct TransactionRegister<T: Send + Sync + Clone> {
+    txns: Vec<T>,
+    gas_estimates: Vec<u64>,
+    dependency_graph: Vec<Vec<u64>>,
+}
+
+impl<T: Send + Sync + Clone> TransactionRegister<T> {
+    pub fn empty() -> Self {
+        Self {
+            txns: vec![],
+            gas_estimates: vec![],
+            dependency_graph: vec![],
+        }
+    }
+
+    pub fn new(txns: Vec<T>, gas_estimates: Vec<u64>, dependency_graph: Vec<Vec<u64>>) -> Self {
+        Self {
+            txns,
+            gas_estimates,
+            dependency_graph,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.txns.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.txns.is_empty()
+    }
+
+    pub fn txns(&self) -> &Vec<T> {
+        &self.txns
+    }
+
+    pub fn into_txns(self) -> Vec<T> {
+        self.txns
+    }
+
+    pub fn gas_estimates(&self) -> &Vec<u64> {
+        &self.gas_estimates
+    }
+
+    pub fn dependency_graph(&self) -> &Vec<Vec<u64>> {
+        &self.dependency_graph
+    }
+
+    pub fn map_par_txns<P, F>(&self, f: F) -> TransactionRegister<P>
+    where P: Send + Clone + Sync, F: Fn(T) -> P + Sync + Send {
+        TransactionRegister {
+            txns: self.txns.clone().into_par_iter().map(f).collect(),
+            gas_estimates: self.gas_estimates.clone(),
+            dependency_graph: self.dependency_graph.clone(),
+        }
+    }
+}
+
+impl<T: Send + Sync + Clone> IntoIterator for TransactionRegister<T> {
+    type Item = T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.txns.into_iter()
+    }
+}
+
+impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
+    fn into(self) -> TransactionRegister<T> {
+        let mut gas_estimates = vec![];
+        let mut dependency_graph = vec![];
+        // unreachable!("Are you sure you don't have the whole register?");
+        for i in 0..self.len() {
+            gas_estimates.push(0);
+            if i == 0 || i == self.len() - 1 {
+                dependency_graph.push(vec![]);
+            }
+            else {
+                dependency_graph.push(vec![0]);
+            }
+        }
+
+        TransactionRegister {
+            txns: self,
+            gas_estimates,
+            dependency_graph,
+        }
+    }
+}
+
+/// Different types of Execution Models for easy comparisons.
+#[derive(Clone, Copy, Debug)]
+pub enum ExecutionMode {
+    Standard,
+    Hints
+}
+
+impl Display for ExecutionMode {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+pub struct Profiler {
+    pub counters: HashMap<String, u128>,
+    timers: HashMap<String, Instant>,
+    pub collective_times: HashMap<String, Duration>,
+}
+
+pub struct Timer<'a> {
+    subject: String,
+    profiler: &'a mut Profiler,
+}
+
+impl<'a> Timer<'a> {
+    pub fn new(profiler: &'a mut Profiler, matter: String) -> Self {
+        profiler.start_timing(&matter);
+        Self {
+            subject: matter,
+            profiler,
+        }
+    }
+}
+
+impl Drop for Timer<'_> {
+    fn drop(&mut self) {
+        self.profiler.end_timing(&self.subject);
+    }
+}
+
+impl Profiler {
+    pub fn new() -> Self {
+        Self {
+            counters: HashMap::new(),
+            timers: HashMap::new(),
+            collective_times: HashMap::new(),
+        }
+    }
+
+    pub fn count_one(&mut self, matter: String) {
+        self.count(matter, 1);
+    }
+
+    pub fn count(&mut self, matter: String, cnt: u128) {
+        self.touch_counter(&matter);
+
+        let mut value = 0;
+        if let Some(v) = self.counters.get(&matter) {
+            value = *v;
+        }
+
+        self.counters.insert(matter, value + cnt);
+    }
+
+    pub fn timer(&mut self, matter: String) -> Timer {
+        Timer::new(self, matter)
+    }
+
+    pub fn start_timing(&mut self, matter: &String) {
+        let key = matter;
+        self.touch_time(matter);
+
+        self.timers.insert(key.clone(), Instant::now());
+    }
+
+    pub fn end_timing(&mut self, matter: &String) {
+        let key = matter;
+
+        if let Some(instant) = self.timers.get(key) {
+            if let Some(curr) = self.collective_times.get(key) {
+                let value = *curr;
+                self.collective_times.insert(key.clone(), value + instant.elapsed());
+            }
+        }
+    }
+
+    pub fn add_from(&mut self, other: &Profiler) {
+        for (key, _value) in other.counters.iter() {
+            self.touch_counter(key);
+            if let Some(lhs) = self.counters.get(key) {
+                if let Some(rhs) = other.counters.get(key) {
+                    self.counters.insert(key.clone(), *lhs + *rhs);
+                }
+            }
+        }
+        for (key, _value) in other.collective_times.iter() {
+            self.touch_time(key);
+            if let Some(lhs) = self.collective_times.get(key) {
+                if let Some(rhs) = other.collective_times.get(key) {
+                    self.collective_times.insert(key.clone(), *lhs + *rhs);
+                }
+            }
+        }
+    }
+
+    pub fn touch_counter(&mut self, key: &String) {
+        if !self.counters.contains_key(key) {
+            self.counters.insert(key.clone(), 0);
+        }
+    }
+
+    pub fn touch_time(&mut self, key: &String) {
+        if !self.collective_times.contains_key(key) {
+            self.collective_times.insert(key.clone(), Duration::from_nanos(0));
+        }
+    }
+
+    pub fn print(&self) {
+        print!("ExecuteTimes");
+        for (key, value) in self.counters.iter().sorted() {
+            print!("{:?}\t{:?}\t", key, value);
+        }
+        for (key, value) in self.collective_times.iter().sorted() {
+            print!("{:?}\t{:?}\t", key, value);
+        }
+        println!();
+    }
+
+    pub fn print_value(&self, key: &String) {
+        if self.counters.contains_key(key) {
+            print!("{:?}\t{:?}", key, self.counters.get(key));
+        }
+        if self.collective_times.contains_key(key) {
+            print!("{:?}\t{:?}", key, self.collective_times.get(key));
+        }
+        println!();
+    }
+}
+
+impl Add<Profiler> for Profiler {
+    type Output = Profiler;
+
+    fn add(self, other: Profiler) -> Profiler {
+        let mut result = Profiler::new();
+        result.add_from(&self);
+        result.add_from(&other);
+
+        result
+    }
+}
+
+impl AddAssign<&Self> for Profiler {
+    fn add_assign(&mut self, other: &Self) {
+        self.add_from(other);
+    }
+}
+

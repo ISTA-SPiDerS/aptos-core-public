@@ -13,7 +13,8 @@ use aptos_types::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt, fmt::Write, sync::Arc};
-use tokio::sync::oneshot;
+use futures::channel::oneshot;
+use aptos_types::transaction::TransactionRegister;
 
 /// The round of a block is a consensus-internal counter, which starts with 0 and increases
 /// monotonically. It is used for the protocol safety and liveness (please see the detailed
@@ -79,7 +80,7 @@ impl ProofWithData {
 /// The payload in block.
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub enum Payload {
-    DirectMempool(Vec<SignedTransaction>),
+    DirectMempool(TransactionRegister<SignedTransaction>),
     InQuorumStore(ProofWithData),
 }
 
@@ -88,7 +89,7 @@ impl Payload {
         if quorum_store_enabled {
             Payload::InQuorumStore(ProofWithData::new(Vec::new()))
         } else {
-            Payload::DirectMempool(Vec::new())
+            Payload::DirectMempool(TransactionRegister::empty())
         }
     }
 
@@ -117,7 +118,7 @@ impl Payload {
     /// This is computationally expensive on the first call
     pub fn size(&self) -> usize {
         match self {
-            Payload::DirectMempool(txns) => txns
+            Payload::DirectMempool(txns) => txns.txns()
                 .par_iter()
                 .with_min_len(100)
                 .map(|txn| txn.raw_txn_bytes_len())
@@ -184,7 +185,7 @@ impl From<&Vec<&Payload>> for PayloadFilter {
             let mut exclude_txns = Vec::new();
             for payload in exclude_payloads {
                 if let Payload::DirectMempool(txns) = payload {
-                    for txn in txns {
+                    for txn in txns.txns() {
                         exclude_txns.push(TransactionSummary {
                             sender: txn.sender(),
                             sequence_number: txn.sequence_number(),

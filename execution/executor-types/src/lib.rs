@@ -22,6 +22,7 @@ use aptos_types::{
     },
     write_set::WriteSet,
 };
+use aptos_types::transaction::TransactionRegister;
 pub use error::Error;
 pub use executed_chunk::ExecutedChunk;
 pub use parsed_transaction_output::ParsedTransactionOutput;
@@ -78,7 +79,7 @@ pub struct StateSnapshotDelta {
     pub jmt_updates: Vec<(HashValue, (HashValue, StateKey))>,
 }
 
-pub trait BlockExecutorTrait<T>: Send + Sync {
+pub trait BlockExecutorTrait<T: std::clone::Clone + std::marker::Send + std::marker::Sync>: Send + Sync {
     /// Get the latest committed block id
     fn committed_block_id(&self) -> HashValue;
 
@@ -88,7 +89,7 @@ pub trait BlockExecutorTrait<T>: Send + Sync {
     /// Executes a block.
     fn execute_block(
         &self,
-        block: (HashValue, Vec<T>),
+        block: (HashValue, TransactionRegister<T>),
         parent_block_id: HashValue,
     ) -> Result<StateComputeResult, Error>;
 

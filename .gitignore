@@ -1,3 +1,5 @@
+test_storage/
+
 # Rust specific ignores
 # Please follow https://help.github.com/en/articles/ignoring-files to create a global
 # .gitignore file locally for IDE/Emacs/Vim generated files.
@@ -109,3 +111,9 @@ aptos-move/aptos-vm-profiling/**/*.txt
 metadata-cache
 local
 run_*
+
+aptos-move/e2e-testsuite/out.txt
+
+aptos-move/e2e-testsuite/random.txt
+
+*.txt

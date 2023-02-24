@@ -108,7 +108,7 @@ pub mod data_cache;
 #[cfg(feature = "mirai-contracts")]
 pub mod foreign_contracts;
 
-mod adapter_common;
+pub mod adapter_common;
 pub mod aptos_vm;
 mod aptos_vm_impl;
 pub mod block_executor;
@@ -129,6 +129,7 @@ use aptos_types::{
     vm_status::VMStatus,
 };
 use std::marker::Sync;
+use aptos_types::transaction::TransactionRegister;
 
 /// This trait describes the VM's validation interfaces.
 pub trait VMValidator {
@@ -149,7 +150,7 @@ pub trait VMExecutor: Send + Sync {
 
     /// Executes a block of transactions and returns output for each one of them.
     fn execute_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: &(impl StateView + Sync),
     ) -> Result<Vec<TransactionOutput>, VMStatus>;
 }

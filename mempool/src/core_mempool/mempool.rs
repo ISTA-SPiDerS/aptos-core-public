@@ -9,6 +9,7 @@ use crate::{
         index::TxnPointer,
         transaction::{MempoolTransaction, TimelineState},
         transaction_store::TransactionStore,
+        filler::BlockFiller,
     },
     counters,
     counters::{CONSENSUS_PULLED_LABEL, E2E_LABEL, INSERT_LABEL, LOCAL_LABEL, REMOVE_LABEL},
@@ -163,13 +164,11 @@ impl Mempool {
     /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
-    pub(crate) fn get_batch(
+    pub(crate) fn get_batch<F: BlockFiller>(
         &self,
-        max_txns: u64,
-        max_bytes: u64,
         mut seen: HashSet<TxnPointer>,
-    ) -> Vec<SignedTransaction> {
-        let mut result = vec![];
+        block_filler: &mut F,
+    ) {
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
         // and gas_price 1, 10 respectively)
@@ -177,7 +176,6 @@ impl Mempool {
         // but can't be executed before first txn. Once observed, such txn will be saved in
         // `skipped` DS and rechecked once it's ancestor becomes available
         let mut skipped = HashSet::new();
-        let mut total_bytes = 0;
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
         // iterate over the queue of transactions based on gas price
@@ -194,44 +192,33 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
-                result.push(ptr);
-                if (result.len() as u64) == max_txns {
-                    break;
-                }
-
-                // check if we can now include some transactions
-                // that were skipped before for given account
-                let mut skipped_txn = (txn.address, tx_seq + 1);
-                while skipped.contains(&skipped_txn) {
-                    seen.insert(skipped_txn);
-                    result.push(skipped_txn);
-                    if (result.len() as u64) == max_txns {
-                        break 'main;
+                if let Some(signed_txn) = self.transactions.get(&ptr.0, ptr.1) {
+                    if !block_filler.add(signed_txn) {
+                        continue;
                     }
-                    skipped_txn = (txn.address, skipped_txn.1 + 1);
+                    if block_filler.is_full() {
+                        break;
+                    }
+
+                    // check if we can now include some transactions
+                    // that were skipped before for given account
+                    let mut skipped_txn = (txn.address, tx_seq + 1);
+                    while skipped.contains(&skipped_txn) {
+                        if let Some(signed_txn) = self.transactions.get(&skipped_txn.0, skipped_txn.1) {
+                            if block_filler.add(signed_txn) {
+                                seen.insert(skipped_txn);
+                                skipped_txn = (txn.address, skipped_txn.1 + 1);
+                            } else {
+                                break;
+                            }
+                            if block_filler.is_full() {
+                                break 'main;
+                            }
+                        }
+                    }
                 }
             } else {
                 skipped.insert(TxnPointer::from(txn));
-            }
-        }
-        let result_size = result.len();
-        let mut block = Vec::with_capacity(result_size);
-        for (address, seq) in result {
-            if let Some((txn, ranking_score)) =
-                self.transactions.get_with_ranking_score(&address, seq)
-            {
-                let txn_size = txn.raw_txn_bytes_len();
-                if total_bytes + txn_size > max_bytes as usize {
-                    break;
-                }
-                total_bytes += txn_size;
-                block.push(txn);
-                counters::core_mempool_txn_ranking_score(
-                    CONSENSUS_PULLED_LABEL,
-                    CONSENSUS_PULLED_LABEL,
-                    self.transactions.get_bucket(ranking_score),
-                    ranking_score,
-                );
             }
         }
 
@@ -240,21 +227,7 @@ impl Mempool {
             seen_consensus = seen_size,
             walked = txn_walked,
             seen_after = seen.len(),
-            result_size = result_size,
-            block_size = block.len(),
-            byte_size = total_bytes,
         );
-
-        counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block.len());
-        counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
-        for transaction in &block {
-            self.log_latency(
-                transaction.sender(),
-                transaction.sequence_number(),
-                counters::CONSENSUS_PULLED_LABEL,
-            );
-        }
-        block
     }
 
     /// Periodic core mempool garbage collection.

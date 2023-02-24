@@ -68,6 +68,7 @@ use std::{
         Arc,
     },
 };
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
 
 static EXECUTION_CONCURRENCY_LEVEL: OnceCell<usize> = OnceCell::new();
 static NUM_PROOF_READING_THREADS: OnceCell<usize> = OnceCell::new();
@@ -100,7 +101,7 @@ impl AptosVM {
 
     /// Sets execution concurrency level when invoked the first time.
     pub fn set_concurrency_level_once(mut concurrency_level: usize) {
-        concurrency_level = min(concurrency_level, num_cpus::get());
+        concurrency_level = min(concurrency_level, 4);
         // Only the first call succeeds, due to OnceCell semantics.
         EXECUTION_CONCURRENCY_LEVEL.set(concurrency_level).ok();
     }
@@ -1046,7 +1047,7 @@ impl VMExecutor for AptosVM {
     /// mutability. Writes to be applied to the data view are encoded in the write set part of a
     /// transaction output.
     fn execute_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: &(impl StateView + Sync),
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
         fail_point!("move_adapter::execute_block", |_| {
@@ -1064,7 +1065,7 @@ impl VMExecutor for AptosVM {
 
         let count = transactions.len();
         let ret =
-            BlockAptosVM::execute_block(transactions, state_view, Self::get_concurrency_level());
+            BlockAptosVM::execute_block(transactions, state_view, Self::get_concurrency_level(), ExecutionMode::Standard, &mut Profiler::new());
         if ret.is_ok() {
             // Record the histogram count for transactions per block.
             BLOCK_TRANSACTION_COUNT.observe(count as f64);

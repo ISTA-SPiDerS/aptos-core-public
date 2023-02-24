@@ -44,7 +44,7 @@ pub static CREATE_ACCOUNT_NEXT: Lazy<u64> = Lazy::new(|| {
         create_account_txn(sender.account(), &Account::new(), 11),
     ];
     let output = &executor
-        .execute_block(txns)
+        .execute_block(txns.into())
         .expect("The VM should not fail to startup");
     output[1].gas_used()
 });
@@ -84,7 +84,7 @@ pub static CREATE_ACCOUNT_TOO_LOW_NEXT: Lazy<u64> = Lazy::new(|| {
         create_account_txn(sender.account(), &Account::new(), 11),
     ];
     let output = &executor
-        .execute_block(txns)
+        .execute_block(txns.into())
         .expect("The VM should not fail to startup");
     output[1].gas_used()
 });
@@ -121,7 +121,7 @@ pub static CREATE_EXISTING_ACCOUNT_NEXT: Lazy<u64> = Lazy::new(|| {
         create_account_txn(sender.account(), receiver.account(), 11),
     ];
     let output = &executor
-        .execute_block(txns)
+        .execute_block(txns.into())
         .expect("The VM should not fail to startup");
     output[1].gas_used()
 });
@@ -189,7 +189,7 @@ pub static PEER_TO_PEER_NEW_RECEIVER_NEXT: Lazy<u64> = Lazy::new(|| {
         peer_to_peer_txn(sender.account(), &Account::new(), 11, 20_000),
     ];
     let output = &executor
-        .execute_block(txns)
+        .execute_block(txns.into())
         .expect("The VM should not fail to startup");
     output[1].gas_used()
 });
@@ -231,7 +231,7 @@ pub static PEER_TO_PEER_NEW_RECEIVER_TOO_LOW_NEXT: Lazy<u64> = Lazy::new(|| {
         peer_to_peer_txn(sender.account(), &Account::new(), 11, balance),
     ];
     let output = &executor
-        .execute_block(txns)
+        .execute_block(txns.into())
         .expect("The VM should not fail to startup");
     output[1].gas_used()
 });

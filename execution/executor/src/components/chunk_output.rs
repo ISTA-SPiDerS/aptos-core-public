@@ -33,7 +33,7 @@ pub struct ChunkOutput {
 
 impl ChunkOutput {
     pub fn by_transaction_execution<V: VMExecutor>(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<Self> {
         let transaction_outputs = Self::execute_block::<V>(transactions.clone(), &state_view)?;
@@ -44,7 +44,7 @@ impl ChunkOutput {
         update_counters_for_processed_chunk(&transactions, &transaction_outputs, "executed");
 
         Ok(Self {
-            transactions,
+            transactions: transactions.txns().clone(),
             transaction_outputs,
             state_cache: state_view.into_state_cache(),
         })

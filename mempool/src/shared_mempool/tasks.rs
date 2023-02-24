@@ -4,7 +4,7 @@
 
 //! Tasks that are executed by coordinators (short-lived compared to coordinators)
 use crate::{
-    core_mempool::{CoreMempool, TimelineState, TxnPointer},
+    core_mempool::{CoreMempool, TimelineState, TxnPointer, BlockFiller, DependencyFiller},
     counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::{BroadcastError, MempoolSyncMsg},
@@ -453,6 +453,8 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 .map(|txn| (txn.sender, txn.sequence_number))
                 .collect();
             let txns;
+            let dependency_graph;
+            let gas_estimates;
             {
                 let lock_timer = counters::mempool_service_start_latency_timer(
                     counters::GET_BLOCK_LOCK_LABEL,
@@ -473,17 +475,24 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 }
 
                 let max_txns = cmp::max(max_txns, 1);
-                let _get_batch_timer = counters::mempool_service_start_latency_timer(
-                    counters::GET_BLOCK_GET_BATCH_LABEL,
-                    counters::REQUEST_SUCCESS_LABEL,
-                );
-                txns = mempool.get_batch(max_txns, max_bytes, exclude_transactions);
+                const CORES: u64 = 8;
+                const GAS_PER_CORE: u64 = 1_000_000_000;
+                let mut validator = smp.validator.write();
+                let mut block_filler: DependencyFiller<TransactionValidator, CORES> = DependencyFiller::new(
+                    &mut validator,
+                    GAS_PER_CORE,
+                    max_bytes,
+                    max_txns);
+                mempool.get_batch(exclude_transactions, &mut block_filler);
+                gas_estimates = block_filler.get_gas_estimates();
+                dependency_graph = block_filler.get_dependency_graph();
+                txns = block_filler.get_block();
             }
 
             // mempool_service_transactions is logged inside get_batch
 
             (
-                QuorumStoreResponse::GetBatchResponse(txns),
+                QuorumStoreResponse::GetBatchResponse(txns, gas_estimates, dependency_graph),
                 callback,
                 counters::GET_BLOCK_LABEL,
             )

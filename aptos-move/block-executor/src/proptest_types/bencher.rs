@@ -18,6 +18,8 @@ use proptest::{
     test_runner::TestRunner,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
+use aptos_types::transaction::ExecutionMode::Standard;
+use aptos_types::transaction::Profiler;
 
 pub struct Bencher<K, V> {
     transaction_size: usize,
@@ -117,7 +119,7 @@ where
             Task<KeyType<K>, ValueType<V>>,
             EmptyDataView<KeyType<K>, ValueType<V>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &self.transactions, &data_view)
+        .execute_transactions_parallel((), &self.transactions, &data_view, Standard, &mut Profiler::new())
         .map(|zipped| zipped.into_iter().map(|(res, _)| res).collect());
 
         self.expected_output.assert_output(&output);

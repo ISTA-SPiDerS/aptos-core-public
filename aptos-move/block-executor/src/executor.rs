@@ -11,17 +11,36 @@ use crate::{
     txn_last_input_output::TxnLastInputOutput,
     view::{LatestView, MVHashMapView},
 };
+use itertools::Itertools;
+use rayon::{prelude::*, scope, ThreadPoolBuilder};
+use std::{
+    collections::HashMap,
+    collections::HashSet,
+    hash::Hash,
+    io,
+    marker::PhantomData,
+    ops::{Add, AddAssign},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, RwLock, Barrier
+    },
+    thread,
+    thread::spawn,
+    time::{Instant, Duration},
+};
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
+use dashmap::DashMap;
 use aptos_logger::debug;
-use aptos_mvhashmap::{MVHashMap, MVHashMapError, MVHashMapOutput};
+use aptos_mvhashmap::{MVHashMap, MVHashMapError, MVHashMapOutput, TxnIndex};
 use aptos_state_view::TStateView;
 use aptos_types::write_set::WriteOp;
 use num_cpus;
 use once_cell::sync::Lazy;
 use std::{
     collections::btree_map::BTreeMap,
-    marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering},
 };
+use aptos_infallible::Mutex;
+use crate::txn_last_input_output::ReadDescriptor;
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
@@ -30,6 +49,13 @@ pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
         .build()
         .unwrap()
 });
+
+pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
+
+pub enum ExtrResult<E: ExecutorTask> {
+    Error(Error<<E as ExecutorTask>::Error>),
+    Value(Vec<<E as ExecutorTask>::Output>),
+}
 
 pub struct BlockExecutor<T, E, S> {
     // number of active concurrent tasks, corresponding to the maximum number of rayon
@@ -67,7 +93,12 @@ where
         scheduler: &Scheduler,
         executor: &E,
         base_view: &S,
+        profiler: &mut Profiler,
+        thread_id: usize,
     ) -> SchedulerTask {
+
+        profiler.start_timing(&"execute#1".to_string());
+
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
@@ -81,6 +112,10 @@ where
             idx_to_execute,
             false,
         );
+        profiler.end_timing(&"execute#1".to_string());
+
+        profiler.start_timing(&"execute#2".to_string());
+
         let mut prev_modified_keys = last_input_output.modified_keys(idx_to_execute);
 
         // For tracking whether the recent execution wrote outside of the previous write/delta set.
@@ -130,8 +165,21 @@ where
             versioned_data_cache.delete(&k, idx_to_execute);
         }
 
+        profiler.end_timing(&"execute#2".to_string());
+
+        profiler.start_timing(&"execute#3".to_string());
+
         last_input_output.record(idx_to_execute, speculative_view.take_reads(), result);
-        scheduler.finish_execution(idx_to_execute, incarnation, updates_outside)
+
+        profiler.end_timing(&"execute#3".to_string());
+
+        profiler.start_timing(&"execute#4".to_string());
+
+        let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler, thread_id);
+
+        profiler.end_timing(&"execute#4".to_string());
+
+        return result;
     }
 
     fn validate(
@@ -141,6 +189,8 @@ where
         last_input_output: &TxnLastInputOutput<T::Key, E::Output, E::Error>,
         versioned_data_cache: &MVHashMap<T::Key, T::Value>,
         scheduler: &Scheduler,
+        profiler: &mut Profiler,
+        thread_id: usize,
     ) -> SchedulerTask {
         use MVHashMapError::*;
         use MVHashMapOutput::*;
@@ -178,7 +228,7 @@ where
                 versioned_data_cache.mark_estimate(&k, idx_to_validate);
             }
 
-            scheduler.finish_abort(idx_to_validate, incarnation)
+            scheduler.finish_abort(idx_to_validate, incarnation, profiler, thread_id)
         } else {
             scheduler.finish_validation(idx_to_validate, validation_wave);
             SchedulerTask::NoTask
@@ -194,13 +244,26 @@ where
         scheduler: &Scheduler,
         base_view: &S,
         committing: bool,
+        total_profiler: Arc<Mutex<&mut Profiler>>,
+        barrier: Arc<Barrier>,
+        idx: usize,
     ) {
+        let mut profiler = Profiler::new();
+
         // Make executor for each task. TODO: fast concurrent executor.
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
+        profiler.start_timing(&"thread time".to_string());
+        let mut extimer: u128 = 0;
+        let mut valtimer: u128 = 0;
+        let mut resttimer: u128 = 0;
+        let thread_id = idx;
+
         drop(init_timer);
 
         let mut scheduler_task = SchedulerTask::NoTask;
+        barrier.wait();
+
         loop {
             // Only one thread try_commit to avoid contention.
             if committing {
@@ -211,36 +274,92 @@ where
                     }
                 }
             }
-            scheduler_task = match scheduler_task {
-                SchedulerTask::ValidationTask(version_to_validate, wave) => self.validate(
-                    version_to_validate,
-                    wave,
-                    last_input_output,
-                    versioned_data_cache,
-                    scheduler,
-                ),
-                SchedulerTask::ExecutionTask(version_to_execute, None) => self.execute(
-                    version_to_execute,
-                    block,
-                    last_input_output,
-                    versioned_data_cache,
-                    scheduler,
-                    &executor,
-                    base_view,
-                ),
-                SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                    let (lock, cvar) = &*condvar;
-                    // Mark dependency resolved.
-                    *lock.lock() = true;
-                    // Wake up the process waiting for dependency.
-                    cvar.notify_one();
+            if (thread_id == 0) {
+                scheduler_task = match scheduler_task {
+                    SchedulerTask::ValidationTask(version_to_validate, wave) => {
+                        profiler.start_timing(&"validation".to_string());
+                        profiler.count_one("val".to_string());
+                        let ret = self.validate(
+                            version_to_validate,
+                            wave,
+                            last_input_output,
+                            versioned_data_cache,
+                            scheduler,
+                            &mut profiler,
+                            thread_id,
+                        );
+                        profiler.end_timing(&"validation".to_string());
+                        ret
+                    },
+                    SchedulerTask::NoTask => {
+                        profiler.start_timing(&"scheduling".to_string());
+                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
+                        profiler.end_timing(&"scheduling".to_string());
+                        ret
+                    },
+                    SchedulerTask::Done => {
+                        // println!("Received Done hurray");
+                        profiler.end_timing(&"thread time".to_string());
+                        (*total_profiler.lock()).add_from(&profiler);
 
-                    SchedulerTask::NoTask
-                },
-                SchedulerTask::NoTask => scheduler.next_task(committing),
-                SchedulerTask::Done => {
-                    break;
-                },
+                        break;
+                    },
+                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
+                        //should never happen
+                        println!("This should never happen");
+                        break;
+                    }
+                    _ => {break;}
+                }
+            } else {
+                scheduler_task = match scheduler_task {
+                    SchedulerTask::ExecutionTask(version_to_execute, None) => {
+                        let now = Instant::now();
+                        profiler.start_timing(&"execution".to_string());
+                        profiler.count_one("exec".to_string());
+
+                        let ret = self.execute(
+                            version_to_execute,
+                            block,
+                            last_input_output,
+                            versioned_data_cache,
+                            scheduler,
+                            &executor,
+                            base_view,
+                            &mut profiler,
+                            thread_id,
+                        );
+                        profiler.end_timing(&"execution".to_string());
+                        extimer += now.elapsed().as_nanos();
+                        ret
+                    },
+                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
+                        let (lock, cvar) = &*condvar;
+                        // Mark dependency resolved.
+                        *lock.lock() = true;
+                        // Wake up the process waiting for dependency.
+                        cvar.notify_one();
+
+                        SchedulerTask::NoTask
+                    },
+                    SchedulerTask::NoTask => {
+                        profiler.start_timing(&"scheduling".to_string());
+                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
+                        profiler.end_timing(&"scheduling".to_string());
+                        ret
+                    },
+                    SchedulerTask::Done => {
+                        // println!("Received done in executing thread");
+                        profiler.end_timing(&"thread time".to_string());
+                        (*total_profiler.lock()).add_from(&profiler);
+
+                        break;
+                    },
+                    SchedulerTask::ValidationTask(_, _) => {
+                        println!("This validation should never happen");
+                        break;
+                    }
+                }
             }
         }
     }
@@ -248,10 +367,16 @@ where
     pub(crate) fn execute_transactions_parallel(
         &self,
         executor_initial_arguments: E::Argument,
-        signature_verified_block: &Vec<T>,
+        signature_verified_block: &TransactionRegister<T>,
         base_view: &S,
+        mode: ExecutionMode,
+        input_profiler: &mut Profiler
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         assert!(self.concurrency_level > 1, "Must use sequential execution");
+
+        let profiler = Arc::new(Mutex::new(input_profiler));
+        (*profiler.lock()).start_timing(&"total time".to_string());
+
 
         let versioned_data_cache = MVHashMap::new();
 
@@ -262,47 +387,83 @@ where
         let num_txns = signature_verified_block.len();
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
-        let scheduler = Scheduler::new(num_txns);
+        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
+        let barrier = Arc::new(Barrier::new(self.concurrency_level));
 
         RAYON_EXEC_POOL.scope(|s| {
-            for _ in 0..self.concurrency_level {
-                s.spawn(|_| {
+            for i in 0..self.concurrency_level {
+                struct NotCopy<T>(T);
+                let i = NotCopy(i);
+                s.spawn(|_|  {
+                    let i = i;
                     self.work_task_with_scope(
                         &executor_initial_arguments,
-                        signature_verified_block,
+                        signature_verified_block.txns(),
                         &last_input_output,
                         &versioned_data_cache,
                         &scheduler,
                         base_view,
                         committing.swap(false, Ordering::SeqCst),
+                        profiler.clone(),
+                        barrier.clone(),
+                        i.0,
                     );
                 });
             }
         });
 
+        (*profiler.lock()).end_timing(&"total time".to_string());
+        (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
+
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);
 
-        let maybe_err = if last_input_output.module_publishing_may_race() {
+        let mut maybe_err = None;
+
+        maybe_err = if last_input_output.module_publishing_may_race() {
             counters::MODULE_PUBLISHING_FALLBACK_COUNT.inc();
             Some(Error::ModulePathReadWrite)
         } else {
-            let mut ret = None;
-            for idx in 0..num_txns {
-                match last_input_output.take_output(idx) {
-                    ExecutionStatus::Success(t) => final_results.push(t),
-                    ExecutionStatus::SkipRest(t) => {
-                        final_results.push(t);
-                        break;
-                    },
-                    ExecutionStatus::Abort(err) => {
-                        ret = Some(err);
-                        break;
-                    },
-                };
-            }
-            ret
+            None
         };
+
+        let chunk_size =
+            (num_txns + 4 * self.concurrency_level - 1) / (4 * self.concurrency_level);
+        let interm_result: Vec<ExtrResult<E>> = RAYON_EXEC_POOL.install(|| {
+            (0..num_txns)
+                .collect::<Vec<TxnIndex>>()
+                .par_chunks(chunk_size)
+                .map(|chunk| {
+                    let mut inner_results = Vec::with_capacity(chunk_size);
+
+                    for idx in chunk.iter() {
+                        match last_input_output.take_output(*idx) {
+                            ExecutionStatus::Success(t) => inner_results.push(t),
+                            ExecutionStatus::SkipRest(t) => {
+                                inner_results.push(t);
+                                return ExtrResult::Value(inner_results);
+                            }
+                            ExecutionStatus::Abort(err) => {
+                                return ExtrResult::Error(err);
+                            }
+                        };
+                    }
+                    ExtrResult::Value(inner_results)
+                })
+                .collect()
+        });
+
+        for interm_res in interm_result {
+            match interm_res {
+                ExtrResult::Error(v) => {
+                    maybe_err = Some(v);
+                    break;
+                }
+                ExtrResult::Value(v) => {
+                    final_results.extend(v);
+                }
+            }
+        }
 
         RAYON_EXEC_POOL.spawn(move || {
             // Explicit async drops.
@@ -311,7 +472,21 @@ where
         });
 
         match maybe_err {
-            Some(err) => Err(err),
+            Some(err) => {
+                if matches!(err, Error::SKIP) {
+                    final_results.resize_with(num_txns, E::Output::skip_output);
+                    let delta_resolver: OutputDeltaResolver<T> =
+                        OutputDeltaResolver::new(versioned_data_cache);
+                    Ok(final_results
+                            .into_iter()
+                            .zip(delta_resolver.resolve(base_view, num_txns).into_iter())
+                            .collect(),
+                    )
+                } else {
+                    println!("err");
+                    Err(err)
+                }
+            }
             None => {
                 final_results.resize_with(num_txns, E::Output::skip_output);
                 let delta_resolver: OutputDeltaResolver<T> =
@@ -377,19 +552,22 @@ where
     pub fn execute_block(
         &self,
         executor_arguments: E::Argument,
-        signature_verified_block: Vec<T>,
+        signature_verified_block: TransactionRegister<T>,
         base_view: &S,
+        mode: ExecutionMode,
+        profiler: &mut Profiler
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         let mut ret = if self.concurrency_level > 1 {
             self.execute_transactions_parallel(
                 executor_arguments,
                 &signature_verified_block,
                 base_view,
+                mode, profiler
             )
         } else {
             self.execute_transactions_sequential(
                 executor_arguments,
-                &signature_verified_block,
+                &signature_verified_block.txns(),
                 base_view,
             )
         };
@@ -399,7 +577,7 @@ where
 
             ret = self.execute_transactions_sequential(
                 executor_arguments,
-                &signature_verified_block,
+                &signature_verified_block.txns(),
                 base_view,
             )
         }

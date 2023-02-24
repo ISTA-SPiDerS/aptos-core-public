@@ -30,6 +30,12 @@ use aptos_types::{
 use aptos_vm::AptosVM;
 use fail::fail_point;
 use std::{marker::PhantomData, sync::Arc};
+use aptos_types::transaction::TransactionRegister;
+use executor_types::{BlockExecutorTrait, Error, StateComputeResult};
+use scratchpad::SparseMerkleTree;
+use storage_interface::async_proof_fetcher::AsyncProofFetcher;
+use storage_interface::cached_state_view::CachedStateView;
+use storage_interface::DbReaderWriter;
 
 pub trait TransactionBlockExecutor<T>: Send + Sync {
     fn execute_transaction_block(
@@ -101,15 +107,16 @@ where
 
     fn execute_block(
         &self,
-        block: (HashValue, Vec<T>),
+        block: (HashValue, TransactionRegister<Transaction>),
         parent_block_id: HashValue,
     ) -> Result<StateComputeResult, Error> {
         self.maybe_initialize()?;
+        let (hash, txns) = block; 
         self.inner
             .read()
             .as_ref()
             .expect("BlockExecutor is not reset")
-            .execute_block(block, parent_block_id)
+            .execute_block((hash, txns), parent_block_id)
     }
 
     fn commit_blocks_ext(
@@ -172,7 +179,7 @@ where
 
     fn execute_block(
         &self,
-        block: (HashValue, Vec<T>),
+        block: (HashValue, TransactionRegister<T>),
         parent_block_id: HashValue,
     ) -> Result<StateComputeResult, Error> {
         let (block_id, transactions) = block;

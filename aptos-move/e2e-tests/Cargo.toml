@@ -39,3 +39,5 @@ proptest = { workspace = true }
 proptest-derive = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+move-compiler = { workspace = true }
+aptos-vm-validator = { workspace = true }

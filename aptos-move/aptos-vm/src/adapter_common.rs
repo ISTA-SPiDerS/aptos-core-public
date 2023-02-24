@@ -16,6 +16,8 @@ use aptos_types::{
     vm_status::{StatusCode, VMStatus},
     write_set::WriteSet,
 };
+use aptos_types::transaction::TransactionRegister;
+use rayon::prelude::*;
 
 /// This trait describes the VM adapter's interface.
 /// TODO: bring more of the execution logic in aptos_vm into this file.
@@ -81,7 +83,7 @@ pub trait VMAdapter {
 /// Transactions after signature checking:
 /// Waypoints and BlockPrologues are not signed and are unaffected by signature checking,
 /// but a user transaction or writeset transaction is transformed to a SignatureCheckedTransaction.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PreprocessedTransaction {
     UserTransaction(Box<SignatureCheckedTransaction>),
     WaypointWriteSet(WriteSetPayload),
@@ -94,7 +96,7 @@ pub enum PreprocessedTransaction {
 /// is a PreprocessedTransaction, where a user transaction is translated to a
 /// SignatureCheckedTransaction and also categorized into either a UserTransaction
 /// or a WriteSet transaction.
-pub(crate) fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> PreprocessedTransaction {
+pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> PreprocessedTransaction {
     match txn {
         Transaction::BlockMetadata(b) => PreprocessedTransaction::BlockMetadata(b),
         Transaction::GenesisTransaction(ws) => PreprocessedTransaction::WaypointWriteSet(ws),

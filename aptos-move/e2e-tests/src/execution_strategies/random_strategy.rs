@@ -74,7 +74,7 @@ impl Executor for RandomExecutor {
         for block in blocks.into_iter() {
             results.extend(
                 self.executor
-                    .execute_block(block)?
+                    .execute_block(block.into())?
                     .into_iter()
                     .map(|output| {
                         self.executor.apply_write_set(output.write_set());

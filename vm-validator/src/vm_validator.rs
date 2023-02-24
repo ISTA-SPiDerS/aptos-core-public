@@ -2,6 +2,7 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use anyhow::Result;
 use aptos_state_view::account_with_state_view::AsAccountWithStateView;
 use aptos_storage_interface::{
@@ -18,11 +19,28 @@ use aptos_types::{
 };
 use aptos_vm::AptosVM;
 use fail::fail_point;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use aptos_state_view::{StateView, StateViewId, TStateView};
+use aptos_types::state_store::state_key::StateKey;
+use aptos_types::state_store::state_storage_usage::StateStorageUsage;
+use aptos_types::transaction::Transaction;
+use aptos_types::vm_status::VMStatus;
+use aptos_types::write_set::WriteSet;
+use aptos_vm::data_cache::{IntoMoveResolver, StorageAdapterOwned};
+use aptos_vm::logging::AdapterLogSchema;
+use aptos_vm::adapter_common::{preprocess_transaction, VMAdapter};
+use aptos_types::state_store::state_value::StateValue;
+use aptos_aggregator::transaction::TransactionOutputExt;
+
 
 #[cfg(test)]
 #[path = "unit_tests/vm_validator_test.rs"]
 mod vm_validator_test;
+
+pub struct VMSpeculationResult {
+    pub input: TransactionReadSet,
+    pub output: TransactionOutputExt,
+}
 
 pub trait TransactionValidation: Send + Sync + Clone {
     type ValidationInstance: aptos_vm::VMValidator;
@@ -35,6 +53,61 @@ pub trait TransactionValidation: Send + Sync + Clone {
 
     /// Notify about new commit
     fn notify_commit(&mut self);
+
+    fn speculate_transaction(
+        &self,
+        transaction: &SignedTransaction,
+    ) -> anyhow::Result<(VMSpeculationResult, VMStatus)>;
+
+    fn add_write_set(
+        &mut self,
+        write_set: &WriteSet
+    );
+}
+
+
+type TransactionReadSet = BTreeSet<StateKey>;
+
+pub struct ReadRecorderView<'a, S: StateView> {
+    base_view: &'a S,
+    captured_reads: Mutex<TransactionReadSet>,
+}
+
+impl<'a, S: StateView> ReadRecorderView<'a, S> {
+    pub fn new_view(
+        base_view: &'a S,
+    ) -> StorageAdapterOwned<ReadRecorderView<'a, S>> {
+        ReadRecorderView {
+            base_view,
+            captured_reads: Mutex::new(BTreeSet::new()),
+        }.into_move_resolver()
+    }
+
+    pub fn reads(&mut self) -> TransactionReadSet {
+        let mut reads = self.captured_reads.lock().unwrap();
+        std::mem::take(&mut reads)
+    }
+}
+
+impl<'a, S : StateView> TStateView for ReadRecorderView<'a, S> {
+    type Key = StateKey;
+
+    fn id(&self) -> StateViewId {
+        self.base_view.id()
+    }
+
+    fn get_state_value(&self, state_key: &StateKey) -> Result<Option<StateValue>> {
+        self.captured_reads.lock().unwrap().insert(state_key.clone());
+        self.base_view.get_state_value(state_key)
+    }
+
+    fn is_genesis(&self) -> bool {
+        self.base_view.is_genesis()
+    }
+
+    fn get_usage(&self) -> anyhow::Result<StateStorageUsage> {
+        self.base_view.get_usage()
+    }
 }
 
 pub struct VMValidator {
@@ -91,6 +164,27 @@ impl TransactionValidation for VMValidator {
             .latest_state_checkpoint_view()
             .expect("Get db view cannot fail")
             .into();
+    }
+
+    fn speculate_transaction(
+        &self,
+        transaction: &SignedTransaction,
+    ) -> anyhow::Result<(VMSpeculationResult, VMStatus)> {
+        let log_context = AdapterLogSchema::new(self.state_view.id(), 0);
+        let mut read_recorder_view = ReadRecorderView::new_view(&self.state_view);
+        let preprocessed_txn = preprocess_transaction::<AptosVM>(Transaction::UserTransaction(transaction.clone()));
+
+        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn, &read_recorder_view, &log_context).unwrap();
+        let input = read_recorder_view.reads();
+
+        anyhow::Ok((VMSpeculationResult {input, output}, status))
+    }
+
+    fn add_write_set(
+        &mut self,
+        write_set: &WriteSet
+    ) {
+        todo!("somehow write to the state view.");
     }
 }
 

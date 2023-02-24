@@ -2,15 +2,17 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::vm_validator::TransactionValidation;
-use anyhow::Result;
+use crate::vm_validator::{TransactionValidation, VMSpeculationResult};
+use anyhow::{format_err, Result};
 use aptos_state_view::StateView;
 use aptos_types::{
     account_address::AccountAddress,
     on_chain_config::OnChainConfigPayload,
     transaction::{SignedTransaction, VMValidatorResult},
     vm_status::StatusCode,
+    write_set::WriteSet,
 };
+use aptos_types::vm_status::VMStatus;
 use aptos_vm::VMValidator;
 
 pub const ACCOUNT_DNE_TEST_ADD: AccountAddress =
@@ -81,4 +83,15 @@ impl TransactionValidation for MockVMValidator {
     }
 
     fn notify_commit(&mut self) {}
+
+    fn speculate_transaction(&self, transaction: &SignedTransaction) -> anyhow::Result<(VMSpeculationResult, VMStatus)> {
+        Err(format_err!(""))
+    }
+
+    fn add_write_set(
+        &mut self,
+        write_set: &WriteSet
+    ) {
+        todo!("not implemented.");
+    }
 }

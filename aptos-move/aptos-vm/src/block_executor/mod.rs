@@ -29,6 +29,7 @@ use aptos_types::{
 };
 use move_core_types::vm_status::VMStatus;
 use rayon::prelude::*;
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
 
 impl BlockExecutorTransaction for PreprocessedTransaction {
     type Key = StateKey;
@@ -83,9 +84,11 @@ pub struct BlockAptosVM();
 
 impl BlockAptosVM {
     pub fn execute_block<S: StateView + Sync>(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: &S,
         concurrency_level: usize,
+        mode: ExecutionMode,
+        profiler: &mut Profiler,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
         let _timer = BLOCK_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
         // Verify the signatures of all the transactions in parallel.
@@ -95,12 +98,15 @@ impl BlockAptosVM {
             BLOCK_EXECUTOR_SIGNATURE_VERIFICATION_SECONDS.start_timer();
         let signature_verified_block: Vec<PreprocessedTransaction> =
             RAYON_EXEC_POOL.install(|| {
-                transactions
+                transactions.txns().to_vec()
                     .into_par_iter()
                     .with_min_len(25)
                     .map(preprocess_transaction::<AptosVM>)
                     .collect()
             });
+
+        let register = TransactionRegister::new(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone());
+
         drop(signature_verification_timer);
 
         BLOCK_EXECUTOR_CONCURRENCY.set(concurrency_level as i64);
@@ -109,7 +115,7 @@ impl BlockAptosVM {
         );
 
         let ret = executor
-            .execute_block(state_view, signature_verified_block, state_view)
+            .execute_block(state_view, register, state_view, mode, profiler)
             .map(|results| {
                 // Process the outputs in parallel, combining delta writes with other writes.
                 RAYON_EXEC_POOL.install(|| {
@@ -130,6 +136,7 @@ impl BlockAptosVM {
                 unreachable!("[Execution]: Must be handled by sequential fallback")
             },
             Err(Error::UserError(err)) => Err(err),
+            _ => unreachable!("What")
         }
     }
 }

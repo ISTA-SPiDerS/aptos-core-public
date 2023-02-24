@@ -137,7 +137,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     };
 
     let (mut output, _, _) =
-        ChunkOutput::by_transaction_execution::<V>(vec![genesis_txn.clone()], base_state_view)?
+        ChunkOutput::by_transaction_execution::<V>(vec![genesis_txn.clone()].into(), base_state_view)?
             .apply_to_ledger(&executed_trees)?;
     ensure!(
         !output.to_commit.is_empty(),

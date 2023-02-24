@@ -19,7 +19,7 @@ fn execute_genesis_write_set() {
     println!("{:#?}", *GENESIS_CHANGE_SET_HEAD);
     let txn =
         Transaction::GenesisTransaction(WriteSetPayload::Direct(GENESIS_CHANGE_SET_HEAD.clone()));
-    let mut output = executor.execute_transaction_block(vec![txn]).unwrap();
+    let mut output = executor.execute_transaction_block(vec![txn].into()).unwrap();
 
     // Executing the genesis transaction should succeed
     assert_eq!(output.len(), 1);
@@ -37,7 +37,7 @@ fn execute_genesis_and_drop_other_transaction() {
     let txn2 = peer_to_peer_txn(sender.account(), receiver.account(), 11, 1000);
 
     let mut output = executor
-        .execute_transaction_block(vec![txn, Transaction::UserTransaction(txn2)])
+        .execute_transaction_block(vec![txn, Transaction::UserTransaction(txn2)].into())
         .unwrap();
 
     // Transaction that comes after genesis should be dropped.

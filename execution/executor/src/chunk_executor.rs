@@ -203,7 +203,7 @@ impl<V: VMExecutor> ChunkExecutorInner<V> {
         let state_view = self.state_view(&latest_view)?;
         let chunk_output = {
             let _timer = APTOS_EXECUTOR_VM_EXECUTE_CHUNK_SECONDS.start_timer();
-            ChunkOutput::by_transaction_execution::<V>(transactions, state_view)?
+            ChunkOutput::by_transaction_execution::<V>(transactions.into(), state_view)?
         };
         let executed_chunk = Self::apply_chunk_output_for_state_sync(
             verified_target_li,

@@ -10,7 +10,7 @@ use aptos_aggregator::delta_change_set::DeltaOp;
 use aptos_types::access_path::AccessPath;
 use arc_swap::ArcSwapOption;
 use crossbeam::utils::CachePadded;
-use dashmap::DashSet;
+use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use std::{
     collections::HashSet,
     sync::{
@@ -19,8 +19,8 @@ use std::{
     },
 };
 
-type TxnInput<K> = Vec<ReadDescriptor<K>>;
-type TxnOutput<T, E> = ExecutionStatus<T, Error<E>>;
+pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
+pub type TxnOutput<T, E> = ExecutionStatus<T, Error<E>>;
 type KeySet<T> = HashSet<<<T as TransactionOutput>::Txn as Transaction>::Key>;
 
 /// Information about the read which is used by validation.
@@ -119,9 +119,9 @@ impl<K: ModulePath> ReadDescriptor<K> {
 }
 
 pub struct TxnLastInputOutput<K, T, E> {
-    inputs: Vec<CachePadded<ArcSwapOption<TxnInput<K>>>>, // txn_idx -> input.
+    inputs: DashMap<TxnIndex, TxnInput<K>>, // txn_idx -> input.
 
-    outputs: Vec<CachePadded<ArcSwapOption<TxnOutput<T, E>>>>, // txn_idx -> output.
+    outputs: DashMap<TxnIndex, TxnOutput<T, E>>, // txn_idx -> output.
 
     // Record all writes and reads to access paths corresponding to modules (code) in any
     // (speculative) executions. Used to avoid a potential race with module publishing and
@@ -135,12 +135,8 @@ pub struct TxnLastInputOutput<K, T, E> {
 impl<K: ModulePath, T: TransactionOutput, E: Send + Clone> TxnLastInputOutput<K, T, E> {
     pub fn new(num_txns: usize) -> Self {
         Self {
-            inputs: (0..num_txns)
-                .map(|_| CachePadded::new(ArcSwapOption::empty()))
-                .collect(),
-            outputs: (0..num_txns)
-                .map(|_| CachePadded::new(ArcSwapOption::empty()))
-                .collect(),
+            inputs: DashMap::with_capacity(num_txns),
+            outputs: DashMap::with_capacity(num_txns),
             module_writes: DashSet::new(),
             module_reads: DashSet::new(),
             module_read_write_intersection: AtomicBool::new(false),
@@ -175,12 +171,8 @@ impl<K: ModulePath, T: TransactionOutput, E: Send + Clone> TxnLastInputOutput<K,
     /// error that ensures a fallback to a correct sequential execution.
     /// When the sets do not have an intersection, it is impossible for the race to occur as any
     /// module in the loader cache may not be published by a transaction in the ongoing block.
-    pub fn record(
-        &self,
-        txn_idx: TxnIndex,
-        input: Vec<ReadDescriptor<K>>,
-        output: ExecutionStatus<T, Error<E>>,
-    ) {
+    pub fn record(&self, txn_idx: TxnIndex, input: TxnInput<K>, output: TxnOutput<T, E>) {
+
         let read_modules: Vec<AccessPath> =
             input.iter().filter_map(|desc| desc.module_path()).collect();
         let written_modules: Vec<AccessPath> = match &output {
@@ -202,24 +194,24 @@ impl<K: ModulePath, T: TransactionOutput, E: Send + Clone> TxnLastInputOutput<K,
             }
         }
 
-        self.inputs[txn_idx].store(Some(Arc::new(input)));
-        self.outputs[txn_idx].store(Some(Arc::new(output)));
+        self.inputs.insert(txn_idx, input);
+        self.outputs.insert(txn_idx, output);
     }
 
     pub fn module_publishing_may_race(&self) -> bool {
         self.module_read_write_intersection.load(Ordering::Acquire)
     }
 
-    pub fn read_set(&self, txn_idx: TxnIndex) -> Option<Arc<Vec<ReadDescriptor<K>>>> {
-        self.inputs[txn_idx].load_full()
+    pub fn read_set(&self, txn_idx: TxnIndex) -> Option<Ref<'_, usize, Vec<ReadDescriptor<K>>>> {
+        self.inputs.get(&txn_idx)
     }
 
     // Extracts a set of paths written or updated during execution from transaction
     // output: (modified by writes, modified by deltas).
     pub fn modified_keys(&self, txn_idx: TxnIndex) -> KeySet<T> {
-        match &self.outputs[txn_idx].load_full() {
+        match self.outputs.get(&txn_idx) {
             None => HashSet::new(),
-            Some(txn_output) => match txn_output.as_ref() {
+            Some(txn_output) => match &*txn_output {
                 ExecutionStatus::Success(t) | ExecutionStatus::SkipRest(t) => t
                     .get_writes()
                     .into_iter()
@@ -233,15 +225,8 @@ impl<K: ModulePath, T: TransactionOutput, E: Send + Clone> TxnLastInputOutput<K,
 
     // Must be executed after parallel execution is done, grabs outputs. Will panic if
     // other outstanding references to the recorded outputs exist.
-    pub fn take_output(&self, txn_idx: TxnIndex) -> ExecutionStatus<T, Error<E>> {
-        let owning_ptr = self.outputs[txn_idx]
-            .swap(None)
-            .expect("Output must be recorded after execution");
-
-        if let Ok(output) = Arc::try_unwrap(owning_ptr) {
-            output
-        } else {
-            unreachable!("Output should be uniquely owned after execution");
-        }
+    pub fn take_output(&self, txn_idx: TxnIndex) -> TxnOutput<T, E> {
+        let result = self.outputs.remove(&txn_idx);
+        result.unwrap().1
     }
 }

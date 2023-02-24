@@ -1,7 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-#![forbid(unsafe_code)]
+// #![forbid(unsafe_code)]
 
 //! Test infrastructure for the Aptos VM.
 //!

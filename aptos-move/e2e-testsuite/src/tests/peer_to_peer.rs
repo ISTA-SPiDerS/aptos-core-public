@@ -10,6 +10,7 @@ use aptos_types::{
 };
 use std::{convert::TryFrom, time::Instant};
 
+
 #[test]
 fn single_peer_to_peer_with_event() {
     ::aptos_logger::Logger::init_for_testing();
@@ -76,7 +77,7 @@ fn few_peer_to_peer_with_event() {
         peer_to_peer_txn(sender.account(), receiver.account(), 12, transfer_amount),
         peer_to_peer_txn(sender.account(), receiver.account(), 13, transfer_amount),
     ];
-    let output = executor.execute_block(txns).unwrap();
+    let output = executor.execute_block(txns.into()).unwrap();
     for (idx, txn_output) in output.iter().enumerate() {
         assert_eq!(
             txn_output.status(),
@@ -301,7 +302,7 @@ fn cycle_peer_to_peer() {
     // execute transaction
     let mut execution_time = 0u128;
     let now = Instant::now();
-    let output = executor.execute_block(txns).unwrap();
+    let output = executor.execute_block(txns.into()).unwrap();
     execution_time += now.elapsed().as_nanos();
     println!("EXECUTION TIME: {}", execution_time);
     for txn_output in &output {
@@ -344,7 +345,7 @@ fn cycle_peer_to_peer_multi_block() {
 
         // execute transaction
         let now = Instant::now();
-        let output = executor.execute_block(txns).unwrap();
+        let output = executor.execute_block(txns.into()).unwrap();
         execution_time += now.elapsed().as_nanos();
         for txn_output in &output {
             assert_eq!(
@@ -388,7 +389,7 @@ fn one_to_many_peer_to_peer() {
 
         // execute transaction
         let now = Instant::now();
-        let output = executor.execute_block(txns).unwrap();
+        let output = executor.execute_block(txns.into()).unwrap();
         execution_time += now.elapsed().as_nanos();
         for txn_output in &output {
             assert_eq!(
@@ -432,7 +433,7 @@ fn many_to_one_peer_to_peer() {
 
         // execute transaction
         let now = Instant::now();
-        let output = executor.execute_block(txns).unwrap();
+        let output = executor.execute_block(txns.into()).unwrap();
         execution_time += now.elapsed().as_nanos();
         for txn_output in &output {
             assert_eq!(

@@ -27,6 +27,7 @@ use std::{
     fmt::{self, Display, Formatter},
     iter::once,
 };
+use aptos_types::transaction::TransactionRegister;
 
 #[path = "block_test_utils.rs"]
 #[cfg(any(test, feature = "fuzzing"))]
@@ -346,13 +347,38 @@ impl Block {
         &self,
         validators: &[AccountAddress],
         txns: Vec<SignedTransaction>,
-    ) -> Vec<Transaction> {
-        once(Transaction::BlockMetadata(
+    ) -> TransactionRegister<Transaction> {
+        let empty_register = TransactionRegister::empty();
+        let empty_payload = Payload::empty(false);
+        let txn_register;
+        match self.payload().unwrap_or(&empty_payload) {
+            Payload::DirectMempool(register) => {
+                txn_register = register;
+            }
+            Payload::InQuorumStore(_) => {
+                txn_register = &empty_register;
+            }
+        }
+        let txn = once(Transaction::BlockMetadata(
             self.new_block_metadata(validators),
         ))
-        .chain(txns.into_iter().map(Transaction::UserTransaction))
+        .chain(
+            txns
+                .into_iter()
+                .map(Transaction::UserTransaction),
+        )
         .chain(once(Transaction::StateCheckpoint(self.id)))
-        .collect()
+        .collect();
+        let gas_estimates = once(0)
+            .chain(txn_register.gas_estimates().clone().into_iter())
+            .chain(once(0))
+            .collect();
+        let dependency_graph = once(vec![])
+            .chain(txn_register.dependency_graph().clone().into_iter())
+            .chain(once(vec![]))
+            .collect();
+
+        TransactionRegister::new(txn, gas_estimates, dependency_graph)
     }
 
     fn new_block_metadata(&self, validators: &[AccountAddress]) -> BlockMetadata {

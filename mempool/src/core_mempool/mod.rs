@@ -2,6 +2,7 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod filler;
 mod index;
 mod mempool;
 mod transaction;
@@ -12,4 +13,5 @@ pub use self::{
     mempool::Mempool as CoreMempool,
     transaction::{MempoolTransaction, TimelineState},
     transaction_store::TXN_INDEX_ESTIMATED_BYTES,
+    filler::DependencyFiller, filler::BlockFiller, filler::SimpleFiller,
 };
