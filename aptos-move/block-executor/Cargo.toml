@@ -35,6 +35,8 @@ proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 rayon = { workspace = true }
 itertools = { workspace = true }
+affinity = "0.1.2"
+rand = "0.7.3"
 
 [dev-dependencies]
 claims = { workspace = true }
