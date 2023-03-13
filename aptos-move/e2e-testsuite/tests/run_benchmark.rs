@@ -49,7 +49,8 @@ enum LoadType
 {
     COINS,
     DEX,
-    P2PTX
+    P2PTX,
+    SOLANA
 }
 
 impl Display for LoadType {
@@ -155,7 +156,7 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
@@ -342,7 +343,6 @@ fn create_block(
                 idx_to = to_dist.sample(&mut rng) % accounts.len();
             }
 
-            // print!("{},", idx_to);
             let txn = accounts[idx_from]
                 .transaction()
                 .payload(
@@ -359,8 +359,8 @@ fn create_block(
         return result;
     }
 
-    let dist:WeightedIndex<usize> = WeightedIndex::new(&COIN_DISTR).unwrap();
-
+    let dist : WeightedIndex<usize> = WeightedIndex::new(&COIN_DISTR).unwrap();
+    let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_LENGTH_WEIGHT).unwrap();
 
     for i in 0..size {
         // let idx: usize = rng.gen::<usize>() % accounts.len();
@@ -410,13 +410,29 @@ fn create_block(
             type_params: vec![],
         }));
 
-        // let seed: Vec<u8> = vec![0];
-        let entry_function = EntryFunction::new(
-            module_id.clone(),
-            ident_str!("exchange").to_owned(),
-            vec![coin_1.clone(), coin_2.clone()],
-            vec![],
-        );
+        let entry_function;
+
+        if matches!(load_type, SOLANA)
+        {
+            let length = TX_LENGTHS[tx_weight_distr.sample(&mut rng)];
+            //println!("{}", length);
+            entry_function = EntryFunction::new(
+                module_id.clone(),
+                ident_str!("loop_exchange").to_owned(),
+                vec![coin_1.clone(), coin_2.clone()],
+                vec![bcs::to_bytes(&length).unwrap()],
+            );
+        }
+        else
+        {
+            entry_function = EntryFunction::new(
+                module_id.clone(),
+                ident_str!("exchange").to_owned(),
+                vec![coin_1.clone(), coin_2.clone()],
+                vec![],
+            );
+        }
+
         let txn = accounts[idx]
             .transaction()
             .entry_function(entry_function)

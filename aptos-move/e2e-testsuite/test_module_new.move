@@ -51,6 +51,34 @@ module Owner::Exchange {
         );
     }
 
+    public entry fun loop_exchange<CoinType1, CoinType2>(s: &signer, loop_count: u64) acquires Container {
+        let addr = signer::address_of(s);
+        let i = 0;
+        while (i < loop_count) {
+            i = i + 1;
+            let cap = &borrow_global<Container>(@Owner).escrow_signer_cap;
+            let escrow_signer = &account::create_signer_with_capability(cap);
+            let escrow_addr = signer::address_of(escrow_signer);
+
+            // Make sure each participant can receive some of this.
+            if (!coin::is_account_registered<CoinType1>(addr)) {
+                managed_coin::register<CoinType1>(s);
+            };
+            if (!coin::is_account_registered<CoinType2>(addr)) {
+                managed_coin::register<CoinType2>(s);
+            };
+
+            if (!coin::is_account_registered<CoinType1>(escrow_addr)) {
+                managed_coin::register<CoinType1>(escrow_signer);
+            };
+            if (!coin::is_account_registered<CoinType2>(escrow_addr)) {
+                managed_coin::register<CoinType2>(escrow_signer);
+            };
+            coin::transfer<CoinType2>(escrow_signer, addr, 1);
+            coin::transfer<CoinType1>(s, escrow_addr, 1);
+        }
+    }
+
     public entry fun exchange<CoinType1, CoinType2>(s: &signer) acquires Container {
         let addr = signer::address_of(s);
 
