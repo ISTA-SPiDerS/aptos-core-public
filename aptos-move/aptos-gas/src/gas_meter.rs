@@ -252,7 +252,8 @@ impl AptosGasMeter {
             },
             None => {
                 self.balance = 0.into();
-                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+                Ok(())
+                //Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
             },
         }
     }

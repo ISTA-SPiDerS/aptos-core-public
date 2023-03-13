@@ -32,6 +32,7 @@ use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
 pub use universe::*;
 
+
 static UNIVERSE_SIZE: Lazy<usize> = Lazy::new(|| {
     use std::{env, process::abort};
 

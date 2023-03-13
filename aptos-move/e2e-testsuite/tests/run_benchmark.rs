@@ -29,17 +29,16 @@ use rand::seq::index::IndexVec::USize;
 use regex::internal::Exec;
 use aptos_cached_packages::aptos_stdlib::coin_transfer;
 use aptos_language_e2e_tests::account::{Account, AccountData};
-use aptos_language_e2e_tests::account_activity_distribution::{TX_FROM, TX_TO};
+use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, RES_DISTR, TX_FROM, TX_LENGTH_WEIGHT, TX_LENGTHS, TX_TO, TX_WRITES, TX_WRITES_WEIGHT};
 use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_types::transaction::ExecutionMode::{Hints, Standard};
 use aptos_types::transaction::{Profiler, TransactionOutput};
-use crate::LoadType::{COINS, DEX, P2PTX};
+use crate::LoadType::{COINS, DEX, P2PTX, SOLANA};
 
-const INITIAL_BALANCE: u64 = 10_000_000;
+const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
-const COIN_DISTR: [usize; 1000] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 17, 17, 17, 17, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 20, 20, 20, 20, 20, 20, 20, 20, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 22, 22, 23, 23, 23, 23, 23, 23, 23, 23, 23, 23, 24, 24, 24, 24, 24, 24, 24, 25, 25, 25, 25, 25, 25, 26, 27, 27, 27, 27, 27, 28, 28, 28, 28, 28, 28, 28, 28, 28, 29, 29, 29, 29, 29, 29, 29, 29, 30, 30, 30, 30, 30, 30, 30, 31, 31, 31, 32, 32, 32, 32, 32, 32, 33, 33, 33, 33, 34, 34, 34, 34, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 38, 38, 38, 39, 39, 39, 39, 39, 39, 39, 40, 41, 41, 41, 42, 42, 42, 42, 43, 43, 43, 43, 44, 44, 44, 44, 45, 45, 46, 46, 47, 49, 49, 49, 49, 50, 50, 51, 51, 53, 53, 53, 54, 55, 55, 55, 56, 56, 57, 57, 57, 57, 58, 58, 58, 59, 60, 61, 61, 62, 62, 62, 63, 63, 64, 66, 66, 67, 67, 68, 68, 68, 68, 68, 69, 70, 70, 71, 71, 72, 72, 72, 73, 74, 75, 76, 76, 77, 78, 78, 78, 81, 82, 82, 83, 83, 83, 84, 85, 86, 86, 87, 87, 88, 89, 90, 94, 94, 95, 97, 98, 100, 100, 102, 103, 104, 106, 107, 108, 108, 108, 111, 112, 114, 117, 120, 124, 124, 124, 126, 126, 127, 131, 134, 136, 137, 138, 138, 139, 139, 140, 145, 145, 148, 148, 149, 154, 154, 156, 156, 160, 162, 163, 166, 167, 167, 168, 168, 170, 171, 176, 178, 178, 181, 181, 186, 195, 196, 198, 201, 206, 208, 209, 217, 240, 275, 290, 296, 305, 315, 315, 321, 343, 351, 362, 393, 453, 506, 570, 577, 620, 624, 629, 660, 661, 743, 795, 862, 926, 1042, 1255, 1274, 2436, 4227, 7263];
 
 const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
@@ -102,39 +101,39 @@ fn main() {
 
     println!("REGISTER SUCCESS");
 
-    // println!("STARTING WARMUP");
-    // for warmup in [1, 2, 3] {
-    //     let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
-    //     let block = get_transaction_register(block.clone(), &executor)
-    //         .map_par_txns(Transaction::UserTransaction);
+    println!("STARTING WARMUP");
+    for warmup in [1, 2, 3] {
+        let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
+        let block = get_transaction_register(block.clone(), &executor)
+            .map_par_txns(Transaction::UserTransaction);
 
-    //     let mut prex_block_result = register_block_result.clone();
+        let mut prex_block_result = register_block_result.clone();
 
-    //     prex_block_result = executor.execute_transaction_block_parallel(
-    //         block.clone(),
-    //         CORES as usize,
-    //         Standard, &mut Profiler::new(),
-    //     )
-    //         .unwrap();
+        prex_block_result = executor.execute_transaction_block_parallel(
+            block.clone(),
+            CORES as usize,
+            Standard, &mut Profiler::new(),
+        )
+            .unwrap();
 
 
-    //     for result in prex_block_result {
-    //         match result.status() {
-    //             TransactionStatus::Keep(status) => {
-    //                 executor.apply_write_set(result.write_set());
-    //                 assert_eq!(
-    //                     status,
-    //                     &ExecutionStatus::Success,
-    //                     "transaction failed with {:?}",
-    //                     status
-    //                 );
-    //             }
-    //             TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-    //             TransactionStatus::Retry => panic!("transaction status is retry"),
-    //         };
-    //     }
-    // }
-    // println!("END WARMUP");
+        for result in prex_block_result {
+            match result.status() {
+                TransactionStatus::Keep(status) => {
+                    executor.apply_write_set(result.write_set());
+                    assert_eq!(
+                        status,
+                        &ExecutionStatus::Success,
+                        "transaction failed with {:?}",
+                        status
+                    );
+                }
+                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+                TransactionStatus::Retry => panic!("transaction status is retry"),
+            };
+        }
+    }
+    println!("END WARMUP");
 
 
     println!("EXECUTE BLOCKS");
@@ -157,6 +156,13 @@ fn main() {
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
         }
         println!("#################################################################################");
     }
@@ -239,7 +245,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
     all_stats.insert("final_time".to_string(), times);
 
 
-    println!("###,{},{},{}", mode, coins, c);
+    println!("###,{},{},{},{}", mode, coins, c, load_type);
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
@@ -361,6 +367,15 @@ fn create_block(
 
     let dist : WeightedIndex<usize> = WeightedIndex::new(&COIN_DISTR).unwrap();
     let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_LENGTH_WEIGHT).unwrap();
+    let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_WRITES_WEIGHT).unwrap();
+    let tx_res_distr : WeightedIndex<usize> = WeightedIndex::new(&RES_DISTR).unwrap();
+
+    let mut max_count:usize = 1;
+    let max_value_opt = TX_WRITES.iter().max();
+    match max_value_opt {
+        Some(max) => { max_count = *max; },
+        None      => println!("vec empty, wat!")
+    }
 
     for i in 0..size {
         // let idx: usize = rng.gen::<usize>() % accounts.len();
@@ -414,13 +429,20 @@ fn create_block(
 
         if matches!(load_type, SOLANA)
         {
-            let length = TX_LENGTHS[tx_weight_distr.sample(&mut rng)];
-            //println!("{}", length);
+            let length = TX_LENGTHS[tx_weight_distr.sample(&mut rng)] * max_count as u64;
+            let num_writes = TX_WRITES[tx_num_writes_distr.sample(&mut rng)];
+            let mut writes: Vec<u64> = Vec::new();
+            let mut i = 0;
+            while i < num_writes {
+                i+=1;
+                writes.push(tx_res_distr.sample(&mut rng) as u64);
+            }
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
-                vec![coin_1.clone(), coin_2.clone()],
-                vec![bcs::to_bytes(&length).unwrap()],
+                vec![],
+                vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
             );
         }
         else
@@ -435,7 +457,7 @@ fn create_block(
 
         let txn = accounts[idx]
             .transaction()
-            .entry_function(entry_function)
+            .entry_function(entry_function.clone())
             .sequence_number(seq_num[&idx])
             .sign();
         seq_num.insert(idx, seq_num[&idx] + 1);
