@@ -8,15 +8,8 @@ use aptos_types::{
     },
 };
 use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
-use language_e2e_tests::{
-    account::Account, account::AccountData, compile::compile_source_module, current_function_name,
-    executor::FakeExecutor, executor::FakeValidation,
-    account_activity_distribution::{TX_TO, TX_FROM}
-};
-use move_deps::move_core_types::{
-    ident_str, identifier,
-    language_storage::{ModuleId, StructTag, TypeTag},
-};
+
+
 use rand::prelude::*;
 use regex::Regex;
 use std::{collections::hash_map::HashMap, fmt, format, fs, str::FromStr, time::Instant};
@@ -28,13 +21,20 @@ use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
 use itertools::Itertools;
+use move_core_types::{ident_str, identifier};
+use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use proptest::char::range;
 use rand::distributions::WeightedIndex;
 use rand::seq::index::IndexVec::USize;
 use regex::internal::Exec;
+use aptos_cached_packages::aptos_stdlib::coin_transfer;
+use aptos_language_e2e_tests::account::{Account, AccountData};
+use aptos_language_e2e_tests::account_activity_distribution::{TX_FROM, TX_TO};
+use aptos_language_e2e_tests::compile::compile_source_module;
+use aptos_language_e2e_tests::current_function_name;
+use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_types::transaction::ExecutionMode::{Hints, Standard};
 use aptos_types::transaction::{Profiler, TransactionOutput};
-use cached_packages::aptos_stdlib::coin_transfer;
 use crate::LoadType::{COINS, DEX, P2PTX};
 
 const INITIAL_BALANCE: u64 = 10_000_000;
@@ -287,12 +287,12 @@ fn register_coins(
         //let coin_clone: &str = &coin.clone();
         let coinId: identifier::Identifier = identifier::Identifier::new(coin).unwrap();
         // coinId.from_str(&coin);
-        let coin_c = TypeTag::Struct(StructTag {
+        let coin_c = TypeTag::Struct(Box::new(StructTag {
             address: module_owner.address().clone(),
             module: ident_str!("Exchange").to_owned(),
             name: coinId,
             type_params: vec![],
-        });
+        }));
 
         let register_coin_function = EntryFunction::new(
             module_id.clone(),
@@ -396,19 +396,19 @@ fn create_block(
         let coin_id1: identifier::Identifier = identifier::Identifier::new(coin).unwrap();
         let coin_id2: identifier::Identifier = identifier::Identifier::new(coin_clone).unwrap();
 
-        let coin_1 = TypeTag::Struct(StructTag {
+        let coin_1 = TypeTag::Struct(Box::new(StructTag {
             address: owner.address().clone(),
             module: ident_str!("Exchange").to_owned(),
             name: coin_id1,
             type_params: vec![],
-        });
+        }));
 
-        let coin_2 = TypeTag::Struct(StructTag {
+        let coin_2 = TypeTag::Struct(Box::new(StructTag {
             address: owner.address().clone(),
             module: ident_str!("Exchange").to_owned(),
             name: coin_id2,
             type_params: vec![],
-        });
+        }));
 
         // let seed: Vec<u8> = vec![0];
         let entry_function = EntryFunction::new(

@@ -437,6 +437,7 @@ dependencies = [
 name = "aptos-block-executor"
 version = "0.1.0"
 dependencies = [
+ "affinity",
  "anyhow",
  "aptos-aggregator",
  "aptos-infallible",
@@ -2084,7 +2085,6 @@ dependencies = [
 name = "aptos-package-builder"
 version = "0.1.0"
 dependencies = [
- "affinity",
  "anyhow",
  "aptos-framework",
  "itertools",
@@ -4360,6 +4360,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-skiplist"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "883a5821d7d079fcf34ac55f27a833ee61678110f6b97637cc74513c0d0b42fc"
+dependencies = [
+ "cfg-if",
+ "crossbeam-epoch",
+ "crossbeam-utils",
+ "scopeguard",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6281,9 +6293,9 @@ dependencies = [
 name = "language-e2e-testsuite"
 version = "0.1.0"
 dependencies = [
+ "affinity",
  "aptos-block-executor",
  "aptos-cached-packages",
- "affinity",
  "aptos-crypto",
  "aptos-framework",
  "aptos-gas",
@@ -6297,13 +6309,14 @@ dependencies = [
  "aptos-vm-genesis",
  "aptos-writeset-generator",
  "bcs 0.1.4 (git+https://github.com/aptos-labs/bcs.git?rev=d31fab9d81748e2594be5cd5cdf845786a30562d)",
+ "crossbeam-skiplist",
  "itertools",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-core-types",
  "move-ir-compiler",
  "proptest",
- "rand 0.7.3",
+ "rand 0.8.5",
  "regex",
  "serde 1.0.149",
 ]
