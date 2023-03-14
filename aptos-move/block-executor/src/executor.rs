@@ -11,25 +11,7 @@ use crate::{
     txn_last_input_output::TxnLastInputOutput,
     view::{LatestView, MVHashMapView},
 };
-use itertools::Itertools;
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
-use std::{
-    collections::HashMap,
-    collections::HashSet,
-    hash::Hash,
-    io,
-    marker::PhantomData,
-    ops::{Add, AddAssign},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock, Barrier
-    },
-    thread,
-    thread::spawn,
-    time::{Instant, Duration},
-};
-use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
-use dashmap::DashMap;
 use aptos_logger::debug;
 use aptos_mvhashmap::{MVHashMap, MVHashMapError, MVHashMapOutput, TxnIndex};
 use aptos_state_view::TStateView;
@@ -38,8 +20,13 @@ use num_cpus;
 use once_cell::sync::Lazy;
 use std::{
     collections::btree_map::BTreeMap,
+    marker::PhantomData,
+    sync::atomic::{AtomicBool, Ordering},
 };
+use std::sync::Arc;
 use aptos_infallible::Mutex;
+use std::time::Instant;
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
@@ -94,7 +81,6 @@ where
         executor: &E,
         base_view: &S,
         profiler: &mut Profiler,
-        thread_id: usize,
     ) -> SchedulerTask {
 
         profiler.start_timing(&"execute#1".to_string());
@@ -175,7 +161,7 @@ where
 
         profiler.start_timing(&"execute#4".to_string());
 
-        let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler, thread_id);
+        let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler);
 
         profiler.end_timing(&"execute#4".to_string());
 
@@ -190,7 +176,6 @@ where
         versioned_data_cache: &MVHashMap<T::Key, T::Value>,
         scheduler: &Scheduler,
         profiler: &mut Profiler,
-        thread_id: usize,
     ) -> SchedulerTask {
         use MVHashMapError::*;
         use MVHashMapOutput::*;
@@ -228,7 +213,7 @@ where
                 versioned_data_cache.mark_estimate(&k, idx_to_validate);
             }
 
-            scheduler.finish_abort(idx_to_validate, incarnation, profiler, thread_id)
+            scheduler.finish_abort(idx_to_validate, incarnation, profiler)
         } else {
             scheduler.finish_validation(idx_to_validate, validation_wave);
             SchedulerTask::NoTask
@@ -245,8 +230,6 @@ where
         base_view: &S,
         committing: bool,
         total_profiler: Arc<Mutex<&mut Profiler>>,
-        barrier: Arc<Barrier>,
-        idx: usize,
     ) {
         let mut profiler = Profiler::new();
 
@@ -257,12 +240,10 @@ where
         let mut extimer: u128 = 0;
         let mut valtimer: u128 = 0;
         let mut resttimer: u128 = 0;
-        let thread_id = idx;
 
         drop(init_timer);
 
         let mut scheduler_task = SchedulerTask::NoTask;
-        barrier.wait();
 
         loop {
             // Only one thread try_commit to avoid contention.
@@ -274,91 +255,61 @@ where
                     }
                 }
             }
-            if (thread_id == 0) {
-                scheduler_task = match scheduler_task {
-                    SchedulerTask::ValidationTask(version_to_validate, wave) => {
-                        profiler.start_timing(&"validation".to_string());
-                        profiler.count_one("val".to_string());
-                        let ret = self.validate(
-                            version_to_validate,
-                            wave,
-                            last_input_output,
-                            versioned_data_cache,
-                            scheduler,
-                            &mut profiler,
-                            thread_id,
-                        );
-                        profiler.end_timing(&"validation".to_string());
-                        ret
-                    },
-                    SchedulerTask::NoTask => {
-                        profiler.start_timing(&"scheduling".to_string());
-                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
-                        profiler.end_timing(&"scheduling".to_string());
-                        ret
-                    },
-                    SchedulerTask::Done => {
-                        // println!("Received Done hurray");
-                        profiler.end_timing(&"thread time".to_string());
-                        (*total_profiler.lock()).add_from(&profiler);
+            scheduler_task = match scheduler_task {
+                SchedulerTask::ValidationTask(version_to_validate, wave) => {
+                    profiler.start_timing(&"validation".to_string());
+                    profiler.count_one("val".to_string());
+                    let ret = self.validate(
+                        version_to_validate,
+                        wave,
+                        last_input_output,
+                        versioned_data_cache,
+                        scheduler,
+                        &mut profiler
+                    );
+                    profiler.end_timing(&"validation".to_string());
+                    ret
+                },
+                SchedulerTask::ExecutionTask(version_to_execute, None) => {
+                    let now = Instant::now();
+                    profiler.start_timing(&"execution".to_string());
+                    profiler.count_one("exec".to_string());
 
-                        break;
-                    },
-                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                        //should never happen
-                        println!("This should never happen");
-                        break;
-                    }
-                    _ => {break;}
-                }
-            } else {
-                scheduler_task = match scheduler_task {
-                    SchedulerTask::ExecutionTask(version_to_execute, None) => {
-                        let now = Instant::now();
-                        profiler.start_timing(&"execution".to_string());
-                        profiler.count_one("exec".to_string());
+                    let ret = self.execute(
+                        version_to_execute,
+                        block,
+                        last_input_output,
+                        versioned_data_cache,
+                        scheduler,
+                        &executor,
+                        base_view,
+                        &mut profiler
+                    );
+                    profiler.end_timing(&"execution".to_string());
+                    extimer += now.elapsed().as_nanos();
+                    ret
+                },
+                SchedulerTask::ExecutionTask(_, Some(condvar)) => {
+                    let (lock, cvar) = &*condvar;
+                    // Mark dependency resolved.
+                    *lock.lock() = true;
+                    // Wake up the process waiting for dependency.
+                    cvar.notify_one();
 
-                        let ret = self.execute(
-                            version_to_execute,
-                            block,
-                            last_input_output,
-                            versioned_data_cache,
-                            scheduler,
-                            &executor,
-                            base_view,
-                            &mut profiler,
-                            thread_id,
-                        );
-                        profiler.end_timing(&"execution".to_string());
-                        extimer += now.elapsed().as_nanos();
-                        ret
-                    },
-                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                        let (lock, cvar) = &*condvar;
-                        // Mark dependency resolved.
-                        *lock.lock() = true;
-                        // Wake up the process waiting for dependency.
-                        cvar.notify_one();
+                    SchedulerTask::NoTask
+                },
+                SchedulerTask::NoTask => {
+                    profiler.start_timing(&"scheduling".to_string());
+                    let ret = scheduler.next_task(committing, &mut profiler);
+                    profiler.end_timing(&"scheduling".to_string());
+                    ret
+                },
+                SchedulerTask::Done => {
+                    // println!("Received done in executing thread");
+                    profiler.end_timing(&"thread time".to_string());
+                    (*total_profiler.lock()).add_from(&profiler);
 
-                        SchedulerTask::NoTask
-                    },
-                    SchedulerTask::NoTask => {
-                        profiler.start_timing(&"scheduling".to_string());
-                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
-                        profiler.end_timing(&"scheduling".to_string());
-                        ret
-                    },
-                    SchedulerTask::Done => {
-                        // println!("Received done in executing thread");
-                        profiler.end_timing(&"thread time".to_string());
-                        (*total_profiler.lock()).add_from(&profiler);
-
-                        break;
-                    },
-                    SchedulerTask::ValidationTask(_, _) => {
-                        println!("This validation should never happen");
-                        break;
-                    }
+                    break;
                 }
             }
         }
@@ -387,15 +338,11 @@ where
         let num_txns = signature_verified_block.len();
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
-        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
-        let barrier = Arc::new(Barrier::new(self.concurrency_level));
+        let scheduler = Scheduler::new(num_txns);
 
         RAYON_EXEC_POOL.scope(|s| {
             for i in 0..self.concurrency_level {
-                struct NotCopy<T>(T);
-                let i = NotCopy(i);
                 s.spawn(|_|  {
-                    let i = i;
                     self.work_task_with_scope(
                         &executor_initial_arguments,
                         signature_verified_block.txns(),
@@ -404,9 +351,7 @@ where
                         &scheduler,
                         base_view,
                         committing.swap(false, Ordering::SeqCst),
-                        profiler.clone(),
-                        barrier.clone(),
-                        i.0,
+                        profiler.clone()
                     );
                 });
             }
