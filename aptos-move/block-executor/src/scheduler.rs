@@ -345,10 +345,16 @@ impl Scheduler {
         let mut commit_state_mutex = self.commit_state.lock();
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
+        // println!("commit idx =  {}", *commit_idx);
 
         if *commit_idx == self.num_txns {
             // All txns have been committed, the parallel execution can finish.
             self.done_marker.store(true, Ordering::SeqCst);
+            for i in 0..self.concurrency_level {
+                let (lock,cvar) = &self.condvars[i];
+                *lock.lock() = true;
+                cvar.notify_one();
+            }
             return None;
         }
 
@@ -408,56 +414,83 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, idx: usize) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize) -> SchedulerTask {
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
         // println!("My thread_id = {}", thread_id);
         // let idx_to_validate = self.validation_idx.load(Ordering::SeqCst);
         // let idx_to_execute = self.execution_idx.load(Ordering::SeqCst);
-        let thread_id = idx;
-        /* This should only happen once to calculate the bottomlevels */
-        // println!("SCHED_SETUP");
-        // let my_end_comp = *self.end_comp[thread_id].lock();
-        let my_len = self.thread_buffer[thread_id].len();
-        if my_len <= rand::thread_rng().gen_range(10,30)  && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
-            if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                // println!("In here");
-                self.sched_setup();
-                // println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
-                return self.sched_next_chunk(profiler).unwrap()
-            }
-            else {
-                let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
-                btreeset.len()}).max().unwrap();
-                *self.max.lock() = max;
-
-                if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                // println!("validate: {:?}", version_to_validate);
-                    return SchedulerTask::ValidationTask(version_to_validate, guard);
-                }
-                if self.done() {
-                    return SchedulerTask::Done;
-                }
-                return self.try_exec(thread_id, profiler)}
-        }
-        else {
-            //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
-            // println!("Stuck here");
-            // profiler.start_timing(&"peek_lock_ex".to_string());
-            // profiler.end_timing(&"peek_lock_ex".to_string());
-            let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
-                btreeset.len()}).max().unwrap();
-            *self.max.lock() = max;
-
-            if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                // println!("validate: {:?}", version_to_validate);
-                return SchedulerTask::ValidationTask(version_to_validate, guard);
-            }
+        loop {
             if self.done() {
                 return SchedulerTask::Done;
             }
-            return self.try_exec(thread_id, profiler)
+            /* This should only happen once to calculate the bottomlevels */
+            // println!("SCHED_SETUP");
+            // let my_end_comp = *self.end_comp[thread_id].lock();
+            let my_len = self.thread_buffer[thread_id].len();
+            if my_len <= rand::thread_rng().gen_range(10,30)  && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+                if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
+                    // println!("In here");
+                    self.sched_setup();
+                    // println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
+                    return self.sched_next_chunk(profiler).unwrap()
+                }
+                else {
+                    let my_buff_size = self.thread_buffer[thread_id].len();
+                    let (idx_to_validate, _) =
+                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                    if my_buff_size == 0 && idx_to_validate >= self.num_txns {
+                        return if self.done() {
+                            SchedulerTask::Done
+                        } else {
+                            if !commiting {
+                                hint::spin_loop();
+                            }
+                            SchedulerTask::NoTask
+                        };
+                    }
+                    // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
+                    // btreeset.len()}).max().unwrap();
+                    // *self.max.lock() = max;
+
+                    if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
+                    // println!("validate: {:?}", version_to_validate);
+                        return SchedulerTask::ValidationTask(version_to_validate, guard);
+                    }
+
+                    return self.try_exec(thread_id, profiler, commiting)}
+            }
+            else {
+                //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
+                // println!("Stuck here");
+                // profiler.start_timing(&"peek_lock_ex".to_string());
+                // profiler.end_timing(&"peek_lock_ex".to_string());
+
+                // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
+                //     btreeset.len()}).max().unwrap();
+                // *self.max.lock() = max;
+                let (idx_to_validate, _) =
+                Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                let my_buff_size = self.thread_buffer[thread_id].len();
+                if my_buff_size == 0 && idx_to_validate >= self.num_txns {
+                    return if self.done() {
+                        SchedulerTask::Done
+                    } else {
+                        if !commiting {
+                            hint::spin_loop();
+                        }
+                        SchedulerTask::NoTask
+                    };
+                }
+
+                if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
+                    // println!("validate: {:?}", version_to_validate);
+                    return SchedulerTask::ValidationTask(version_to_validate, guard);
+                }
+
+                return self.try_exec(thread_id, profiler, commiting)
+            }
         }
     }
 
@@ -588,7 +621,7 @@ impl Scheduler {
 
     }
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
         if let Some(_txn_to_exec) = self.thread_buffer[thread_id].front() {
 
             let mut localidx: TxnIndex = 0;
@@ -647,13 +680,16 @@ impl Scheduler {
                 return SchedulerTask::Done
             }
             else {
+                if !commiting {
                 // println!("STUCK HERE");
-                let (lock,cvar) = &self.condvars[thread_id];
-                let mut q = lock.lock();
-                while !*q {
-                    q = cvar.wait(q).unwrap();
+                    let (lock,cvar) = &self.condvars[thread_id];
+                    let mut q = lock.lock();
+                    while !*q {
+                        q = cvar.wait(q).unwrap();
+                    }
+                    return SchedulerTask::NoTask;
                 }
-                return SchedulerTask::NoTask;
+                else {return SchedulerTask::NoTask}
             }
         }
     }

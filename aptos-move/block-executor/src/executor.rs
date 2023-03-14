@@ -46,6 +46,14 @@ pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
         .thread_name(|index| format!("par_exec_{}", index))
+        .spawn_handler(|thread| {
+            std::thread::spawn(|| {
+                affinity::set_thread_affinity(&[thread.index()]);
+                thread.run();
+
+            });
+            Ok(())
+        })
         .build()
         .unwrap()
 });
@@ -277,6 +285,11 @@ where
 
             scheduler_task = match scheduler_task {
                 SchedulerTask::ValidationTask(version_to_validate, wave) => {
+                    // println!(
+                    //     "thread_id {} validating txn_idx {}",
+                    //     RAYON_EXEC_POOL.current_thread_index().unwrap(),
+                    //     version_to_validate.0
+                    // );
                     profiler.start_timing(&"validation".to_string());
                     profiler.count_one("val".to_string());
                     let ret = self.validate(
@@ -306,6 +319,11 @@ where
                 },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
                     let now = Instant::now();
+                    // println!(
+                    //     "thread_id {} executing txn_idx {}",
+                    //     thread_id,
+                    //     version_to_execute.0
+                    // );
                     profiler.start_timing(&"execution".to_string());
                     profiler.count_one("exec".to_string());
 
