@@ -274,93 +274,68 @@ where
                     }
                 }
             }
-            if (thread_id == 0) {
-                scheduler_task = match scheduler_task {
-                    SchedulerTask::ValidationTask(version_to_validate, wave) => {
-                        profiler.start_timing(&"validation".to_string());
-                        profiler.count_one("val".to_string());
-                        let ret = self.validate(
-                            version_to_validate,
-                            wave,
-                            last_input_output,
-                            versioned_data_cache,
-                            scheduler,
-                            &mut profiler,
-                            thread_id,
-                        );
-                        profiler.end_timing(&"validation".to_string());
-                        ret
-                    },
-                    SchedulerTask::NoTask => {
-                        profiler.start_timing(&"scheduling".to_string());
-                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
-                        profiler.end_timing(&"scheduling".to_string());
-                        ret
-                    },
-                    SchedulerTask::Done => {
-                        // println!("Received Done hurray");
-                        profiler.end_timing(&"thread time".to_string());
-                        (*total_profiler.lock()).add_from(&profiler);
 
-                        break;
-                    },
-                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                        //should never happen
-                        println!("This should never happen");
-                        break;
-                    }
-                    _ => {break;}
-                }
-            } else {
-                scheduler_task = match scheduler_task {
-                    SchedulerTask::ExecutionTask(version_to_execute, None) => {
-                        let now = Instant::now();
-                        profiler.start_timing(&"execution".to_string());
-                        profiler.count_one("exec".to_string());
+            scheduler_task = match scheduler_task {
+                SchedulerTask::ValidationTask(version_to_validate, wave) => {
+                    profiler.start_timing(&"validation".to_string());
+                    profiler.count_one("val".to_string());
+                    let ret = self.validate(
+                        version_to_validate,
+                        wave,
+                        last_input_output,
+                        versioned_data_cache,
+                        scheduler,
+                        &mut profiler,
+                        thread_id,
+                    );
+                    profiler.end_timing(&"validation".to_string());
+                    ret
+                },
+                SchedulerTask::NoTask => {
+                    profiler.start_timing(&"scheduling".to_string());
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id);
+                    profiler.end_timing(&"scheduling".to_string());
+                    ret
+                },
+                SchedulerTask::Done => {
+                    // println!("Received Done hurray");
+                    profiler.end_timing(&"thread time".to_string());
+                    (*total_profiler.lock()).add_from(&profiler);
 
-                        let ret = self.execute(
-                            version_to_execute,
-                            block,
-                            last_input_output,
-                            versioned_data_cache,
-                            scheduler,
-                            &executor,
-                            base_view,
-                            &mut profiler,
-                            thread_id,
-                        );
-                        profiler.end_timing(&"execution".to_string());
-                        extimer += now.elapsed().as_nanos();
-                        ret
-                    },
-                    SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                        let (lock, cvar) = &*condvar;
-                        // Mark dependency resolved.
-                        *lock.lock() = true;
-                        // Wake up the process waiting for dependency.
-                        cvar.notify_one();
+                    break;
+                },
+                SchedulerTask::ExecutionTask(version_to_execute, None) => {
+                    let now = Instant::now();
+                    profiler.start_timing(&"execution".to_string());
+                    profiler.count_one("exec".to_string());
 
-                        SchedulerTask::NoTask
-                    },
-                    SchedulerTask::NoTask => {
-                        profiler.start_timing(&"scheduling".to_string());
-                        let ret = scheduler.next_task(committing, &mut profiler, thread_id);
-                        profiler.end_timing(&"scheduling".to_string());
-                        ret
-                    },
-                    SchedulerTask::Done => {
-                        // println!("Received done in executing thread");
-                        profiler.end_timing(&"thread time".to_string());
-                        (*total_profiler.lock()).add_from(&profiler);
+                    let ret = self.execute(
+                        version_to_execute,
+                        block,
+                        last_input_output,
+                        versioned_data_cache,
+                        scheduler,
+                        &executor,
+                        base_view,
+                        &mut profiler,
+                        thread_id,
+                    );
+                    profiler.end_timing(&"execution".to_string());
+                    extimer += now.elapsed().as_nanos();
+                    ret
+                },
+                SchedulerTask::ExecutionTask(_, Some(condvar)) => {
+                    let (lock, cvar) = &*condvar;
+                    // Mark dependency resolved.
+                    *lock.lock() = true;
+                    // Wake up the process waiting for dependency.
+                    cvar.notify_one();
 
-                        break;
-                    },
-                    SchedulerTask::ValidationTask(_, _) => {
-                        println!("This validation should never happen");
-                        break;
-                    }
-                }
+                    SchedulerTask::NoTask
+                },
+                _ => {break;}
             }
+
         }
     }
 
