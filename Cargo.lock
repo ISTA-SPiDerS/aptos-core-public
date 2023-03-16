@@ -63,18 +63,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "affinity"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "763e484feceb7dd021b21c5c6f81aee06b1594a743455ec7efbf72e6355e447b"
-dependencies = [
- "cfg-if",
- "errno",
- "libc",
- "num_cpus",
-]
-
-[[package]]
 name = "again"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -437,7 +425,6 @@ dependencies = [
 name = "aptos-block-executor"
 version = "0.1.0"
 dependencies = [
- "affinity",
  "anyhow",
  "aptos-aggregator",
  "aptos-infallible",
@@ -6294,7 +6281,6 @@ dependencies = [
 name = "language-e2e-testsuite"
 version = "0.1.0"
 dependencies = [
- "affinity",
  "aptos-block-executor",
  "aptos-cached-packages",
  "aptos-crypto",

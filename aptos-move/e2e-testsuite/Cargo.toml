@@ -38,7 +38,6 @@ aptos-mempool = { workspace = true }
 regex = "1.3.3"
 rand = "*"
 
-affinity = "0.1.2"
 crossbeam-skiplist = "0.1.1"
 [features]
 default = ["aptos-cached-packages/fuzzing"]

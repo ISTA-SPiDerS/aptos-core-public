@@ -35,7 +35,6 @@ proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 rayon = { workspace = true }
 itertools = { workspace = true }
-affinity = "0.1.2"
 rand = "0.7.3"
 crossbeam-skiplist = "0.1.1"
 
