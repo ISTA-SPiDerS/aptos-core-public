@@ -237,8 +237,6 @@ pub struct Scheduler {
 
     hint_graph: Vec<CachePadded<Vec<TxnIndex>>>,
 
-    validation_gap: usize,
-
     use_hints: bool,
 
     thread_buffer: Vec<Arc<SkipSet<TxnIndex>>>,
@@ -267,7 +265,7 @@ pub struct Scheduler {
 
     mapping: Vec<Mutex<usize>>,
 
-    incoming: Vec<Mutex<TxnIndex>>,
+    incoming: Vec<Mutex<usize>>,
 
     children: Vec<Mutex<Vec<TxnIndex>>>,
 
@@ -305,7 +303,6 @@ impl Scheduler {
             hint_graph: (0..num_txns)
                 .map(|idx| CachePadded::new(dependencies[idx].iter().map(|v| *v as TxnIndex).collect()))
                 .collect(),
-            validation_gap: 1000,
             // use_hints: (x==1),
             use_hints: true,
             //change capacity later
@@ -345,7 +342,7 @@ impl Scheduler {
         let mut commit_state_mutex = self.commit_state.lock();
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
-        // println!("commit idx =  {}", *commit_idx);
+        // //println!("commit idx =  {}", *commit_idx);
 
         if *commit_idx == self.num_txns {
             // All txns have been committed, the parallel execution can finish.
@@ -418,33 +415,38 @@ impl Scheduler {
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
-        // println!("My thread_id = {}", thread_id);
+        // //println!("My thread_id = {}, commiting = {}, buffer len = {}", thread_id, commiting, self.thread_buffer[thread_id].len());
         // let idx_to_validate = self.validation_idx.load(Ordering::SeqCst);
         // let idx_to_execute = self.execution_idx.load(Ordering::SeqCst);
         loop {
+            // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
             if self.done() {
                 return SchedulerTask::Done;
             }
             /* This should only happen once to calculate the bottomlevels */
-            // println!("SCHED_SETUP");
+            // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
             let my_len = self.thread_buffer[thread_id].len();
+            profiler.start_timing(&"try_schedule".to_string());
             if my_len <= rand::thread_rng().gen_range(10,30)  && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                    // println!("In here");
+                    // //println!("In here");
                     self.sched_setup();
-                    // println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
+                    // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
+                    profiler.end_timing(&"try_schedule".to_string());
+
                     return self.sched_next_chunk(profiler).unwrap()
                 }
                 else {
-                    let my_buff_size = self.thread_buffer[thread_id].len();
+                    profiler.end_timing(&"try_schedule".to_string());
                     let (idx_to_validate, _) =
                     Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                    if my_buff_size == 0 && idx_to_validate >= self.num_txns {
+                    if my_len == 0 && idx_to_validate >= self.num_txns {
                         return if self.done() {
                             SchedulerTask::Done
                         } else {
                             if !commiting {
+                                // //println!("STUCK HERE");
                                 hint::spin_loop();
                             }
                             SchedulerTask::NoTask
@@ -455,15 +457,17 @@ impl Scheduler {
                     // *self.max.lock() = max;
 
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                    // println!("validate: {:?}", version_to_validate);
+                    // //println!("validate: {:?}", version_to_validate);
                         return SchedulerTask::ValidationTask(version_to_validate, guard);
                     }
 
                     return self.try_exec(thread_id, profiler, commiting)}
             }
             else {
+                profiler.start_timing(&"SCHEDULING".to_string());
+
                 //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
-                // println!("Stuck here");
+                // //println!("Stuck here");
                 // profiler.start_timing(&"peek_lock_ex".to_string());
                 // profiler.end_timing(&"peek_lock_ex".to_string());
 
@@ -472,12 +476,12 @@ impl Scheduler {
                 // *self.max.lock() = max;
                 let (idx_to_validate, _) =
                 Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                let my_buff_size = self.thread_buffer[thread_id].len();
-                if my_buff_size == 0 && idx_to_validate >= self.num_txns {
+                if my_len == 0 && idx_to_validate >= self.num_txns {
                     return if self.done() {
                         SchedulerTask::Done
                     } else {
                         if !commiting {
+                            //println!("STUCK HERE");
                             hint::spin_loop();
                         }
                         SchedulerTask::NoTask
@@ -485,7 +489,7 @@ impl Scheduler {
                 }
 
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                    // println!("validate: {:?}", version_to_validate);
+                    // //println!("validate: {:?}", version_to_validate);
                     return SchedulerTask::ValidationTask(version_to_validate, guard);
                 }
 
@@ -500,17 +504,17 @@ impl Scheduler {
             return ()
         }
         *init = false;
-        // println!("SCHED_SETUP");
+        // //println!("SCHED_SETUP");
         *self.mapping[0].lock() = 0;
         let mut bottomlevels: Vec<TxnIndex> = vec![0; self.num_txns];
         for i in (0..self.num_txns).rev() {
             for node in &*self.hint_graph[i] {
-                // println!("incoming length = {}", incoming.len());
-                // println!("self.num_txns = {}", self.num_txns);
+                // //println!("incoming length = {}", incoming.len());
+                // //println!("self.num_txns = {}", self.num_txns);
 
                 *self.incoming[i].lock() += 1;
                 self.children[*node].lock().push(i);
-                if bottomlevels[*node] <= bottomlevels[i] + 1 {
+                if bottomlevels[*node] < bottomlevels[i] + 1 {
                     bottomlevels[*node] = bottomlevels[i] + 1;
                 }
             }
@@ -539,11 +543,11 @@ impl Scheduler {
         let mut counter: usize = 0;
         while self.heap.len() > 0 {
 
-            if counter > 99 {
+            if counter > usize::MAX {
                 break
             }
             ui = *self.heap.pop_front().unwrap();
-            // println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
+            // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
 
         /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index].clone().iter()
@@ -558,22 +562,22 @@ impl Scheduler {
                     cmpOrdering::Greater
                 }
             });
-            // println!("{:?}", parents[0].idx);
+            // //println!("{:?}", parents[0].idx);
 
             /* find the best proc for task */
             best_begin_time = usize::MAX;
             for proc in 0..self.concurrency_level {
                 begin_time = *self.end_comp[proc].lock();
-                // println!("begin_time = {}", begin_time);
+                // //println!("begin_time = {}", begin_time);
 
                 for dad in &parents {
-                    // println!("parent {}", dad.idx);
+                    // //println!("parent {}", dad.idx);
                     if *self.mapping[dad.idx].lock() == proc {
                         ready = *self.finish_time[dad.idx].lock();
-                        // println!("ready = {} if same proc = {}",ready, proc);
+                        // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
                         ready = *self.finish_time[dad.idx].lock() + CACHE_OVERHEAD;
-                        // println!("ready = {} if not same proc = {}", ready, proc);
+                        // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
                 }
@@ -588,22 +592,11 @@ impl Scheduler {
             let (lock,cvar) = &self.condvars[best_proc];
             *lock.lock() = true;
             cvar.notify_one();
-            // println!("Inserted {} to thread {}", ui.index, best_proc);
-            begin_time = *self.end_comp[best_proc].lock();
-            for dad in &parents {
-                if *self.mapping[dad.idx].lock() == usize::MAX {
-                    println!("Problem in BL_EST (running {} before {})", ui.index, dad.idx);
-                }
-                if *self.mapping[dad.idx].lock() == best_proc {
-                    ready = *self.finish_time[dad.idx].lock();
-                } else {
-                    ready = *self.finish_time[dad.idx].lock() + CACHE_OVERHEAD;
-                }
-                begin_time = if begin_time < ready {ready} else {begin_time};
-            }
+            //println!("Inserted {} to thread {}", ui.index, best_proc);
+
             /* run time estimation*/
-            *self.end_comp[best_proc].lock() = begin_time + (self.gas_estimates[ui.index] as usize);
-            // println!("gas estimate = {}", self.gas_estimates[ui.index]);
+            *self.end_comp[best_proc].lock() = best_begin_time + (self.gas_estimates[ui.index] as usize);
+            // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
             *self.finish_time[ui.index].lock() = *self.end_comp[best_proc].lock();
             let bottomlock = &*self.bottomlevels.lock();
             for child in &*self.children[ui.index].lock() {
@@ -622,47 +615,50 @@ impl Scheduler {
     }
 
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
+        profiler.start_timing(&"try_exec".to_string());
         if let Some(_txn_to_exec) = self.thread_buffer[thread_id].front() {
 
             let mut localidx: TxnIndex = 0;
             for txn in self.thread_buffer[thread_id].iter() {
                 let mut my_global_idx_mutex = self.tglobalidx[thread_id].lock();
-                // println!("INDEX = {} -> global = {}, local = {} and size {}", thread_id-1, *my_global_idx_mutex, localidx, self.thread_buffer[thread_id -1].len());
-
-                if *my_global_idx_mutex == usize::MAX {
+                // //println!("INDEX = {} -> global = {}, local = {} and size {}", thread_id, *my_global_idx_mutex, localidx, self.thread_buffer[thread_id].len());
+                //|| localidx == self.thread_buffer[thread_id].len()
+                if (*my_global_idx_mutex == usize::MAX && *my_global_idx_mutex !=0) {
                     *my_global_idx_mutex = 0;
                     return SchedulerTask::NoTask
                 }
-                if localidx > 49 {
-                    drop(my_global_idx_mutex);
-                    hint::spin_loop;
-                    return SchedulerTask::NoTask
-                }
+                // if localidx > 49 {
+                //     drop(my_global_idx_mutex);
+                //     hint::spin_loop;
+                //     return SchedulerTask::NoTask
+                // }
                 if let ControlFlow::Break(_) = check_index(&mut localidx, &my_global_idx_mutex) {
                     continue;
                 }
-                // drop(my_global_idx_mutex);
+                drop(my_global_idx_mutex);
                 let txn_to_exec = txn.value();
-                // println!("txn_to_exec = {} in buffer {}", *txn_to_exec, thread_id -1);
+                // //println!("txn_to_exec = {} in buffer {}", *txn_to_exec, thread_id -1);
 
                 if let Some((version_to_execute, maybe_condvar)) =
                 self.try_execute_next_version(profiler, *txn_to_exec, thread_id)
                 {
                     // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
                     // if localidx < *my_global_idx_mutex {
-                    //     println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
+                    //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
                     // }
-                    // println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
+                    // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
                     // drop(my_global_idx_mutex);
+                    profiler.end_timing(&"try_exec".to_string());
                     return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
 
                 }
 
                 else {
+                    let mut my_global_idx_mutex = self.tglobalidx[thread_id].lock();
 
-
-                    if *my_global_idx_mutex == usize::MAX {
+                    if *my_global_idx_mutex == usize::MAX || *my_global_idx_mutex == self.thread_buffer[thread_id].len()-1 {
                         *my_global_idx_mutex = 0;
+                        profiler.end_timing(&"try_exec".to_string());
                         return SchedulerTask::NoTask
                     }
                     else {
@@ -673,6 +669,8 @@ impl Scheduler {
                     continue;
                 }
             }
+            profiler.end_timing(&"try_exec".to_string());
+
             return SchedulerTask::NoTask
         }
         else {
@@ -681,15 +679,20 @@ impl Scheduler {
             }
             else {
                 if !commiting {
-                // println!("STUCK HERE");
+                //println!("STUCK HERE inside try_exec");
                     let (lock,cvar) = &self.condvars[thread_id];
                     let mut q = lock.lock();
                     while !*q {
                         q = cvar.wait(q).unwrap();
                     }
+                profiler.end_timing(&"try_exec".to_string());
+
                     return SchedulerTask::NoTask;
                 }
-                else {return SchedulerTask::NoTask}
+
+                else {
+                    profiler.end_timing(&"try_exec".to_string());
+                    return SchedulerTask::NoTask}
             }
         }
     }
@@ -703,17 +706,21 @@ impl Scheduler {
         profiler: &mut Profiler,
     ) -> bool {
         //should start saving thread_id somewhere, argument in function maybe
+        profiler.start_timing(&"add_dep_TIME".to_string());
         let thread_id = idx;
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
         if self.is_executed(dep_txn_idx, true).is_some() {
+            profiler.end_timing(&"add_dep_TIME".to_string());
             return false;
         }
         if stored_deps.contains_key(&txn_idx) {
+            profiler.end_timing(&"add_dep_TIME".to_string());
             return true;
         }
-        // println!("inserting txn_idx {} as a dependency to {}, at my thread_id {}", txn_idx, dep_txn_idx, thread_id);
+        // println!("inserting txn_idx {} as a dependency on {}, at my thread_id {}", txn_idx, dep_txn_idx, thread_id);
         profiler.count_one("addDep".to_string());
         stored_deps.insert(txn_idx, thread_id);
+        profiler.end_timing(&"add_dep_TIME".to_string());
         true
     }
 
@@ -732,6 +739,7 @@ impl Scheduler {
         // usually has just observed the read dependency.
 
         // Create a condition variable associated with the dependency.
+        panic!("This should not be called");
         let thread_id = crate::executor::RAYON_EXEC_POOL.current_thread_index().unwrap();
         let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
@@ -788,30 +796,33 @@ impl Scheduler {
         // difference and like this correctness argument is much easier to see, in fact also
         // the reason why we grab write lock directly, and never release it during the whole function.
         // So even validation status readers have to wait if they somehow end up at the same index.
+        //println!("finished execution of {}", txn_idx);
         let mut validation_status = self.txn_status[txn_idx].1.write();
         self.set_executed_status(txn_idx, incarnation);
         {   self.thread_buffer[thread_id].remove(&txn_idx);
-            // println!("popped my own txn idx {txn_idx} from my (thread_id - 1) = {thread_id} - 1");
         }
 
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
-        // println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
+        //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         for txn in stored_deps.keys() {
-            // println!("TXN = {}",txn);
+            // //println!("TXN = {}",txn);
             let target_thread = stored_deps[txn];
-            // println!("Target thread = {}", target_thread);
+            // //println!("Target thread = {}", target_thread);
             // self.resume((*txn).clone());
-            // println!("WTF?");
-            // println!("Inserting {}. to thread_buffer[{}] after finishing exec of {}", *txn, target_thread, txn_idx);
-            // println!("before insert after finish {:?}, index {}", self.thread_buffer[target_thread], target_thread);
+            // //println!("WTF?");
+            // //println!("Inserting {}. to thread_buffer[{}] after finishing exec of {}", *txn, target_thread, txn_idx);
+            // //println!("before insert after finish {:?}, index {}", self.thread_buffer[target_thread], target_thread);
             // profiler.start_timing(&"insert_lock_ex".to_string());
             // self.thread_buffer[target_thread].lock().insert(*txn);
             // profiler.end_timing(&"insert_lock_ex".to_string());
-            // println!("Inserted {} after execution of {}",*txn, txn_idx);
+            // //println!("Inserted {} after execution of {}",*txn, txn_idx);
+            // self.resume(*txn);
             let mut my_globalidx = self.tglobalidx[target_thread].lock();
+            //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
+
             *my_globalidx = usize::MAX;
 
-            self.resume(*txn);
+
         }
         stored_deps.clear();
 
@@ -843,7 +854,7 @@ impl Scheduler {
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
         if cur_val_idx > txn_idx {
-            if revalidate_suffix {
+            if revalidate_suffix  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
@@ -959,15 +970,15 @@ impl Scheduler {
                     // unsafe {
                     //     count += 1;
                     //     if count % 100 == 0 {
-                    //         println!("{}", count);
+                    //         //println!("{}", count);
                     //     }
                     // }
 
                     if self.is_executed(*dependency,true).is_none() {
                         if self.add_dependency(txn_idx, *dependency, thread_id, profiler) {
                             // profiler.count_one("addDep".to_string());
-                            // // println!("Popping from thread_buffer due to dependency");
-                            // // println!("before popping {:?}, index {}", self.thread_buffer[thread_id-1], thread_id -1);
+                            // // //println!("Popping from thread_buffer due to dependency");
+                            // // //println!("before popping {:?}, index {}", self.thread_buffer[thread_id-1], thread_id -1);
                             // let status = self.txn_status[*dependency].0.read();
                             // if let ExecutionStatus::Executed(_) = *status {
                             //     continue;
@@ -975,7 +986,7 @@ impl Scheduler {
                             // profiler.start_timing(&"pop_lock_ex".to_string());
                             // let value = self.thread_buffer[thread_id-1].lock().remove(&txn_idx);
                             // profiler.end_timing(&"pop_lock_ex".to_string());
-                            // println!("Popped {} = {} from thread_buffer [{}] due to dependency from {}", txn_idx, value, thread_id - 1, *dependency);
+                            // //println!("Popped {} = {} from thread_buffer [{}] due to dependency from {}", txn_idx, value, thread_id - 1, *dependency);
                             return None;
                         }
                     }
@@ -1038,7 +1049,7 @@ impl Scheduler {
             if !self.done() {
                 // Avoid pointlessly spinning, and give priority to other threads that may
                 // be working to finish the remaining tasks.
-                hint::spin_loop();
+                // hint::spin_loop();
             }
             return None;
         }
