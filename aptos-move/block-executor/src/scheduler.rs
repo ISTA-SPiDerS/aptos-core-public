@@ -4,6 +4,8 @@
 use aptos_infallible::Mutex;
 use crossbeam::utils::CachePadded;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
+use tracing::info;
+use tracing_subscriber::EnvFilter;
 use std::{
     io,
     cmp::{min, Ordering as cmpOrdering,max},
@@ -18,13 +20,22 @@ use std::{
         BTreeMap,
         HashMap,
     },
-    ops::ControlFlow
+    ops::ControlFlow,
+    future::Future,
+    pin::Pin,
+    task::{Context,Poll, Waker},
 };
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
+use color_eyre::Report;
 use dashmap::{DashMap, DashSet};
 use aptos_types::transaction::{Profiler, TransactionStatus};
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
-
+use tokio::sync::mpsc;
+// use async_priority_channel::*;
 
 const CACHE_OVERHEAD: usize = 10000;
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
@@ -41,6 +52,33 @@ type DependencyCondvar = Arc<(Mutex<bool>, Condvar)>;
 /// each contain a version of transaction that must be executed or validated, respectively.
 /// NoTask holds no task (similar None if we wrapped tasks in Option), and Done implies that
 /// there are no more tasks and the scheduler is done.
+
+// pub struct MyFuture {
+//     shared_state: Arc<Mutex<SharedState>>,
+
+// }
+
+// struct SharedState {
+//     completed: bool,
+//     waker: Option<Waker>,
+// }
+// impl Future for MyFuture {
+//     type Output = ();
+
+
+//     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+//         let mut shared_state = self.shared_state.lock();
+//         if shared_state.completed {
+//             Poll::Ready(())
+
+//         }
+//         else {
+//             shared_state.waker = Some(cx.waker().clone());
+//             Poll::Pending
+//         }
+//     }
+
+
 pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
     ValidationTask(Version, Wave),
@@ -239,8 +277,6 @@ pub struct Scheduler {
 
     use_hints: bool,
 
-    thread_buffer: Vec<Arc<SkipSet<TxnIndex>>>,
-
     on_thread: Vec<CachePadded<Mutex<usize>>>,
 
     // round_number: AtomicUsize, //might need to make this AtomicUsize, no actual need but Rust
@@ -256,8 +292,6 @@ pub struct Scheduler {
     sched_lock: AtomicUsize,
 
     condvars:Vec<(Mutex<bool>,Condvar)>,
-
-    tglobalidx: Vec<Mutex<usize>>,
 
     heap: SkipSet<Task>,
 
@@ -276,6 +310,11 @@ pub struct Scheduler {
     init_lock: Mutex<bool>,
 
     nscheduled:AtomicUsize,
+
+    channels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
+
+    priochannels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
+
 }
 
 /// Public Interfaces for the Scheduler
@@ -306,9 +345,6 @@ impl Scheduler {
             // use_hints: (x==1),
             use_hints: true,
             //change capacity later
-            thread_buffer: (0..(*concurrency_level))
-                .map(|_| Arc::new(SkipSet::new()))
-                .collect(),
             on_thread: Vec::with_capacity(num_txns),
             // round_number: AtomicUsize::new(0),
             my_last_stop: (0..(*concurrency_level-1))
@@ -321,9 +357,6 @@ impl Scheduler {
             condvars: (0..(*concurrency_level))
             .map(|_| (Mutex::new(false),Condvar::new()))
             .collect(),
-            tglobalidx: (0..(*concurrency_level))
-            .map(|_| Mutex::new(0))
-            .collect(),
             heap: SkipSet::new(),
             finish_time: (0..num_txns +1).map(|_| Mutex::new(0)).collect(),
             mapping: (0..num_txns +1).map(|_| Mutex::new(usize::MAX)).collect(),
@@ -333,6 +366,9 @@ impl Scheduler {
             bottomlevels: Arc::new(Mutex::new((Vec::new()))),
             init_lock: Mutex::new(true),
             nscheduled: AtomicUsize::new(0),
+            channels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
+            priochannels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
+
         }
     }
 
@@ -426,9 +462,9 @@ impl Scheduler {
             /* This should only happen once to calculate the bottomlevels */
             // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
-            let my_len = self.thread_buffer[thread_id].len();
+            // let my_len = self.thread_buffer[thread_id].len();
             profiler.start_timing(&"try_schedule".to_string());
-            if my_len <= rand::thread_rng().gen_range(10,30)  && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     // //println!("In here");
                     self.sched_setup();
@@ -441,17 +477,17 @@ impl Scheduler {
                     profiler.end_timing(&"try_schedule".to_string());
                     let (idx_to_validate, _) =
                     Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                    if my_len == 0 && idx_to_validate >= self.num_txns {
-                        return if self.done() {
-                            SchedulerTask::Done
-                        } else {
-                            if !commiting {
-                                // //println!("STUCK HERE");
-                                hint::spin_loop();
-                            }
-                            SchedulerTask::NoTask
-                        };
-                    }
+                    // if my_len == 0 && idx_to_validate >= self.num_txns {
+                    //     return if self.done() {
+                    //         SchedulerTask::Done
+                    //     } else {
+                    //         if !commiting {
+                    //             // //println!("STUCK HERE");
+                    //             hint::spin_loop();
+                    //         }
+                    //         SchedulerTask::NoTask
+                    //     };
+                    // }
                     // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
                     // btreeset.len()}).max().unwrap();
                     // *self.max.lock() = max;
@@ -476,17 +512,17 @@ impl Scheduler {
                 // *self.max.lock() = max;
                 let (idx_to_validate, _) =
                 Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                if my_len == 0 && idx_to_validate >= self.num_txns {
-                    return if self.done() {
-                        SchedulerTask::Done
-                    } else {
-                        if !commiting {
-                            //println!("STUCK HERE");
-                            hint::spin_loop();
-                        }
-                        SchedulerTask::NoTask
-                    };
-                }
+                // if my_len == 0 && idx_to_validate >= self.num_txns {
+                //     return if self.done() {
+                //         SchedulerTask::Done
+                //     } else {
+                //         if !commiting {
+                //             //println!("STUCK HERE");
+                //             hint::spin_loop();
+                //         }
+                //         SchedulerTask::NoTask
+                //     };
+                // }
 
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                     // //println!("validate: {:?}", version_to_validate);
@@ -550,18 +586,19 @@ impl Scheduler {
             // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
 
         /* Sort Pred[ui] in a non-decreasing order of finish times */
-            let mut parents: Vec<Parent> = self.hint_graph[ui.index].clone().iter()
+            let mut parents: Vec<Parent> = self.hint_graph[ui.index]
+            .clone().iter()
             .map(|i| Parent {idx: *i, finish_time: *self.finish_time[*i].lock()})
             .collect::<Vec<Parent>>();
-            parents.sort_by(|a, b| {
-                if a.finish_time < b.finish_time {
-                    cmpOrdering::Less
-                } else if  a.finish_time == b.finish_time {
-                    cmpOrdering::Equal
-                } else {
-                    cmpOrdering::Greater
-                }
-            });
+            // parents.sort_by(|a, b| {
+            //     if a.finish_time < b.finish_time {
+            //         cmpOrdering::Less
+            //     } else if  a.finish_time == b.finish_time {
+            //         cmpOrdering::Equal
+            //     } else {
+            //         cmpOrdering::Greater
+            //     }
+            // });
             // //println!("{:?}", parents[0].idx);
 
             /* find the best proc for task */
@@ -587,12 +624,18 @@ impl Scheduler {
                 }
             }
             *self.mapping[ui.index].lock() = best_proc;
-            self.thread_buffer[best_proc].insert(ui.index);
+            // self.thread_buffer[best_proc].insert(ui.index);
+            {
+                let (tx, rx) = &*self.channels[best_proc].lock();
+
+                tx.send(ui.index).unwrap();
+                // info!("Sent {} to {} ", ui.index, best_proc);
+
+            }
             self.nscheduled.fetch_add(1, Ordering::SeqCst);
             let (lock,cvar) = &self.condvars[best_proc];
             *lock.lock() = true;
             cvar.notify_one();
-            //println!("Inserted {} to thread {}", ui.index, best_proc);
 
             /* run time estimation*/
             *self.end_comp[best_proc].lock() = best_begin_time + (self.gas_estimates[ui.index] as usize);
@@ -614,61 +657,48 @@ impl Scheduler {
 
     }
 
+
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
+
         profiler.start_timing(&"try_exec".to_string());
-        if let Some(_txn_to_exec) = self.thread_buffer[thread_id].front() {
+        // info!("{} TRYIN TO EXEC", thread_id);
 
-            let mut localidx: TxnIndex = 0;
-            for txn in self.thread_buffer[thread_id].iter() {
-                let mut my_global_idx_mutex = self.tglobalidx[thread_id].lock();
-                // //println!("INDEX = {} -> global = {}, local = {} and size {}", thread_id, *my_global_idx_mutex, localidx, self.thread_buffer[thread_id].len());
-                //|| localidx == self.thread_buffer[thread_id].len()
-                if (*my_global_idx_mutex == usize::MAX && *my_global_idx_mutex !=0) {
-                    *my_global_idx_mutex = 0;
-                    return SchedulerTask::NoTask
-                }
-                // if localidx > 49 {
-                //     drop(my_global_idx_mutex);
-                //     hint::spin_loop;
-                //     return SchedulerTask::NoTask
-                // }
-                if let ControlFlow::Break(_) = check_index(&mut localidx, &my_global_idx_mutex) {
-                    continue;
-                }
-                drop(my_global_idx_mutex);
-                let txn_to_exec = txn.value();
-                // //println!("txn_to_exec = {} in buffer {}", *txn_to_exec, thread_id -1);
 
-                if let Some((version_to_execute, maybe_condvar)) =
-                self.try_execute_next_version(profiler, *txn_to_exec, thread_id)
-                {
-                    // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
-                    // if localidx < *my_global_idx_mutex {
-                    //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
-                    // }
-                    // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
-                    // drop(my_global_idx_mutex);
-                    profiler.end_timing(&"try_exec".to_string());
-                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+        let mut priolock = self.priochannels[thread_id].lock();
+        if let Ok(txn_to_exec) = priolock.1.try_recv() {
 
-                }
+            drop(priolock);
+            //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
-                else {
-                    let mut my_global_idx_mutex = self.tglobalidx[thread_id].lock();
+            if let Some((version_to_execute, maybe_condvar)) =
+            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+            {
 
-                    if *my_global_idx_mutex == usize::MAX || *my_global_idx_mutex == self.thread_buffer[thread_id].len()-1 {
-                        *my_global_idx_mutex = 0;
-                        profiler.end_timing(&"try_exec".to_string());
-                        return SchedulerTask::NoTask
-                    }
-                    else {
-                        *my_global_idx_mutex = localidx;
-                        localidx += 1;
-                    }
-                    drop(my_global_idx_mutex);
-                    continue;
-                }
+                profiler.end_timing(&"try_exec".to_string());
+                return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
+        }
+
+        let rx = &mut self.channels[thread_id].lock().1;
+
+        if let Ok(txn_to_exec) = rx.try_recv() {
+
+            drop(rx);
+            //info!("Received {}", txn_to_exec);
+
+            if let Some((version_to_execute, maybe_condvar)) =
+            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+            {
+                // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
+                // if localidx < *my_global_idx_mutex {
+                //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
+                // }
+                // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
+                // drop(my_global_idx_mutex);
+                profiler.end_timing(&"try_exec".to_string());
+                return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+            }
+
             profiler.end_timing(&"try_exec".to_string());
 
             return SchedulerTask::NoTask
@@ -677,23 +707,8 @@ impl Scheduler {
             if self.done() {
                 return SchedulerTask::Done
             }
-            else {
-                if !commiting {
-                //println!("STUCK HERE inside try_exec");
-                    let (lock,cvar) = &self.condvars[thread_id];
-                    let mut q = lock.lock();
-                    while !*q {
-                        q = cvar.wait(q).unwrap();
-                    }
-                profiler.end_timing(&"try_exec".to_string());
-
-                    return SchedulerTask::NoTask;
-                }
-
-                else {
-                    profiler.end_timing(&"try_exec".to_string());
-                    return SchedulerTask::NoTask}
-            }
+            // //info!("Channel empty");
+            return SchedulerTask::NoTask;
         }
     }
 
@@ -705,10 +720,12 @@ impl Scheduler {
         idx: usize,
         profiler: &mut Profiler,
     ) -> bool {
-        //should start saving thread_id somewhere, argument in function maybe
         profiler.start_timing(&"add_dep_TIME".to_string());
         let thread_id = idx;
+        //info!("Try to acquire txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
+        //info!("acquired txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
+
         if self.is_executed(dep_txn_idx, true).is_some() {
             profiler.end_timing(&"add_dep_TIME".to_string());
             return false;
@@ -796,13 +813,16 @@ impl Scheduler {
         // difference and like this correctness argument is much easier to see, in fact also
         // the reason why we grab write lock directly, and never release it during the whole function.
         // So even validation status readers have to wait if they somehow end up at the same index.
-        //println!("finished execution of {}", txn_idx);
+        //info!("started finish execution of {} on thread_id {}", txn_idx, thread_id);
+
         let mut validation_status = self.txn_status[txn_idx].1.write();
         self.set_executed_status(txn_idx, incarnation);
-        {   self.thread_buffer[thread_id].remove(&txn_idx);
-        }
+        //info!("set executed status in finish execution of {}", txn_idx);
 
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
+        //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
+        //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
+
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         for txn in stored_deps.keys() {
             // //println!("TXN = {}",txn);
@@ -817,11 +837,17 @@ impl Scheduler {
             // profiler.end_timing(&"insert_lock_ex".to_string());
             // //println!("Inserted {} after execution of {}",*txn, txn_idx);
             // self.resume(*txn);
-            let mut my_globalidx = self.tglobalidx[target_thread].lock();
-            //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
+            //info!("before acquiring prio channel lock in finish execution of {}", txn_idx);
 
-            *my_globalidx = usize::MAX;
+            {
+                let priolock = self.priochannels[target_thread].lock();
+                priolock.0.send(*txn).unwrap();
+                drop(priolock);
+            }
+            //info!("after acquiring prio channel lock in finish execution of {}", txn_idx);
 
+            // //info!("PRIO Sent {}", *txn);
+                   //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
 
         }
         stored_deps.clear();
@@ -854,7 +880,7 @@ impl Scheduler {
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
         if cur_val_idx > txn_idx {
-            if revalidate_suffix  {
+            if false  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
@@ -870,6 +896,7 @@ impl Scheduler {
                 return SchedulerTask::ValidationTask((txn_idx, incarnation), cur_wave);
             }
         }
+        //info!("finished execution of {}", txn_idx);
 
         SchedulerTask::NoTask
     }
@@ -908,13 +935,13 @@ impl Scheduler {
     }
 }
 
-fn check_index(localidx: &mut usize, my_global_idx_mutex: &aptos_infallible::MutexGuard<usize>) -> ControlFlow<()> {
-    if *localidx < **my_global_idx_mutex {
-        *localidx += 1;
-        return ControlFlow::Break(());
-    }
-    ControlFlow::Continue(())
-}
+// fn check_index(localidx: &mut usize, my_global_idx_mutex: &aptos_infallible::MutexGuard<usize>) -> ControlFlow<()> {
+//     if *localidx < **my_global_idx_mutex {
+//         *localidx += 1;
+//         return ControlFlow::Break(());
+//     }
+//     ControlFlow::Continue(())
+// }
 
 /// Public functions of the Scheduler
 impl Scheduler {

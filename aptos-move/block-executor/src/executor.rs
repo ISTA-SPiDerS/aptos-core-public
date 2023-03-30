@@ -11,6 +11,9 @@ use crate::{
     txn_last_input_output::TxnLastInputOutput,
     view::{LatestView, MVHashMapView},
 };
+use tracing::info;
+use color_eyre::Report;
+use tracing_subscriber::EnvFilter;
 use itertools::Itertools;
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
 use std::{
@@ -42,6 +45,8 @@ use std::{
 use aptos_infallible::Mutex;
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
+use std::sync::{Once, ONCE_INIT};
+static INIT: Once = Once::new();
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
 // let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
@@ -192,6 +197,22 @@ where
         return result;
     }
 
+    fn setup() -> Result<(), Report> {
+        if std::env::var("RUST_LIB_BACKTRACE").is_err() {
+            std::env::set_var("RUST_LIB_BACKTRACE", "1")
+        }
+        color_eyre::install();
+
+        if std::env::var("RUST_LOG").is_err() {
+            std::env::set_var("RUST_LOG", "info")
+        }
+        tracing_subscriber::fmt::fmt()
+            .with_env_filter(EnvFilter::from_default_env())
+            .init();
+
+        Ok(())
+    }
+
     fn validate(
         &self,
         version_to_validate: Version,
@@ -289,7 +310,7 @@ where
                 SchedulerTask::ValidationTask(version_to_validate, wave) => {
                     // println!(
                     //     "thread_id {} validating txn_idx {}",
-                    //     RAYON_EXEC_POOL.current_thread_index().unwrap(),
+                    //     thread_id,
                     //     version_to_validate.0
                     // );
                     profiler.start_timing(&"validation".to_string());
@@ -313,7 +334,7 @@ where
                     ret
                 },
                 SchedulerTask::Done => {
-                    // println!("Received Done hurray");
+                    // info!("Received Done hurray");
                     profiler.end_timing(&"thread time".to_string());
                     (*total_profiler.lock()).add_from(&profiler);
 
@@ -384,6 +405,8 @@ where
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
         let barrier = Arc::new(Barrier::new(self.concurrency_level));
+        INIT.call_once(|| {Self::setup();
+             ()});
 
         RAYON_EXEC_POOL.scope(|s| {
             for i in 0..self.concurrency_level {

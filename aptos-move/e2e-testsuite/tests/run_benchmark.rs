@@ -103,44 +103,44 @@ fn main() {
 
     println!("REGISTER SUCCESS");
 
-    println!("STARTING WARMUP");
-    for warmup in [1, 2, 3] {
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
-        let block = get_transaction_register(block.clone(), &executor)
-            .map_par_txns(Transaction::UserTransaction);
+    // println!("STARTING WARMUP");
+    // for warmup in [1, 2, 3] {
+    //     let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
+    //     let block = get_transaction_register(block.clone(), &executor)
+    //         .map_par_txns(Transaction::UserTransaction);
 
-        let mut prex_block_result = register_block_result.clone();
+    //     let mut prex_block_result = register_block_result.clone();
 
-        prex_block_result = executor.execute_transaction_block_parallel(
-            block.clone(),
-            CORES as usize,
-            Standard, &mut Profiler::new(),
-        )
-            .unwrap();
+    //     prex_block_result = executor.execute_transaction_block_parallel(
+    //         block.clone(),
+    //         CORES as usize,
+    //         Standard, &mut Profiler::new(),
+    //     )
+    //         .unwrap();
 
 
-        for result in prex_block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
-                }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
-        }
-    }
-    println!("END WARMUP");
+    //     for result in prex_block_result {
+    //         match result.status() {
+    //             TransactionStatus::Keep(status) => {
+    //                 executor.apply_write_set(result.write_set());
+    //                 assert_eq!(
+    //                     status,
+    //                     &ExecutionStatus::Success,
+    //                     "transaction failed with {:?}",
+    //                     status
+    //                 );
+    //             }
+    //             TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+    //             TransactionStatus::Retry => panic!("transaction status is retry"),
+    //         };
+    //     }
+    // }
+    // println!("END WARMUP");
 
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,8,12,16, 20];
+    let core_set = [4,8,12,16];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
     let modes = [Hints];
@@ -162,21 +162,21 @@ fn main() {
         println!("#################################################################################");
     }
 
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
-        }
-        println!("#################################################################################");
-    }
+    // for mode in modes {
+    //     for c in core_set {
+    //         runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+    //     }
+    //     println!("#################################################################################");
+    // }
 
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX);
-        }
-        println!("#################################################################################");
-    }
+    // for mode in modes {
+    //     for c in core_set {
+    //         runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX);
+    //     }
+    //     println!("#################################################################################");
+    // }
 
-    println!("EXECUTION SUCCESS");
+    // println!("EXECUTION SUCCESS");
 }
 
 fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType) {
