@@ -162,21 +162,21 @@ fn main() {
         println!("#################################################################################");
     }
 
-    // for mode in modes {
-    //     for c in core_set {
-    //         runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
-    //     }
-    //     println!("#################################################################################");
-    // }
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+        }
+        println!("#################################################################################");
+    }
 
-    // for mode in modes {
-    //     for c in core_set {
-    //         runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX);
-    //     }
-    //     println!("#################################################################################");
-    // }
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX);
+        }
+        println!("#################################################################################");
+    }
 
-    // println!("EXECUTION SUCCESS");
+    println!("EXECUTION SUCCESS");
 }
 
 fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType) {
