@@ -22,6 +22,7 @@ pub mod on_chain_configs;
 mod proptest_types;
 
 pub mod account_activity_distribution;
+pub mod uniswap_distribution;
 
 pub fn assert_status_eq(s1: &KeptVMStatus, s2: &KeptVMStatus) -> bool {
     assert_eq!(s1, s2);
