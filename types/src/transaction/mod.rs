@@ -1686,7 +1686,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutionMode {
     Standard,
-    Hints
+    Pythia
 }
 
 impl Display for ExecutionMode {
