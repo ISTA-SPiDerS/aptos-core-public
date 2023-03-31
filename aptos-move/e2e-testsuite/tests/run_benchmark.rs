@@ -31,7 +31,7 @@ use rand::seq::index::IndexVec::USize;
 use regex::internal::Exec;
 use aptos_cached_packages::aptos_stdlib::coin_transfer;
 use aptos_language_e2e_tests::account::{Account, AccountData};
-use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, RES_DISTR, TX_FROM, TX_LENGTH_WEIGHT, TX_LENGTHS, TX_TO, TX_WRITES, TX_WRITES_WEIGHT};
+use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, RES_DISTR, TX_FROM, TX_LENGTH_WEIGHT, TX_LENGTHS, TX_NFT_FROM, TX_NFT_TO, TX_TO, TX_WRITES, TX_WRITES_WEIGHT};
 use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
 
 use aptos_language_e2e_tests::compile::compile_source_module;
@@ -39,7 +39,7 @@ use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM};
 use aptos_types::transaction::{Profiler, TransactionOutput};
-use crate::LoadType::{COINS, DEX_AVG, DEX_BURSTY, P2PTX, SOLANA};
+use crate::LoadType::{COINS, DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -51,10 +51,11 @@ const CORES: u64 = 10;
 enum LoadType
 {
     COINS,
-    DEX_AVG,
-    DEX_BURSTY,
+    DEXAVG,
+    DEXBURSTY,
     P2PTX,
-    SOLANA
+    SOLANA,
+    NFT
 }
 
 impl Display for LoadType {
@@ -66,7 +67,7 @@ impl Display for LoadType {
 
 fn main() {
     let module_path = "test_module_new.move";
-    let num_accounts = 10000;
+    let num_accounts = 100000;
     let block_size = 10000;
 
     let mut executor = FakeExecutor::from_head_genesis();
@@ -149,18 +150,25 @@ fn main() {
     let modes = [BlockSTM];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
-    for mode in modes {
-       for coins in coin_set {
-           for c in core_set {
-               runExperimentWithSetting(mode, coins, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, COINS);
-           }
-       }
-       println!("#################################################################################");
-    }
+    // for mode in modes {
+    //    for coins in coin_set {
+    //        for c in core_set {
+    //            runExperimentWithSetting(mode, coins, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, COINS);
+    //        }
+    //    }
+    //    println!("#################################################################################");
+    // }
 
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
         }
         println!("#################################################################################");
     }
@@ -174,14 +182,14 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX_AVG);
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
         }
         println!("#################################################################################");
     }
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX_BURSTY);
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
         }
         println!("#################################################################################");
     }
@@ -349,8 +357,37 @@ fn create_block(
 
     if matches!(load_type, P2PTX)
     {
-        let to_dist:WeightedIndex<usize> = WeightedIndex::new(&TX_TO).unwrap();
-        let from_dist:WeightedIndex<usize> = WeightedIndex::new(&TX_FROM).unwrap();
+        let mut fromVec:Vec<usize> = vec![];
+        let mut toVec:Vec<usize> = vec![];
+
+        for (key, value) in TX_TO {
+            if value > 100 {
+                for i in 0..((value/100) as usize) {
+                    toVec.push(key as usize)
+                }
+            }
+            else {
+                for i in 0..value{
+                    toVec.push((key/100) as usize)
+                }
+            }
+        }
+
+        for (key, value) in TX_FROM {
+            if value > 100 {
+                for i in 0..((value/100) as usize) {
+                    fromVec.push(key as usize)
+                }
+            }
+            else {
+                for i in 0..value{
+                    fromVec.push((key/100) as usize)
+                }
+            }
+        }
+
+        let to_dist:WeightedIndex<usize> = WeightedIndex::new(&toVec).unwrap();
+        let from_dist:WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
 
         for i in 0..size {
             // get account with likelyhood of similar distribution
@@ -379,15 +416,16 @@ fn create_block(
     }
 
     let mut distr:Vec<usize> = vec![];
-    if matches!(load_type, DEX_AVG)
+    if matches!(load_type, DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
                 distr.push(key as usize)
             }
         }
+        println!("{}", distr.len())
     }
-    else if matches!(load_type, DEX_BURSTY)
+    else if matches!(load_type, DEXBURSTY)
     {
         for (key, value) in BURSTY {
             for i in 0..value {
@@ -395,13 +433,34 @@ fn create_block(
             }
         }
     }
-
+    else if matches!(load_type, NFT)
+    {
+        for (key, value) in TX_NFT_TO {
+            for i in 0..value {
+                distr.push(key as usize)
+            }
+        }
+    }
     let dist : WeightedIndex<usize> = WeightedIndex::new(&distr).unwrap();
 
 
     let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_LENGTH_WEIGHT).unwrap();
     let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_WRITES_WEIGHT).unwrap();
     let tx_res_distr : WeightedIndex<usize> = WeightedIndex::new(&RES_DISTR).unwrap();
+
+    let mut fromVec:Vec<usize> = vec![];
+    for (key, value) in TX_NFT_FROM {
+        if value > 100 {
+            for i in 0..((value / 100) as usize) {
+                fromVec.push(key as usize)
+            }
+        } else {
+            for i in 0..value {
+                fromVec.push((key / 100) as usize)
+            }
+        }
+    }
+    let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
 
     let mut max_count:usize = 1;
     let max_value_opt = TX_WRITES.iter().max();
@@ -412,16 +471,21 @@ fn create_block(
 
     for i in 0..size {
         // let idx: usize = rng.gen::<usize>() % accounts.len();
-        let idx: usize = (i as usize) % accounts.len();
+        let mut idx: usize = (i as usize) % accounts.len();
+
         //let coin_1_num = (i as usize) % coins;
 
         let coin_1_num;
-        if matches!(load_type, DEX_AVG) || matches!(load_type, DEX_BURSTY)
+        if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
         {
             coin_1_num = dist.sample(&mut rng) % coins;
         }
-        else
+        else if matches!(load_type, NFT)
         {
+            idx = from_dist.sample(&mut rng) % accounts.len();
+            coin_1_num = dist.sample(&mut rng) % coins;
+        }
+        else {
             coin_1_num = rng.gen::<usize>() % coins;
         }
 
