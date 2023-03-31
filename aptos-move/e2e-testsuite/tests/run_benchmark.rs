@@ -149,14 +149,14 @@ fn main() {
     let modes = [Hints];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
-    //for mode in modes {
-    //    for coins in coin_set {
-    //        for c in core_set {
-    //            runExperimentWithSetting(mode, coins, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, COINS);
-    //        }
-    //    }
-    //    println!("#################################################################################");
-    //g}
+    for mode in modes {
+       for coins in coin_set {
+           for c in core_set {
+               runExperimentWithSetting(mode, coins, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, COINS);
+           }
+       }
+       println!("#################################################################################");
+    g}
 
     for mode in modes {
         for c in core_set {
@@ -174,10 +174,18 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX);
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX_AVG);
         }
         println!("#################################################################################");
     }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEX_BURSTY);
+        }
+        println!("#################################################################################");
+    }
+
 
     println!("EXECUTION SUCCESS");
 }
