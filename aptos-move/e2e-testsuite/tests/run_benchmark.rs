@@ -32,12 +32,14 @@ use regex::internal::Exec;
 use aptos_cached_packages::aptos_stdlib::coin_transfer;
 use aptos_language_e2e_tests::account::{Account, AccountData};
 use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, RES_DISTR, TX_FROM, TX_LENGTH_WEIGHT, TX_LENGTHS, TX_TO, TX_WRITES, TX_WRITES_WEIGHT};
+use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
+
 use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_types::transaction::ExecutionMode::{Hints, Standard};
 use aptos_types::transaction::{Profiler, TransactionOutput};
-use crate::LoadType::{COINS, DEX, P2PTX, SOLANA};
+use crate::LoadType::{COINS, DEX_AVG, DEX_BURSTY, P2PTX, SOLANA};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -49,7 +51,8 @@ const CORES: u64 = 10;
 enum LoadType
 {
     COINS,
-    DEX,
+    DEX_AVG,
+    DEX_BURSTY,
     P2PTX,
     SOLANA
 }
@@ -367,7 +370,27 @@ fn create_block(
         return result;
     }
 
-    let dist : WeightedIndex<usize> = WeightedIndex::new(&COIN_DISTR).unwrap();
+    let mut distr:Vec<usize> = vec![];
+    if matches!(load_type, DEX_AVG)
+    {
+        for (key, value) in AVG {
+            for i in 0..value {
+                distr.push(key as usize)
+            }
+        }
+    }
+    else if matches!(load_type, DEX_BURSTY)
+    {
+        for (key, value) in BURSTY {
+            for i in 0..value {
+                distr.push(key as usize)
+            }
+        }
+    }
+
+    let dist : WeightedIndex<usize> = WeightedIndex::new(&distr).unwrap();
+
+
     let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_LENGTH_WEIGHT).unwrap();
     let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_WRITES_WEIGHT).unwrap();
     let tx_res_distr : WeightedIndex<usize> = WeightedIndex::new(&RES_DISTR).unwrap();
@@ -385,7 +408,7 @@ fn create_block(
         //let coin_1_num = (i as usize) % coins;
 
         let coin_1_num;
-        if matches!(load_type, DEX)
+        if matches!(load_type, DEX_AVG) || matches!(load_type, DEX_BURSTY)
         {
             coin_1_num = dist.sample(&mut rng) % coins;
         }
