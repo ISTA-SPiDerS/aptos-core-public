@@ -37,7 +37,7 @@ use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
 use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
-use aptos_types::transaction::ExecutionMode::{Hints, Standard};
+use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM};
 use aptos_types::transaction::{Profiler, TransactionOutput};
 use crate::LoadType::{COINS, DEX_AVG, DEX_BURSTY, P2PTX, SOLANA};
 
@@ -117,7 +117,7 @@ fn main() {
         prex_block_result = executor.execute_transaction_block_parallel(
             block.clone(),
             CORES as usize,
-            Standard, &mut Profiler::new(),
+            BlockSTM, &mut Profiler::new(),
         )
             .unwrap();
 
@@ -146,7 +146,7 @@ fn main() {
     let core_set = [4,8,12,16,20,24,28,32];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
-    let modes = [Standard];
+    let modes = [BlockSTM];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
     for mode in modes {
@@ -156,7 +156,7 @@ fn main() {
            }
        }
        println!("#################################################################################");
-    g}
+    }
 
     for mode in modes {
         for c in core_set {

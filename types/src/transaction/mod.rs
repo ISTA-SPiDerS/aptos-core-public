@@ -1685,7 +1685,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutionMode {
-    Standard,
+    BlockSTM,
     Hints
 }
 

@@ -1065,7 +1065,7 @@ impl VMExecutor for AptosVM {
 
         let count = transactions.len();
         let ret =
-            BlockAptosVM::execute_block(transactions, state_view, Self::get_concurrency_level(), ExecutionMode::Standard, &mut Profiler::new());
+            BlockAptosVM::execute_block(transactions, state_view, Self::get_concurrency_level(), ExecutionMode::BlockSTM, &mut Profiler::new());
         if ret.is_ok() {
             // Record the histogram count for transactions per block.
             BLOCK_TRANSACTION_COUNT.observe(count as f64);

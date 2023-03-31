@@ -47,7 +47,7 @@ fn run_benchmarkasdsada() {
                 .map(Transaction::UserTransaction)
                 .collect::<Vec<Transaction>>()
                 .into(), 4,
-            ExecutionMode::Standard,
+            ExecutionMode::BlockSTM,
             &mut Profiler::new()
         )
         .unwrap();

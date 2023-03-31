@@ -19,7 +19,7 @@ use proptest::{
     test_runner::TestRunner,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
-use aptos_types::transaction::ExecutionMode::Standard;
+use aptos_types::transaction::ExecutionMode::BlockSTM;
 use aptos_types::transaction::Profiler;
 
 fn run_transactions<K, V>(
