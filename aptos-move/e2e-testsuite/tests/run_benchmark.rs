@@ -31,7 +31,9 @@ use rand::seq::index::IndexVec::USize;
 use regex::internal::Exec;
 use aptos_cached_packages::aptos_stdlib::coin_transfer;
 use aptos_language_e2e_tests::account::{Account, AccountData};
-use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, RES_DISTR, TX_FROM, TX_LENGTH_WEIGHT, TX_LENGTHS, TX_NFT_FROM, TX_NFT_TO, TX_TO, TX_WRITES, TX_WRITES_WEIGHT};
+use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use aptos_language_e2e_tests::solana_distribution::{RES_DISTR, COST_DISTR, LEN_DISTR};
+
 use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
 
 use aptos_language_e2e_tests::compile::compile_source_module;
@@ -283,9 +285,9 @@ fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecuto
     let mut transaction_validation = executor.get_transaction_validation();
     let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
         &mut transaction_validation,
-        100_000_000,
-        100_000_000,
-        100_000
+        1_000_000_000,
+        1_000_000_000,
+        10_00_000
     );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
     for tx in txns {
@@ -441,12 +443,38 @@ fn create_block(
             }
         }
     }
+    else if matches!(load_type, SOLANA)
+    {
+        for (key, value) in RES_DISTR {
+            for i in 0..value {
+                distr.push(key as usize)
+            }
+        }
+    }
+    else
+    {
+        distr = Vec::from(COIN_DISTR);
+    }
+
+    let mut len_options:Vec<usize> = vec![];
+    let mut len_distr:Vec<usize> = vec![];
+
+    for (key, value) in LEN_DISTR {
+        len_options.push(key as usize);
+        len_distr.push(value as usize);
+    }
+    let mut cost_options:Vec<usize> = vec![];
+    let mut cost_distr:Vec<usize> = vec![];
+    for (key, value) in COST_DISTR {
+        cost_options.push(key as usize);
+        cost_distr.push(value as usize);
+    }
+
+    let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
+    let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
+
+
     let dist : WeightedIndex<usize> = WeightedIndex::new(&distr).unwrap();
-
-
-    let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_LENGTH_WEIGHT).unwrap();
-    let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&TX_WRITES_WEIGHT).unwrap();
-    let tx_res_distr : WeightedIndex<usize> = WeightedIndex::new(&RES_DISTR).unwrap();
 
     let mut fromVec:Vec<usize> = vec![];
     for (key, value) in TX_NFT_FROM {
@@ -463,7 +491,7 @@ fn create_block(
     let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
 
     let mut max_count:usize = 1;
-    let max_value_opt = TX_WRITES.iter().max();
+    let max_value_opt = len_options.iter().max();
     match max_value_opt {
         Some(max) => { max_count = *max; },
         None      => println!("vec empty, wat!")
@@ -526,13 +554,14 @@ fn create_block(
 
         if matches!(load_type, SOLANA)
         {
-            let length = TX_LENGTHS[tx_weight_distr.sample(&mut rng)] * max_count as u64;
-            let num_writes = TX_WRITES[tx_num_writes_distr.sample(&mut rng)];
+            let length = cost_options[tx_weight_distr.sample(&mut rng)] * (max_count/2);
+            let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
+
             let mut writes: Vec<u64> = Vec::new();
             let mut i = 0;
             while i < num_writes {
                 i+=1;
-                writes.push(tx_res_distr.sample(&mut rng) as u64);
+                writes.push(dist.sample(&mut rng) as u64);
             }
 
             entry_function = EntryFunction::new(
