@@ -109,39 +109,38 @@ fn main() {
 
     println!("REGISTER SUCCESS");
 
-    // println!("STARTING WARMUP");
-    // for warmup in [1, 2, 3] {
-    //     let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
-    //     let block = get_transaction_register(block.clone(), &executor)
-    //         .map_par_txns(Transaction::UserTransaction);
+    println!("STARTING WARMUP");
+    for warmup in [1, 2, 3] {
+        let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
+        let block = get_transaction_register(block.clone(), &executor)
+            .map_par_txns(Transaction::UserTransaction);
 
-    //     let mut prex_block_result = register_block_result.clone();
+        let mut prex_block_result = register_block_result.clone();
 
-    //     prex_block_result = executor.execute_transaction_block_parallel(
-    //         block.clone(),
-    //         CORES as usize,
-    //         Standard, &mut Profiler::new(),
-    //     )
-    //         .unwrap();
+        prex_block_result = executor.execute_transaction_block_parallel(
+            block.clone(),
+            CORES as usize,
+            Standard, &mut Profiler::new(),
+        )
+            .unwrap();
 
-
-    //     for result in prex_block_result {
-    //         match result.status() {
-    //             TransactionStatus::Keep(status) => {
-    //                 executor.apply_write_set(result.write_set());
-    //                 assert_eq!(
-    //                     status,
-    //                     &ExecutionStatus::Success,
-    //                     "transaction failed with {:?}",
-    //                     status
-    //                 );
-    //             }
-    //             TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-    //             TransactionStatus::Retry => panic!("transaction status is retry"),
-    //         };
-    //     }
-    // }
-    // println!("END WARMUP");
+        for result in prex_block_result {
+            match result.status() {
+                TransactionStatus::Keep(status) => {
+                    executor.apply_write_set(result.write_set());
+                    assert_eq!(
+                        status,
+                        &ExecutionStatus::Success,
+                        "transaction failed with {:?}",
+                        status
+                    );
+                }
+                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+                TransactionStatus::Retry => panic!("transaction status is retry"),
+            };
+        }
+    }
+    println!("END WARMUP");
 
 
     println!("EXECUTE BLOCKS");
@@ -554,7 +553,7 @@ fn create_block(
 
         if matches!(load_type, SOLANA)
         {
-            let length = cost_options[tx_weight_distr.sample(&mut rng)] * (max_count/2);
+            let mut length = cost_options[tx_weight_distr.sample(&mut rng)];
             let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
 
             let mut writes: Vec<u64> = Vec::new();
@@ -563,6 +562,10 @@ fn create_block(
                 i+=1;
                 writes.push(dist.sample(&mut rng) as u64);
             }
+
+            println!("{} {}", num_writes, length);
+
+            length = length * (max_count/2);
 
             entry_function = EntryFunction::new(
                 module_id.clone(),
