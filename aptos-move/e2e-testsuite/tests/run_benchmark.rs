@@ -554,7 +554,7 @@ fn create_block(
 
         if matches!(load_type, SOLANA)
         {
-            let length = cost_options[tx_weight_distr.sample(&mut rng)] * (max_count/2);
+            let mut length = cost_options[tx_weight_distr.sample(&mut rng)];
             let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
 
             let mut writes: Vec<u64> = Vec::new();
