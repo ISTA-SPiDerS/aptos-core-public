@@ -563,8 +563,6 @@ fn create_block(
                 writes.push(dist.sample(&mut rng) as u64);
             }
 
-            println!("{} {}", num_writes, length);
-
             length = length * (max_count/2);
 
             entry_function = EntryFunction::new(

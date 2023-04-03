@@ -69,10 +69,11 @@ module Owner::Exchange {
         let res_table = &mut borrow_global_mut<TestTables>(@Owner).resource_table;
 
         let i = 0;
+        let length = vector::length(&resources);
         while (i < loop_count) {
             let j = 0;
 
-            while (j < vector::length(&resources)) {
+            while (j < length) {
                 let res = *vector::borrow(&resources, j);
                 j = j + 1;
                 i = i + 1;
