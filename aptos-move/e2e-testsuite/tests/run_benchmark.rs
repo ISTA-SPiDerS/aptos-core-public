@@ -564,6 +564,8 @@ fn create_block(
                 writes.push(dist.sample(&mut rng) as u64);
             }
 
+            length = length * (max_count/2);
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
