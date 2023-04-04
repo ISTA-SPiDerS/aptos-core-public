@@ -37,7 +37,7 @@ use rand::prelude::*;
 use tokio::sync::mpsc;
 // use async_priority_channel::*;
 
-const CACHE_OVERHEAD: usize = 10000;
+const CACHE_OVERHEAD: usize = 0;
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 const BATCH_SIZE: usize = 30;
 
@@ -880,7 +880,7 @@ impl Scheduler {
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
         if cur_val_idx > txn_idx {
-            if false  {
+            if revalidate_suffix  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
@@ -896,7 +896,7 @@ impl Scheduler {
                 return SchedulerTask::ValidationTask((txn_idx, incarnation), cur_wave);
             }
         }
-        //info!("finished execution of {}", txn_idx);
+        // info!("finished execution of {} on thread id {}", txn_idx, thread_id);
 
         SchedulerTask::NoTask
     }
