@@ -83,13 +83,13 @@ where
         profiler: &mut Profiler,
     ) -> SchedulerTask {
 
-        profiler.start_timing(&"execute#1".to_string());
 
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
+        profiler.start_timing(&"execute#1".to_string());
 
         // VM execution.
         let execute_result = executor.execute_transaction(

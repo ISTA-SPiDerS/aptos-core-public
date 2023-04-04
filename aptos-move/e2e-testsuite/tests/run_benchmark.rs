@@ -161,12 +161,12 @@ fn main() {
     //    println!("#################################################################################");
     // }
 
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
-        }
-        println!("#################################################################################");
-    }
+    // for mode in modes {
+    //     for c in core_set {
+    //         runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+    //     }
+    //     println!("#################################################################################");
+    // }
 
     for mode in modes {
         for c in core_set {
@@ -364,26 +364,26 @@ fn create_block(
 
         for (key, value) in TX_TO {
             if value > 100 {
-                for i in 0..((value/100) as usize) {
+                for i in 0..((value) as usize) {
                     toVec.push(key as usize)
                 }
             }
             else {
                 for i in 0..value{
-                    toVec.push((key/100) as usize)
+                    toVec.push((key) as usize)
                 }
             }
         }
 
         for (key, value) in TX_FROM {
             if value > 100 {
-                for i in 0..((value/100) as usize) {
+                for i in 0..((value) as usize) {
                     fromVec.push(key as usize)
                 }
             }
             else {
                 for i in 0..value{
-                    fromVec.push((key/100) as usize)
+                    fromVec.push((key) as usize)
                 }
             }
         }
@@ -476,16 +476,10 @@ fn create_block(
 
     let dist : WeightedIndex<usize> = WeightedIndex::new(&distr).unwrap();
 
-    let mut fromVec:Vec<usize> = vec![];
+    let mut fromVec: Vec<usize> = vec![];
     for (key, value) in TX_NFT_FROM {
-        if value > 100 {
-            for i in 0..((value / 100) as usize) {
-                fromVec.push(key as usize)
-            }
-        } else {
-            for i in 0..value {
-                fromVec.push((key / 100) as usize)
-            }
+        for i in 0..(value as usize) {
+            fromVec.push(key as usize)
         }
     }
     let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
@@ -516,6 +510,7 @@ fn create_block(
         else {
             coin_1_num = rng.gen::<usize>() % coins;
         }
+
 
         let coin_2_num = coin_1_num;
 
@@ -595,6 +590,8 @@ fn create_block(
 
     result
 }
+
+//todo! resource allocation is odd!
 
 fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountData, ModuleId) {
     let owner_account = executor.create_raw_account_data(INITIAL_BALANCE, SEQ_NUM);
