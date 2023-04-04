@@ -880,7 +880,7 @@ impl Scheduler {
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
         if cur_val_idx > txn_idx {
-            if revalidate_suffix  {
+            if false  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
