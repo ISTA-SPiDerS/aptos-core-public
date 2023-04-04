@@ -3,6 +3,8 @@
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
+extern crate core;
+
 use aptos_types::{
     account_address::AccountAddress,
     transaction::{
@@ -459,21 +461,22 @@ fn create_block(
     let mut len_distr:Vec<usize> = vec![];
 
     for (key, value) in LEN_DISTR {
-        len_options.push(key as usize);
+        len_options.push(key.round() as usize);
         len_distr.push(value as usize);
     }
-    let mut cost_options:Vec<usize> = vec![];
+
+    let mut cost_options:Vec<f64> = vec![];
     let mut cost_distr:Vec<usize> = vec![];
+
     for (key, value) in COST_DISTR {
-        cost_options.push(key as usize);
+        cost_options.push(key);
         cost_distr.push(value as usize);
     }
 
     let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-    let tx_weight_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
+    let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
 
-
-    let dist : WeightedIndex<usize> = WeightedIndex::new(&distr).unwrap();
+    let dist : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
 
     let mut fromVec: Vec<usize> = vec![];
     for (key, value) in TX_NFT_FROM {
@@ -548,7 +551,7 @@ fn create_block(
 
         if matches!(load_type, SOLANA)
         {
-            let mut length = cost_options[tx_weight_distr.sample(&mut rng)];
+            let cost = cost_options[tx_cost_distr.sample(&mut rng)];
             let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
 
             let mut writes: Vec<u64> = Vec::new();
@@ -558,7 +561,7 @@ fn create_block(
                 writes.push(dist.sample(&mut rng) as u64);
             }
 
-            length = length * (max_count/2);
+            let length = (cost * max_count as f64).round() as usize;
 
             entry_function = EntryFunction::new(
                 module_id.clone(),
