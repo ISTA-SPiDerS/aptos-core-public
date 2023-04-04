@@ -873,14 +873,16 @@ impl Scheduler {
                 .fetch_min(execution_target_idx, Ordering::SeqCst);
         }
         */
-
+        /*
         let (cur_val_idx, cur_wave) =
             Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+        */
 
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
+        /*
         if cur_val_idx > txn_idx {
-            if false  {
+            if revalidate_suffix  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
@@ -896,6 +898,7 @@ impl Scheduler {
                 return SchedulerTask::ValidationTask((txn_idx, incarnation), cur_wave);
             }
         }
+        */
         // info!("finished execution of {} on thread id {}", txn_idx, thread_id);
 
         SchedulerTask::NoTask
@@ -1080,7 +1083,7 @@ impl Scheduler {
             }
             return None;
         }
-        (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
+        // (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
 
         // If incarnation was last executed, and thus ready for validation,
         // return version and wave for validation task, otherwise None.
