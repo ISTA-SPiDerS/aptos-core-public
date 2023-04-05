@@ -25,16 +25,19 @@ use std::{
     pin::Pin,
     task::{Context,Poll, Waker},
 };
+use std::time::SystemTime;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
 use color_eyre::Report;
 use dashmap::{DashMap, DashSet};
+use itertools::equal;
 use aptos_types::transaction::{Profiler, TransactionStatus};
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
+use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
 const CACHE_OVERHEAD: usize = 0;
@@ -463,20 +466,22 @@ impl Scheduler {
             // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
-            profiler.start_timing(&"try_schedule".to_string());
             if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
+                    profiler.start_timing(&"newScheduler".to_string());
+
                     // //println!("In here");
                     self.sched_setup();
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
-                    profiler.end_timing(&"try_schedule".to_string());
-
-                    return self.sched_next_chunk(profiler).unwrap()
+                    let x = self.sched_next_chunk(profiler).unwrap();
+                    profiler.end_timing(&"newScheduler".to_string());
+                    return x;
                 }
                 else {
-                    profiler.end_timing(&"try_schedule".to_string());
+                    profiler.start_timing(&"SCHEDULING".to_string());
+
                     let (idx_to_validate, _) =
-                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                        Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                     // if my_len == 0 && idx_to_validate >= self.num_txns {
                     //     return if self.done() {
                     //         SchedulerTask::Done
@@ -493,11 +498,16 @@ impl Scheduler {
                     // *self.max.lock() = max;
 
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                    // //println!("validate: {:?}", version_to_validate);
-                        return SchedulerTask::ValidationTask(version_to_validate, guard);
+                        // //println!("validate: {:?}", version_to_validate);
+                        let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                        profiler.end_timing(&"SCHEDULING".to_string());
+                        return val;
                     }
 
-                    return self.try_exec(thread_id, profiler, commiting)}
+                    let ex = self.try_exec(thread_id, profiler, commiting);
+                    profiler.end_timing(&"SCHEDULING".to_string());
+                    return ex;
+                }
             }
             else {
                 profiler.start_timing(&"SCHEDULING".to_string());
@@ -511,7 +521,7 @@ impl Scheduler {
                 //     btreeset.len()}).max().unwrap();
                 // *self.max.lock() = max;
                 let (idx_to_validate, _) =
-                Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                 // if my_len == 0 && idx_to_validate >= self.num_txns {
                 //     return if self.done() {
                 //         SchedulerTask::Done
@@ -526,10 +536,19 @@ impl Scheduler {
 
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                     // //println!("validate: {:?}", version_to_validate);
-                    return SchedulerTask::ValidationTask(version_to_validate, guard);
+                    let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                    profiler.end_timing(&"SCHEDULING".to_string());
+                    return val;
                 }
 
-                return self.try_exec(thread_id, profiler, commiting)
+                let ex = self.try_exec(thread_id, profiler, commiting);
+                profiler.end_timing(&"SCHEDULING".to_string());
+                if matches!(ex, NoTask)
+                {
+                    profiler.count_one("noTask".to_string());
+                    //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
+                }
+                return ex;
             }
         }
     }
@@ -569,7 +588,6 @@ impl Scheduler {
             // No more tasks.
             return Some(SchedulerTask::Done);
         }
-        profiler.start_timing(&"SCHEDULING".to_string());
         // let mut end_comp: Vec<usize> = vec![0; self.concurrency_level];
         let mut ui: Task;
         let mut begin_time: usize;
@@ -650,7 +668,6 @@ impl Scheduler {
             }
             counter += 1;
         }
-        profiler.end_timing(&"SCHEDULING".to_string());
         //reset sched_lock
         self.sched_lock.store(usize::MAX, Ordering::SeqCst);
         return Some(SchedulerTask::NoTask);
