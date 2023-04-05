@@ -360,23 +360,23 @@ fn create_block(
 
     if matches!(load_type, P2PTX)
     {
-        let mut fromVec:Vec<usize> = vec![];
-        let mut toVec:Vec<usize> = vec![];
+        let mut fromVec:Vec<f64> = vec![];
+        let mut toVec:Vec<f64> = vec![];
 
         for (key, value) in TX_TO {
             for i in 0..value {
-                toVec.push((key.round() as usize));
+                toVec.push(key);
             }
         }
 
         for (key, value) in TX_FROM {
             for i in 0..value {
-                fromVec.push((key.round() as usize));
+                fromVec.push(key);
             }
         }
 
-        let to_dist:WeightedIndex<usize> = WeightedIndex::new(&toVec).unwrap();
-        let from_dist:WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
+        let to_dist:WeightedIndex<f64> = WeightedIndex::new(&toVec).unwrap();
+        let from_dist:WeightedIndex<f64> = WeightedIndex::new(&fromVec).unwrap();
 
         for i in 0..size {
             // get account with likelyhood of similar distribution
