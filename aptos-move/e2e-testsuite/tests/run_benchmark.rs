@@ -364,28 +364,14 @@ fn create_block(
         let mut toVec:Vec<usize> = vec![];
 
         for (key, value) in TX_TO {
-            if value > 100 {
-                for i in 0..((value) as usize) {
-                    toVec.push(key as usize)
-                }
-            }
-            else {
-                for i in 0..value{
-                    toVec.push((key) as usize)
-                }
+            for i in 0..value {
+                toVec.push((key.round() as usize));
             }
         }
 
         for (key, value) in TX_FROM {
-            if value > 100 {
-                for i in 0..((value) as usize) {
-                    fromVec.push(key as usize)
-                }
-            }
-            else {
-                for i in 0..value{
-                    fromVec.push((key) as usize)
-                }
+            for i in 0..value {
+                fromVec.push((key.round() as usize));
             }
         }
 
