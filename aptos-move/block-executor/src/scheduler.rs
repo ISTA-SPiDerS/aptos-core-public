@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_infallible::Mutex;
+use std::sync::Mutex as MyMut;
 use crossbeam::utils::CachePadded;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use tracing::info;
@@ -37,7 +38,7 @@ use rand::prelude::*;
 use tokio::sync::mpsc;
 // use async_priority_channel::*;
 
-const CACHE_OVERHEAD: usize = 0;
+const CACHE_OVERHEAD: usize = 1000;
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 const BATCH_SIZE: usize = 30;
 
@@ -315,6 +316,8 @@ pub struct Scheduler {
 
     priochannels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
 
+    valock: MyMut<bool>,
+
 }
 
 /// Public Interfaces for the Scheduler
@@ -368,6 +371,7 @@ impl Scheduler {
             nscheduled: AtomicUsize::new(0),
             channels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
             priochannels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
+            valock: MyMut::new(false),
 
         }
     }
@@ -1072,26 +1076,33 @@ impl Scheduler {
     /// to the caller.
     /// - Otherwise, return None.
     fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
-        let (mut idx_to_validate, mut wave) =
-            Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
+        let mut lock = self.valock.try_lock();
+        if let Ok(ref mut mutex) = lock {
+            let (mut idx_to_validate, mut wave) =
+                Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
 
-        if idx_to_validate >= self.num_txns {
-            if !self.done() {
-                // Avoid pointlessly spinning, and give priority to other threads that may
-                // be working to finish the remaining tasks.
-                // hint::spin_loop();
+            if idx_to_validate >= self.num_txns {
+                if !self.done() {
+                    // Avoid pointlessly spinning, and give priority to other threads that may
+                    // be working to finish the remaining tasks.
+                    // hint::spin_loop();
+                }
+                return None;
             }
-            return None;
-        }
-        // (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
 
-        // If incarnation was last executed, and thus ready for validation,
-        // return version and wave for validation task, otherwise None.
-        let executed = self.is_executed(idx_to_validate, false);
-        if executed == None {
-            return None
+            // If incarnation was last executed, and thus ready for validation,
+            // return version and wave for validation task, otherwise None.
+            let executed = self.is_executed(idx_to_validate, false);
+            if executed == None {
+                return None
+            }
+            (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
+            // info!("validate {}", idx_to_validate);
+            executed.map(|incarnation| ((idx_to_validate, incarnation), wave))
         }
-        executed.map(|incarnation| ((idx_to_validate, incarnation), wave))
+        else {
+            None
+        }
     }
 
     /// Grab an index to try and execute next (by fetch-and-incrementing execution_idx).

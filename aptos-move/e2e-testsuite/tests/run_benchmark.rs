@@ -149,7 +149,7 @@ fn main() {
 
     let core_set = [4,8,12,16];
     let coin_set = [2,4,8,16,32,64,128];
-    let trial_count = 3;
+    let trial_count = 10;
     let modes = [Pythia];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
