@@ -404,12 +404,12 @@ fn create_block(
         return result;
     }
 
-    let mut distr:Vec<usize> = vec![];
+    let mut distr:Vec<f64> = vec![];
     if matches!(load_type, DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
-                distr.push(key as usize)
+                distr.push(key)
             }
         }
         println!("{}", distr.len())
@@ -418,7 +418,7 @@ fn create_block(
     {
         for (key, value) in BURSTY {
             for i in 0..value {
-                distr.push(key as usize)
+                distr.push(key)
             }
         }
     }
@@ -426,7 +426,7 @@ fn create_block(
     {
         for (key, value) in TX_NFT_TO {
             for i in 0..value {
-                distr.push(key as usize)
+                distr.push(key)
             }
         }
     }
@@ -434,7 +434,7 @@ fn create_block(
     {
         for (key, value) in RES_DISTR {
             for i in 0..value {
-                distr.push(key as usize)
+                distr.push(key)
             }
         }
     }
@@ -460,9 +460,9 @@ fn create_block(
     }
 
     let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-    let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
+    let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
 
-    let dist : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
+    let dist : WeightedIndex<f64> = WeightedIndex::new(&distr).unwrap();
 
     let mut fromVec: Vec<usize> = vec![];
     for (key, value) in TX_NFT_FROM {
