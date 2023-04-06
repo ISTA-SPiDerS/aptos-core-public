@@ -41,7 +41,6 @@ use tokio::sync::mpsc;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
-const CACHE_OVERHEAD: usize = 1000;
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 const BATCH_SIZE: usize = 30;
 
