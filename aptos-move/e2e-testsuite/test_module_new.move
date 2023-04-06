@@ -70,24 +70,30 @@ module Owner::Exchange {
 
         let i = 0;
         let length = vector::length(&resources);
+        while (i < length) {
+            let res = *vector::borrow(&resources, i);
+            i = i + 1;
+
+            if (!table::contains(res_table, res)) {
+                table::add(res_table, res, 1);
+            } else {
+                let dst_token = table::borrow_mut(res_table, res);
+                *dst_token = *dst_token + 1;
+            };
+        };
+
+        i = 0;
         while (i < loop_count) {
-            let j = 0;
+            let j = i % length;
+            i = i + 1;
 
-            while (j < length) {
-                let res = *vector::borrow(&resources, j);
-                j = j + 1;
-                i = i + 1;
+            let res = *vector::borrow(&resources, j);
 
-                if (!table::contains(res_table, res)) {
-                    table::add(res_table, res, 1);
-                } else {
-                    let dst_token = table::borrow_mut(res_table, res);
-                    *dst_token = *dst_token + 1;
-                };
-
-                if (i >= loop_count) {
-                    return;
-                }
+            if (!table::contains(res_table, res)) {
+                table::add(res_table, res, 1);
+            } else {
+                let dst_token = table::borrow_mut(res_table, res);
+                *dst_token = *dst_token + 1;
             };
         };
     }
