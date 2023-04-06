@@ -149,7 +149,7 @@ fn main() {
 
     let core_set = [4,8,12,16];
     let coin_set = [2,4,8,16,32,64,128];
-    let trial_count = 3;
+    let trial_count = 10;
     let modes = [Pythia];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
@@ -164,7 +164,7 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, 1000, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
@@ -547,7 +547,7 @@ fn create_block(
                 writes.push(dist.sample(&mut rng) as u64);
             }
 
-            let length = (cost * max_count as f64).round() as usize;
+            let length = cost.round() as usize;
 
             entry_function = EntryFunction::new(
                 module_id.clone(),
