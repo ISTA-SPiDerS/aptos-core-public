@@ -388,14 +388,17 @@ impl Scheduler {
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
         // //println!("commit idx =  {}", *commit_idx);
 
-        if *commit_idx == self.num_txns && self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+        if *commit_idx == self.num_txns
         {
-            // All txns have been committed, the parallel execution can finish.
-            self.done_marker.store(true, Ordering::SeqCst);
-            for i in 0..self.concurrency_level {
-                let (lock,cvar) = &self.condvars[i];
-                *lock.lock() = true;
-                cvar.notify_one();
+            if self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+            {
+                // All txns have been committed, the parallel execution can finish.
+                self.done_marker.store(true, Ordering::SeqCst);
+                for i in 0..self.concurrency_level {
+                    let (lock, cvar) = &self.condvars[i];
+                    *lock.lock() = true;
+                    cvar.notify_one();
+                }
             }
             return None;
         }
