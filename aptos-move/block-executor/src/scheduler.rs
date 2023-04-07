@@ -237,11 +237,6 @@ impl Scheduler {
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
-                for i in 0..self.concurrency_level {
-                    let (lock, cvar) = &self.condvars[i];
-                    *lock.lock() = true;
-                    cvar.notify_one();
-                }
             }
             return None;
         }
