@@ -13,7 +13,7 @@ use std::{
         Arc, Condvar,
     },
 };
-use aptos_types::transaction::{Profiler, TransactionStatus};
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionStatus};
 
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 
@@ -31,6 +31,7 @@ type DependencyCondvar = Arc<(Mutex<bool>, Condvar)>;
 pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
     ValidationTask(Version, Wave),
+    SigTask(usize),
     NoTask,
     Done,
 }
@@ -196,6 +197,7 @@ pub struct Scheduler {
     txn_dependency: Vec<CachePadded<Mutex<Vec<TxnIndex>>>>,
     /// An index i maps to the most up-to-date status of transaction i.
     txn_status: Vec<CachePadded<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>>,
+    sig_val_idx: AtomicUsize,
 }
 
 /// Public Interfaces for the Scheduler
@@ -218,6 +220,7 @@ impl Scheduler {
                     ))
                 })
                 .collect(),
+            sig_val_idx: AtomicUsize::new(0),
         }
     }
 
@@ -228,7 +231,8 @@ impl Scheduler {
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
 
-        if *commit_idx == self.num_txns {
+        if *commit_idx == self.num_txns && self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+        {
             // All txns have been committed, the parallel execution can finish.
             self.done_marker.store(true, Ordering::SeqCst);
             return None;
@@ -290,7 +294,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, committing: bool, profiler: &mut Profiler) -> SchedulerTask {
+    pub fn next_task(&self, committing: bool, profiler: &mut Profiler, mode: ExecutionMode) -> SchedulerTask {
         loop {
             if self.done() {
                 // No more tasks.
@@ -312,6 +316,20 @@ impl Scheduler {
                         // We don't want to hint on the thread that is committing
                         // because it may have work to do (to commit) even if there
                         // is no more conventional (validation and execution tasks) work.
+                        if self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
+                        {
+                            if !matches!(mode, ExecutionMode::BlockSTM_Sig) {
+                                self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
+                                return SchedulerTask::NoTask;
+                            }
+                            let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
+                            if idx > self.num_txns
+                            {
+                                return SchedulerTask::NoTask;
+                            }
+                            return SchedulerTask::SigTask(idx);
+                            //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
+                        }
                         hint::spin_loop();
                     }
                     SchedulerTask::NoTask

@@ -78,6 +78,12 @@ pub trait ExecutorTask: Sync {
         txn_idx: usize,
         materialize_deltas: bool,
     ) -> ExecutionStatus<Self::Output, Self::Error>;
+
+    /// Verify a single transaction.
+    fn verify_transaction(
+        &self,
+        txn: &Self::Txn,
+    ) -> bool;
 }
 
 /// Trait for execution result of a single transaction.

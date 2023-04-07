@@ -24,6 +24,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 use std::sync::Arc;
+use std::borrow::Borrow;
 use aptos_infallible::Mutex;
 use std::time::Instant;
 use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
@@ -230,12 +231,15 @@ where
         base_view: &S,
         committing: bool,
         total_profiler: Arc<Mutex<&mut Profiler>>,
+        mode: ExecutionMode,
     ) {
         let mut profiler = Profiler::new();
 
         // Make executor for each task. TODO: fast concurrent executor.
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
+
+
         profiler.start_timing(&"thread time".to_string());
         let mut extimer: u128 = 0;
         let mut valtimer: u128 = 0;
@@ -270,6 +274,14 @@ where
                     profiler.end_timing(&"validation".to_string());
                     ret
                 },
+                SchedulerTask::SigTask(index) => {
+                    for n in 0..24 {
+                        if  index + n < block.len() {
+                            executor.verify_transaction(block[index + n].borrow());
+                        }
+                    }
+                    SchedulerTask::NoTask
+                },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
                     let now = Instant::now();
                     profiler.start_timing(&"execution".to_string());
@@ -300,7 +312,7 @@ where
                 },
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler);
+                    let ret = scheduler.next_task(committing, &mut profiler, mode);
                     profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
@@ -351,7 +363,8 @@ where
                         &scheduler,
                         base_view,
                         committing.swap(false, Ordering::SeqCst),
-                        profiler.clone()
+                        profiler.clone(),
+                        mode
                     );
                 });
             }

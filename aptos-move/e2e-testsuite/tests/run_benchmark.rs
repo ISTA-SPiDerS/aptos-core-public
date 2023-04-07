@@ -41,7 +41,7 @@ use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
 use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
-use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM};
+use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM, BlockSTM_Sig};
 use aptos_types::transaction::{Profiler, TransactionOutput};
 use crate::LoadType::{COINS, DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 
@@ -151,7 +151,7 @@ fn main() {
     let core_set = [4,8,12,16];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
-    let modes = [BlockSTM];
+    let modes = [BlockSTM, BlockSTM_Sig];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
     // for mode in modes {
