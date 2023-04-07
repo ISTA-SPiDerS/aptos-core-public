@@ -33,7 +33,7 @@ use tokio::{
 use color_eyre::Report;
 use dashmap::{DashMap, DashSet};
 use itertools::equal;
-use aptos_types::transaction::{Profiler, TransactionStatus};
+use aptos_types::transaction::{ExecutionMode, Profiler, TransactionStatus};
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
@@ -85,6 +85,7 @@ type DependencyCondvar = Arc<(Mutex<bool>, Condvar)>;
 pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
     ValidationTask(Version, Wave),
+    SigTask(usize),
     NoTask,
     Done,
 }
@@ -318,6 +319,7 @@ pub struct Scheduler {
 
     priochannels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
 
+    sig_val_idx: AtomicUsize,
 }
 
 /// Public Interfaces for the Scheduler
@@ -371,7 +373,7 @@ impl Scheduler {
             nscheduled: AtomicUsize::new(0),
             channels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
             priochannels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
-
+            sig_val_idx: AtomicUsize::new(0),
         }
     }
 
@@ -383,7 +385,8 @@ impl Scheduler {
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
         // //println!("commit idx =  {}", *commit_idx);
 
-        if *commit_idx == self.num_txns {
+        if *commit_idx == self.num_txns && self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+        {
             // All txns have been committed, the parallel execution can finish.
             self.done_marker.store(true, Ordering::SeqCst);
             for i in 0..self.concurrency_level {
@@ -450,7 +453,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
@@ -506,6 +509,20 @@ impl Scheduler {
 
                     let ex = self.try_exec(thread_id, profiler, commiting);
                     profiler.end_timing(&"SCHEDULING".to_string());
+                    if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
+                    {
+                        if !matches!(mode, ExecutionMode::Pythia_Sig) {
+                            self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
+                            return ex;
+                        }
+                        let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
+                        if idx > self.num_txns
+                        {
+                            return ex;
+                        }
+                        return SchedulerTask::SigTask(idx);
+                        //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
+                    }
                     return ex;
                 }
             }
@@ -543,9 +560,18 @@ impl Scheduler {
 
                 let ex = self.try_exec(thread_id, profiler, commiting);
                 profiler.end_timing(&"SCHEDULING".to_string());
-                if matches!(ex, NoTask)
+                if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                 {
-                    profiler.count_one("noTask".to_string());
+                    if !matches!(mode, ExecutionMode::Pythia_Sig) {
+                        self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
+                        return ex;
+                    }
+                    let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
+                    if idx > self.num_txns
+                    {
+                        return ex;
+                    }
+                    return SchedulerTask::SigTask(idx);
                     //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
                 }
                 return ex;

@@ -54,6 +54,26 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
     // This function is called by the BlockExecutor for each transaction is intends
     // to execute (via the ExecutorTask trait). It can be as a part of sequential
     // execution, or speculatively as a part of a parallel execution.
+    fn verify_transaction(
+        &self,
+        txn: &PreprocessedTransaction,
+    ) -> bool {
+        return match txn {
+            PreprocessedTransaction::UserTransaction(txn) => {
+                match txn.check_sig() {
+                    Ok(_) => true,
+                    _ => {
+                        false
+                    },
+                }
+            },
+            _ => { true }
+        }
+    }
+
+    // This function is called by the BlockExecutor for each transaction is intends
+    // to execute (via the ExecutorTask trait). It can be as a part of sequential
+    // execution, or speculatively as a part of a parallel execution.
     fn execute_transaction(
         &self,
         view: &impl StateView,

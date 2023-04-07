@@ -583,6 +583,13 @@ impl SignedTransaction {
         Ok(SignatureCheckedTransaction(self))
     }
 
+    /// Checks that the signature of given transaction. Returns `Ok(SignatureCheckedTransaction)` if
+    /// the signature is valid.
+    pub fn check_sig(&self) -> Result<bool> {
+        self.authenticator.verify(&self.raw_txn)?;
+        Ok(true)
+    }
+
     /// Checks that the signature of given transaction inplace. Returns `Ok(())` if
     /// the signature is valid.
     pub fn signature_is_valid(&self) -> bool {
@@ -1686,7 +1693,8 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutionMode {
     Standard,
-    Pythia
+    Pythia,
+    Pythia_Sig,
 }
 
 impl Display for ExecutionMode {
