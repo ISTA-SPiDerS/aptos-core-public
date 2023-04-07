@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_infallible::Mutex;
+use std::sync::Mutex as MyMut;
 use crossbeam::utils::CachePadded;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use tracing::info;
@@ -40,7 +41,6 @@ use tokio::sync::mpsc;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
-const CACHE_OVERHEAD: usize = 0;
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 const BATCH_SIZE: usize = 30;
 
@@ -299,15 +299,15 @@ pub struct Scheduler {
 
     heap: SkipSet<Task>,
 
-    finish_time: Vec<Mutex<usize>>,
+    finish_time: Mutex<Vec<usize>>,
 
-    mapping: Vec<Mutex<usize>>,
+    mapping: Mutex<Vec<usize>>,
 
-    incoming: Vec<Mutex<usize>>,
+    incoming: Mutex<Vec<usize>>,
 
-    children: Vec<Mutex<Vec<TxnIndex>>>,
+    children: Mutex<Vec<Vec<TxnIndex>>>,
 
-    end_comp: Vec<Mutex<usize>>,
+    end_comp:  Mutex<Vec<usize>>,
 
     bottomlevels: Arc<Mutex<Vec<usize>>>,
 
@@ -315,9 +315,11 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    channels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
+    channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
 
-    priochannels: Vec<Mutex<(mpsc::UnboundedSender<TxnIndex>, mpsc::UnboundedReceiver<TxnIndex>)>>,
+    priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+
+    valock: MyMut<bool>,
 
     sig_val_idx: AtomicUsize,
 }
@@ -363,16 +365,17 @@ impl Scheduler {
             .map(|_| (Mutex::new(false),Condvar::new()))
             .collect(),
             heap: SkipSet::new(),
-            finish_time: (0..num_txns +1).map(|_| Mutex::new(0)).collect(),
-            mapping: (0..num_txns +1).map(|_| Mutex::new(usize::MAX)).collect(),
-            incoming: (0..num_txns).map(|_| Mutex::new(0)).collect(),
-            children: (0..num_txns).map(|_|{Mutex::new(Vec::new())}).collect(),
-            end_comp: (0..*concurrency_level).map(|_| Mutex::new(0)).collect(),
+            finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
+            mapping: Mutex::new((0..num_txns +1).map(|_| usize::MAX).collect()),
+            incoming: Mutex::new((0..num_txns).map(|_| 0).collect()),
+            children: Mutex::new((0..num_txns).map(|_|{Vec::new()}).collect()),
+            end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
             bottomlevels: Arc::new(Mutex::new((Vec::new()))),
             init_lock: Mutex::new(true),
             nscheduled: AtomicUsize::new(0),
-            channels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
-            priochannels: (0..*concurrency_level).map(|_| Mutex::new(mpsc::unbounded_channel())).collect(),
+            channels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
         }
     }
@@ -581,20 +584,23 @@ impl Scheduler {
 
     fn sched_setup(&self) {
         let mut init = self.init_lock.lock();
+        let mut incoming_lock = self.incoming.lock();
+        let mut children_lock = self.children.lock();
+        let mut mapping_lock= self.mapping.lock();
         if *init == false {
             return ()
         }
         *init = false;
         // //println!("SCHED_SETUP");
-        *self.mapping[0].lock() = 0;
+        mapping_lock[0] = 0;
         let mut bottomlevels: Vec<TxnIndex> = vec![0; self.num_txns];
         for i in (0..self.num_txns).rev() {
             for node in &*self.hint_graph[i] {
                 // //println!("incoming length = {}", incoming.len());
                 // //println!("self.num_txns = {}", self.num_txns);
 
-                *self.incoming[i].lock() += 1;
-                self.children[*node].lock().push(i);
+                incoming_lock[i] += 1;
+                children_lock[*node].push(i);
                 if bottomlevels[*node] < bottomlevels[i] + 1 {
                     bottomlevels[*node] = bottomlevels[i] + 1;
                 }
@@ -621,6 +627,12 @@ impl Scheduler {
         let mut ready: usize;
         let mut best_proc: usize = usize::MAX;
         let mut counter: usize = 0;
+        let mut finish_time_lock  = self.finish_time.lock();
+        let mut mapping_lock = self.mapping.lock();
+        let mut end_comp_lock = self.end_comp.lock();
+        let mut incoming_lock = self.incoming.lock();
+        let mut children_lock = self.children.lock();
+        let bottomlock = self.bottomlevels.lock();
         while self.heap.len() > 0 {
 
             if counter > usize::MAX {
@@ -632,7 +644,7 @@ impl Scheduler {
         /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
             .clone().iter()
-            .map(|i| Parent {idx: *i, finish_time: *self.finish_time[*i].lock()})
+            .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
             .collect::<Vec<Parent>>();
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
@@ -648,16 +660,16 @@ impl Scheduler {
             /* find the best proc for task */
             best_begin_time = usize::MAX;
             for proc in 0..self.concurrency_level {
-                begin_time = *self.end_comp[proc].lock();
+                begin_time = end_comp_lock[proc];
                 // //println!("begin_time = {}", begin_time);
 
                 for dad in &parents {
                     // //println!("parent {}", dad.idx);
-                    if *self.mapping[dad.idx].lock() == proc {
-                        ready = *self.finish_time[dad.idx].lock();
+                    if mapping_lock[dad.idx] == proc {
+                        ready = finish_time_lock[dad.idx];
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = *self.finish_time[dad.idx].lock() + CACHE_OVERHEAD;
+                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
@@ -667,10 +679,10 @@ impl Scheduler {
                     best_proc = proc;
                 }
             }
-            *self.mapping[ui.index].lock() = best_proc;
+            mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
             {
-                let (tx, rx) = &*self.channels[best_proc].lock();
+                let (tx, rx) = &self.channels[best_proc];
 
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
@@ -682,13 +694,13 @@ impl Scheduler {
             cvar.notify_one();
 
             /* run time estimation*/
-            *self.end_comp[best_proc].lock() = best_begin_time + (self.gas_estimates[ui.index] as usize);
+            end_comp_lock[best_proc] = best_begin_time + (self.gas_estimates[ui.index] as usize);
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
-            *self.finish_time[ui.index].lock() = *self.end_comp[best_proc].lock();
-            let bottomlock = &*self.bottomlevels.lock();
-            for child in &*self.children[ui.index].lock() {
-                *self.incoming[*child].lock() -= 1;
-                if *self.incoming[*child].lock() == 0 {
+            finish_time_lock[ui.index] = end_comp_lock[best_proc];
+            // let bottomlock = &*self.bottomlevels.lock();
+            for child in &*children_lock[ui.index] {
+                incoming_lock[*child] -= 1;
+                if incoming_lock[*child] == 0 {
                     self.heap.insert(Task {bottomlevel: bottomlock[*child], index: *child});
                 }
             }
@@ -707,8 +719,8 @@ impl Scheduler {
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
-        let mut priolock = self.priochannels[thread_id].lock();
-        if let Ok(txn_to_exec) = priolock.1.try_recv() {
+        let mut priolock = &self.priochannels[thread_id];
+        if let Ok(txn_to_exec) = priolock.1.lock().try_recv() {
 
             drop(priolock);
             //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
@@ -722,7 +734,7 @@ impl Scheduler {
             }
         }
 
-        let rx = &mut self.channels[thread_id].lock().1;
+        let rx = &mut self.channels[thread_id].1.lock();
 
         if let Ok(txn_to_exec) = rx.try_recv() {
 
@@ -883,9 +895,8 @@ impl Scheduler {
             //info!("before acquiring prio channel lock in finish execution of {}", txn_idx);
 
             {
-                let priolock = self.priochannels[target_thread].lock();
+                let priolock = &self.priochannels[target_thread];
                 priolock.0.send(*txn).unwrap();
-                drop(priolock);
             }
             //info!("after acquiring prio channel lock in finish execution of {}", txn_idx);
 
@@ -916,14 +927,16 @@ impl Scheduler {
                 .fetch_min(execution_target_idx, Ordering::SeqCst);
         }
         */
-
+        /*
         let (cur_val_idx, cur_wave) =
             Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+        */
 
         // If validation_idx is already lower than txn_idx, all required transactions will be
         // considered for validation, and there is nothing to do.
+        /*
         if cur_val_idx > txn_idx {
-            if false  {
+            if revalidate_suffix  {
                 // The transaction execution required revalidating all higher txns (not
                 // only itself), currently happens when incarnation writes to a new path
                 // (w.r.t. the write-set of its previous completed incarnation).
@@ -939,6 +952,7 @@ impl Scheduler {
                 return SchedulerTask::ValidationTask((txn_idx, incarnation), cur_wave);
             }
         }
+        */
         // info!("finished execution of {} on thread id {}", txn_idx, thread_id);
 
         SchedulerTask::NoTask
@@ -1112,26 +1126,33 @@ impl Scheduler {
     /// to the caller.
     /// - Otherwise, return None.
     fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
-        let (mut idx_to_validate, mut wave) =
-            Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
+        let mut lock = self.valock.try_lock();
+        if let Ok(ref mut mutex) = lock {
+            let (mut idx_to_validate, mut wave) =
+                Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
 
-        if idx_to_validate >= self.num_txns {
-            if !self.done() {
-                // Avoid pointlessly spinning, and give priority to other threads that may
-                // be working to finish the remaining tasks.
-                // hint::spin_loop();
+            if idx_to_validate >= self.num_txns {
+                if !self.done() {
+                    // Avoid pointlessly spinning, and give priority to other threads that may
+                    // be working to finish the remaining tasks.
+                    // hint::spin_loop();
+                }
+                return None;
             }
-            return None;
-        }
-        (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
 
-        // If incarnation was last executed, and thus ready for validation,
-        // return version and wave for validation task, otherwise None.
-        let executed = self.is_executed(idx_to_validate, false);
-        if executed == None {
-            return None
+            // If incarnation was last executed, and thus ready for validation,
+            // return version and wave for validation task, otherwise None.
+            let executed = self.is_executed(idx_to_validate, false);
+            if executed == None {
+                return None
+            }
+            (idx_to_validate, wave) = Self::unpack_validation_idx(self.validation_idx.fetch_add(1, Ordering::SeqCst));
+            // info!("validate {}", idx_to_validate);
+            executed.map(|incarnation| ((idx_to_validate, incarnation), wave))
         }
-        executed.map(|incarnation| ((idx_to_validate, incarnation), wave))
+        else {
+            None
+        }
     }
 
     /// Grab an index to try and execute next (by fetch-and-incrementing execution_idx).
