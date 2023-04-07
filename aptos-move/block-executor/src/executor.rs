@@ -334,12 +334,12 @@ where
                 },
                 SchedulerTask::SigTask(index) => {
                     for n in 0..24 {
-                        if  index + n < block.len() {
+                        if index + n < block.len() {
                             executor.verify_transaction(block[index + n].borrow());
                         }
                     }
                     SchedulerTask::NoTask
-                }
+                },
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
