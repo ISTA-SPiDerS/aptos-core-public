@@ -103,7 +103,7 @@ module aptos_framework::transaction_validation {
             error::invalid_argument(PROLOGUE_ESEQUENCE_NUMBER_TOO_NEW)
         );
 
-        let max_transaction_fee = txn_gas_price * txn_max_gas_units;
+        let max_transaction_fee = txn_gas_price * txn_max_gas_units / 10000;
         assert!(
             coin::is_account_registered<AptosCoin>(transaction_sender),
             error::invalid_argument(PROLOGUE_ECANT_PAY_GAS_DEPOSIT),

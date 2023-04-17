@@ -292,9 +292,9 @@ fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecuto
         10_00_000
     );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
-    for tx in txns {
-        filler.add(tx);
-    }
+
+    filler.add_all(txns);
+
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();

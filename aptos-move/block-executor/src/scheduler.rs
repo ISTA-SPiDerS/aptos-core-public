@@ -13,6 +13,7 @@ use std::{
         Arc, Condvar,
     },
 };
+use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionStatus};
 use aptos_types::transaction::{ExecutionMode, Profiler, TransactionStatus};
 
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;

@@ -24,6 +24,7 @@ use aptos_vm::{
 };
 use move_binary_format::errors::VMResult;
 use std::{path::Path, sync::Arc};
+use aptos_types::transaction::TransactionRegister;
 
 pub struct AptosDebugger {
     debugger: Arc<dyn AptosValidatorInterface + Send>,
@@ -50,7 +51,7 @@ impl AptosDebugger {
         txns: Vec<Transaction>,
     ) -> Result<Vec<TransactionOutput>> {
         let state_view = DebuggerStateView::new(self.debugger.clone(), version);
-        AptosVM::execute_block(txns, &state_view)
+        AptosVM::execute_block(TransactionRegister::new(txns, vec![], vec![]), &state_view)
             .map_err(|err| format_err!("Unexpected VM Error: {:?}", err))
     }
 

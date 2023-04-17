@@ -31,11 +31,6 @@ use aptos_vm::AptosVM;
 use fail::fail_point;
 use std::{marker::PhantomData, sync::Arc};
 use aptos_types::transaction::TransactionRegister;
-use executor_types::{BlockExecutorTrait, Error, StateComputeResult};
-use scratchpad::SparseMerkleTree;
-use storage_interface::async_proof_fetcher::AsyncProofFetcher;
-use storage_interface::cached_state_view::CachedStateView;
-use storage_interface::DbReaderWriter;
 
 pub trait TransactionBlockExecutor<T>: Send + Sync {
     fn execute_transaction_block(
@@ -49,7 +44,7 @@ impl TransactionBlockExecutor<Transaction> for AptosVM {
         transactions: Vec<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
-        ChunkOutput::by_transaction_execution::<AptosVM>(transactions, state_view)
+        ChunkOutput::by_transaction_execution::<AptosVM>(transactions.into(), state_view)
     }
 }
 
@@ -61,7 +56,7 @@ pub struct BlockExecutor<V, T> {
 impl<V, T> BlockExecutor<V, T>
 where
     V: TransactionBlockExecutor<T>,
-    T: Send + Sync,
+    T: Clone + Send + Sync,
 {
     pub fn new(db: DbReaderWriter) -> Self {
         Self {
@@ -89,7 +84,7 @@ where
 impl<V, T> BlockExecutorTrait<T> for BlockExecutor<V, T>
 where
     V: TransactionBlockExecutor<T>,
-    T: Send + Sync,
+    T: Clone + Send + Sync,
 {
     fn committed_block_id(&self) -> HashValue {
         self.maybe_initialize().expect("Failed to initialize.");
@@ -107,7 +102,7 @@ where
 
     fn execute_block(
         &self,
-        block: (HashValue, TransactionRegister<Transaction>),
+        block: (HashValue, TransactionRegister<T>),
         parent_block_id: HashValue,
     ) -> Result<StateComputeResult, Error> {
         self.maybe_initialize()?;
@@ -171,7 +166,7 @@ where
 impl<V, T> BlockExecutorInner<V, T>
 where
     V: TransactionBlockExecutor<T>,
-    T: Send + Sync,
+    T: Clone + Send + Sync,
 {
     fn committed_block_id(&self) -> HashValue {
         self.block_tree.root_block().id
@@ -232,7 +227,7 @@ where
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_transaction_block(transactions, state_view)?
+                V::execute_transaction_block(transactions.into_txns(), state_view)?
             };
             chunk_output.trace_log_transaction_status();
 

@@ -1507,8 +1507,8 @@ impl AptosTest for TransferCoins {
         let payee = ctx.random_account();
         ctx.create_user_account(payer.public_key()).await?;
         ctx.create_user_account(payee.public_key()).await?;
-        ctx.mint(payer.address(), 10000).await?;
-        check_account_balance(&client, payer.address(), 10000).await?;
+        ctx.mint(payer.address(), 10000000).await?;
+        check_account_balance(&client, payer.address(), 10000000).await?;
 
         let transfer_txn = payer.sign_with_transaction_builder(
             ctx.aptos_transaction_factory()

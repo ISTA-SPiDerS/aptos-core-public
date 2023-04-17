@@ -56,6 +56,8 @@
 //! every Consensus commit request. We use a separate system TTL to ensure that a transaction won't
 //! remain stuck in Mempool forever, even if Consensus doesn't make progress
 
+extern crate core;
+
 #[cfg(any(test, feature = "fuzzing"))]
 mod tests;
 pub use shared_mempool::{

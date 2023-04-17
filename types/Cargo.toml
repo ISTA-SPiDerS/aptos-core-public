@@ -37,6 +37,8 @@ serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 tiny-keccak = { workspace = true }
 rayon = { workspace = true }
+core_affinity = "0.8.0"
+num_cpus = { workspace = true }
 
 [dev-dependencies]
 aptos-crypto = { workspace = true, features = ["fuzzing"] }

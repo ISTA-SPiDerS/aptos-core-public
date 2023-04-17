@@ -30,14 +30,6 @@ use std::time::Instant;
 use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 
-pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .thread_name(|index| format!("par_exec_{}", index))
-        .build()
-        .unwrap()
-});
-
 pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
 
 pub enum ExtrResult<E: ExecutorTask> {

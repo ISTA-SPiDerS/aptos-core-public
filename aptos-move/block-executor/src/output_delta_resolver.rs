@@ -1,10 +1,11 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{executor::RAYON_EXEC_POOL, task::Transaction};
+use crate::{task::Transaction};
 use aptos_aggregator::delta_change_set::{deserialize, serialize};
 use aptos_mvhashmap::{EntryCell, MVHashMap};
 use aptos_state_view::TStateView;
+use aptos_types::transaction::RAYON_EXEC_POOL;
 use aptos_types::write_set::{TransactionWrite, WriteOp};
 
 pub(crate) struct OutputDeltaResolver<T: Transaction> {

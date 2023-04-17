@@ -65,6 +65,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use anyhow::format_err;
 use aptos_types::on_chain_config::OnChainConfigPayload;
 
 static RNG_SEED: [u8; 32] = [9u8; 32];
@@ -123,7 +124,7 @@ impl TransactionValidation for FakeValidation {
         &mut self,
         write_set: &WriteSet
     ) {
-        self.state_view.add_write_set(write_set);
+
     }
 }
 

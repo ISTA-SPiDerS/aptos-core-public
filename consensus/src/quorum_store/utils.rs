@@ -204,7 +204,8 @@ impl MempoolProxy {
                 "[direct_mempool_quorum_store] did not receive GetBatchResponse on time"
             )),
             Ok(resp) => match resp.map_err(anyhow::Error::from)?? {
-                QuorumStoreResponse::GetBatchResponse(txns) => Ok(txns),
+                // TODO: Return the transaction register or something
+                QuorumStoreResponse::GetBatchResponse(txns, _, _) => Ok(txns),
                 _ => Err(anyhow::anyhow!(
                     "[direct_mempool_quorum_store] did not receive expected GetBatchResponse"
                 )),
