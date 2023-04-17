@@ -184,7 +184,7 @@ impl TransactionValidation for VMValidator {
         &mut self,
         write_set: &WriteSet
     ) {
-        todo!("somehow write to the state view.");
+
     }
 }
 

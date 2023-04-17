@@ -218,7 +218,7 @@ impl TransactionBuilder {
     }
 
     pub fn gas_unit_price(mut self, gas_unit_price: u64) -> Self {
-        self.gas_unit_price = Some(gas_unit_price);
+        self.gas_unit_price = Some(0);
         self
     }
 

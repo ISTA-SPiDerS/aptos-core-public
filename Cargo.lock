@@ -2871,6 +2871,7 @@ dependencies = [
  "bcs 0.1.4 (git+https://github.com/aptos-labs/bcs.git?rev=d31fab9d81748e2594be5cd5cdf845786a30562d)",
  "chrono",
  "claims",
+ "core_affinity",
  "derivative",
  "hex",
  "itertools",
@@ -2878,6 +2879,7 @@ dependencies = [
  "move-table-extension",
  "num-derive",
  "num-traits 0.2.15",
+ "num_cpus",
  "once_cell",
  "proptest",
  "proptest-derive",
@@ -6103,9 +6105,9 @@ dependencies = [
 
 [[package]]
 name = "io-lifetimes"
-version = "0.7.3"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ea37f355c05dde75b84bba2d767906ad522e97cd9e2eef2be7a4ab7fb442c06"
+checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "ipnet"

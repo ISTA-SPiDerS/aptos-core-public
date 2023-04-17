@@ -47,12 +47,12 @@ pub use change_set::NoOpChangeSetChecker;
 pub use change_set::{ChangeSet, CheckChangeSet};
 pub use module::{Module, ModuleBundle};
 use move_core_types::vm_status::AbortLocation;
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 pub use script::{
     ArgumentABI, EntryABI, EntryFunction, EntryFunctionABI, Script, TransactionScriptABI,
     TypeArgumentABI,
 };
-
+use num_cpus;
 use rayon::prelude::*;
 use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64};
 use std::ops::{Add, AddAssign};
@@ -60,6 +60,7 @@ use std::time::{Duration, Instant};
 use itertools::Itertools;
 use rayon::iter::plumbing::UnindexedConsumer;
 use rayon::vec::IntoIter;
+use core_affinity;
 pub use transaction_argument::{parse_transaction_argument, TransactionArgument};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
@@ -1688,6 +1689,23 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
         }
     }
 }
+
+pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
+// let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_cpus::get())
+        .thread_name(|index| format!("par_exec_{}", index))
+        .spawn_handler(|thread| {
+            std::thread::spawn(|| {
+                let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
+                let res = core_affinity::set_for_current(core_ids[thread.index()].clone());
+                thread.run();
+            });
+            Ok(())
+        })
+        .build()
+        .unwrap()
+});
 
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]

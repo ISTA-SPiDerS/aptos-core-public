@@ -347,6 +347,7 @@ pub async fn fund_account(
     num_octas: u64,
     address: AccountAddress,
 ) -> CliTypedResult<Vec<HashValue>> {
+    println!("Go");
     let response = reqwest::Client::new()
         .post(format!(
             "{}mint?amount={}&auth_key={}",
@@ -356,6 +357,8 @@ pub async fn fund_account(
         .send()
         .await
         .map_err(|err| CliError::ApiError(err.to_string()))?;
+    println!("{}", response.status());
+
     if response.status() == 200 {
         let hashes: Vec<HashValue> = response
             .json()
@@ -363,6 +366,7 @@ pub async fn fund_account(
             .map_err(|err| CliError::UnexpectedError(err.to_string()))?;
         Ok(hashes)
     } else {
+        println!("{}", response.status());
         Err(CliError::ApiError(format!(
             "Faucet issue: {}",
             response.status()

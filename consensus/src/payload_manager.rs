@@ -127,7 +127,7 @@ impl PayloadManager {
         };
 
         match (self, payload) {
-            (PayloadManager::DirectMempool, Payload::DirectMempool(txns)) => Ok(txns.clone()),
+            (PayloadManager::DirectMempool, Payload::DirectMempool(txns)) => Ok(txns.clone().into_txns()),
             (
                 PayloadManager::InQuorumStore(batch_reader, _),
                 Payload::InQuorumStore(proof_with_data),

@@ -60,6 +60,7 @@ use std::{
     string::String,
     sync::Arc,
 };
+use aptos_types::transaction::TransactionRegister;
 
 /**
  * Definitions
@@ -468,7 +469,7 @@ impl<'a> AptosTestAdapter<'a> {
     /// Should error if the transaction ends up being discarded, or having a status other than
     /// EXECUTED.
     fn run_transaction(&mut self, txn: Transaction) -> Result<TransactionOutput> {
-        let mut outputs = AptosVM::execute_block(vec![txn], &self.storage)?;
+        let mut outputs = AptosVM::execute_block(TransactionRegister::new(vec![txn], vec![], vec![]), &self.storage)?;
 
         assert_eq!(outputs.len(), 1);
 

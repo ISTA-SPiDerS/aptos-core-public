@@ -13,7 +13,7 @@ use aptos_types::{
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, fmt, fmt::Write, sync::Arc};
-use futures::channel::oneshot;
+use tokio::sync::oneshot;
 use aptos_types::transaction::TransactionRegister;
 
 /// The round of a block is a consensus-internal counter, which starts with 0 and increases

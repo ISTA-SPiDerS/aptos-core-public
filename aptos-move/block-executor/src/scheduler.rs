@@ -34,7 +34,7 @@ use tokio::{
 use color_eyre::Report;
 use dashmap::{DashMap, DashSet};
 use itertools::equal;
-use aptos_types::transaction::{ExecutionMode, Profiler, TransactionStatus};
+use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionStatus};
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
@@ -815,7 +815,7 @@ impl Scheduler {
 
         // Create a condition variable associated with the dependency.
         panic!("This should not be called");
-        let thread_id = crate::executor::RAYON_EXEC_POOL.current_thread_index().unwrap();
+        let thread_id = RAYON_EXEC_POOL.current_thread_index().unwrap();
         let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();

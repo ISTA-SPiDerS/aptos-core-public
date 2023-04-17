@@ -169,6 +169,9 @@ impl Mempool {
         mut seen: HashSet<TxnPointer>,
         block_filler: &mut F,
     ) {
+        println!("fetch batch");
+        
+        let mut result = vec![];
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
         // and gas_price 1, 10 respectively)
@@ -176,6 +179,7 @@ impl Mempool {
         // but can't be executed before first txn. Once observed, such txn will be saved in
         // `skipped` DS and rechecked once it's ancestor becomes available
         let mut skipped = HashSet::new();
+        let mut total_bytes = 0;
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
         // iterate over the queue of transactions based on gas price
@@ -192,42 +196,43 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
-                if let Some(signed_txn) = self.transactions.get(&ptr.0, ptr.1) {
-                    if !block_filler.add(signed_txn) {
-                        continue;
-                    }
-                    if block_filler.is_full() {
-                        break;
-                    }
+                result.push(self.transactions.get(&ptr.0, ptr.1).unwrap());
+                if (result.len() as u64) == 10000 {
+                    break;
+                }
 
-                    // check if we can now include some transactions
-                    // that were skipped before for given account
-                    let mut skipped_txn = (txn.address, tx_seq + 1);
-                    while skipped.contains(&skipped_txn) {
-                        if let Some(signed_txn) = self.transactions.get(&skipped_txn.0, skipped_txn.1) {
-                            if block_filler.add(signed_txn) {
-                                seen.insert(skipped_txn);
-                                skipped_txn = (txn.address, skipped_txn.1 + 1);
-                            } else {
-                                break;
-                            }
-                            if block_filler.is_full() {
-                                break 'main;
-                            }
-                        }
+                // check if we can now include some transactions
+                // that were skipped before for given account
+                let mut skipped_txn = (txn.address, tx_seq + 1);
+                while skipped.contains(&skipped_txn) {
+                    seen.insert(skipped_txn);
+                    result.push(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    if (result.len() as u64) == 10000 {
+                        break 'main;
                     }
+                    skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
             } else {
                 skipped.insert(TxnPointer::from(txn));
             }
         }
+        let result_size = result.len();
+        let off = block_filler.add_all(result);
 
         debug!(
             LogSchema::new(LogEntry::GetBlock),
             seen_consensus = seen_size,
             walked = txn_walked,
             seen_after = seen.len(),
+            result_size = result_size,
+            block_size = result_size - off.len(),
+            byte_size = total_bytes,
         );
+
+        println!("{}", result_size - off.len());
+
+        counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, result_size - off.len());
+        counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
     }
 
     /// Periodic core mempool garbage collection.

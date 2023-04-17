@@ -14,7 +14,7 @@ use aptos_storage_interface::{
 };
 use aptos_types::{
     account_config::CORE_CODE_ADDRESS,
-    transaction::{ExecutionStatus, Transaction, TransactionOutput, TransactionStatus},
+    transaction::{ExecutionStatus, Transaction, TransactionRegister, TransactionOutput, TransactionStatus},
 };
 use aptos_vm::{AptosVM, VMExecutor};
 use fail::fail_point;
@@ -36,12 +36,12 @@ impl ChunkOutput {
         transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<Self> {
-        let transaction_outputs = Self::execute_block::<V>(transactions.clone(), &state_view)?;
+        let transaction_outputs = Self::execute_block::<V>(transactions.clone().into_txns(), &state_view)?;
 
         // to print txn output for debugging, uncomment:
         // println!("{:?}", transaction_outputs.iter().map(|t| t.status() ).collect::<Vec<_>>());
 
-        update_counters_for_processed_chunk(&transactions, &transaction_outputs, "executed");
+        update_counters_for_processed_chunk(transactions.txns(), &transaction_outputs, "executed");
 
         Ok(Self {
             transactions: transactions.txns().clone(),
@@ -105,7 +105,7 @@ impl ChunkOutput {
         transactions: Vec<Transaction>,
         state_view: &CachedStateView,
     ) -> Result<Vec<TransactionOutput>> {
-        Ok(V::execute_block(transactions, &state_view)?)
+        Ok(V::execute_block(transactions.into(), &state_view)?)
     }
 
     /// In consensus-only mode, executes the block of [Transaction]s using the

@@ -15,7 +15,6 @@ use crate::{
 use aptos_aggregator::{delta_change_set::DeltaOp, transaction::TransactionOutputExt};
 use aptos_block_executor::{
     errors::Error,
-    executor::{BlockExecutor, RAYON_EXEC_POOL},
     task::{
         Transaction as BlockExecutorTransaction,
         TransactionOutput as BlockExecutorTransactionOutput,
@@ -29,7 +28,8 @@ use aptos_types::{
 };
 use move_core_types::vm_status::VMStatus;
 use rayon::prelude::*;
-use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
+use aptos_block_executor::executor::BlockExecutor;
+use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 
 impl BlockExecutorTransaction for PreprocessedTransaction {
     type Key = StateKey;

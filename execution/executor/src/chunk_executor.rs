@@ -524,7 +524,8 @@ impl<V: VMExecutor> ChunkExecutorInner<V> {
             .iter()
             .take((end_version - begin_version) as usize)
             .cloned()
-            .collect();
+            .collect::<Vec<Transaction>>()
+            .into();
 
         let chunk_output = ChunkOutput::by_transaction_execution::<V>(txns, state_view)?;
         // not `zip_eq`, deliberately

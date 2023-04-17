@@ -19,8 +19,6 @@ use futures::{
 };
 use std::time::{Duration, Instant};
 use tokio::time::timeout;
-use consensus_types::common::{Payload, PayloadFilter, TransactionSummary};
-use consensus_types::request_response::{BlockProposalCommand, ConsensusResponse};
 
 pub struct DirectMempoolQuorumStore {
     consensus_receiver: Receiver<BlockProposalCommand>,
