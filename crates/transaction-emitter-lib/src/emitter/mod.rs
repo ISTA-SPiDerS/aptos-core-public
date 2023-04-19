@@ -5,6 +5,7 @@ pub mod account_minter;
 pub mod stats;
 pub mod submission_worker;
 pub mod transaction_executor;
+pub mod account_activity_distribution;
 
 use crate::{
     emitter::{
