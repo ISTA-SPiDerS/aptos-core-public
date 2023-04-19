@@ -213,9 +213,12 @@ impl Default for EmitJobRequest {
             reuse_accounts: false,
             mint_to_root: false,
             init_gas_price_multiplier: 10,
-            transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
+            transaction_mix_per_phase: vec![vec![(TransactionType::CoinTransfer {
+                invalid_transaction_ratio: 0,
+                sender_use_account_pool: true,
+            }, 1)]],
             txn_expiration_time_secs: 60,
-            max_transactions_per_account: 20,
+            max_transactions_per_account: 100,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
@@ -344,7 +347,7 @@ impl EmitJobRequest {
                     worker_offset_mode: WorkerOffsetMode::Jitter {
                         jitter_millis: 5000,
                     },
-                    accounts_per_worker: 1,
+                    accounts_per_worker: 100,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
