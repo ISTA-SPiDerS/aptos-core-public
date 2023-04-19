@@ -27,7 +27,7 @@ use std::sync::Arc;
 use std::borrow::Borrow;
 use aptos_infallible::Mutex;
 use std::time::Instant;
-use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
+use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 
 pub type TxnInput<K> = Vec<ReadDescriptor<K>>;

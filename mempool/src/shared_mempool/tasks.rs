@@ -41,6 +41,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::Handle;
+use crate::core_mempool::SimpleFiller;
 
 // ============================== //
 //  broadcast_coordinator tasks  //
@@ -453,8 +454,8 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 .map(|txn| (txn.sender, txn.sequence_number))
                 .collect();
             let txns;
-            let dependency_graph;
-            let gas_estimates;
+            //let dependency_graph;
+            //let gas_estimates;
             {
                 let lock_timer = counters::mempool_service_start_latency_timer(
                     counters::GET_BLOCK_LOCK_LABEL,
@@ -478,21 +479,19 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 const CORES: u64 = 8;
                 const GAS_PER_CORE: u64 = 1_000_000_000;
                 let mut validator = smp.validator.write();
-                let mut block_filler: DependencyFiller<TransactionValidator, CORES> = DependencyFiller::new(
-                    &mut validator,
-                    GAS_PER_CORE,
+                let mut block_filler: SimpleFiller = SimpleFiller::new(
                     max_bytes,
                     max_txns);
                 mempool.get_batch(exclude_transactions, &mut block_filler);
-                gas_estimates = block_filler.get_gas_estimates();
-                dependency_graph = block_filler.get_dependency_graph();
+                //gas_estimates = block_filler.get_gas_estimates();
+                //dependency_graph = block_filler.get_dependency_graph();
                 txns = block_filler.get_block();
             }
 
             // mempool_service_transactions is logged inside get_batch
 
             (
-                QuorumStoreResponse::GetBatchResponse(txns, gas_estimates, dependency_graph),
+                QuorumStoreResponse::GetBatchResponse(txns, vec![], vec![]),
                 callback,
                 counters::GET_BLOCK_LABEL,
             )
