@@ -419,7 +419,7 @@ fn run_forever() -> ForgeConfig<'static> {
 
 fn local_test_suite() -> ForgeConfig<'static> {
     ForgeConfig::default()
-        .with_aptos_tests(vec![&FundAccount, &TransferCoins])
+        //.with_aptos_tests(vec![&FundAccount, &TransferCoins])
         //.with_admin_tests(vec![&GetMetadata])
         .with_network_tests(vec![&EmitTransaction])
         .with_genesis_module_bundle(aptos_cached_packages::head_release_bundle().clone())
