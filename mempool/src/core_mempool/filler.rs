@@ -14,6 +14,7 @@ pub trait BlockFiller {
     fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
+    fn get_blockx(&mut self) -> Vec<SignedTransaction>;
 
     fn is_full(&self) -> bool;
 }
@@ -87,6 +88,9 @@ impl BlockFiller for SimpleFiller {
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
+    }
+    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
+        self.block.clone()
     }
 
     fn is_full(&self) -> bool {
@@ -272,14 +276,14 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             let tx = txn[index].clone();
             if self.full {
                 rejected.push(tx);
-                continue;
+                return rejected;
             }
 
             let txn_len = tx.raw_txn_bytes_len() as u64;
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
                 rejected.push(tx);
-                continue;
+                return rejected;
             }
 
             if let anyhow::Result::Ok((speculation, status)) = res {
@@ -307,7 +311,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_estimated_gas + gas_used > self.gas_per_core * C {
                     self.full = true;
                     rejected.push(tx);
-                    continue;
+                    return rejected;
                 }
 
                 let mut dependencies = HashSet::new();
@@ -322,7 +326,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                     self.full = true;
                     rejected.push(tx);
-                    continue;
+                    return rejected;
                 }
 
                 self.total_bytes += txn_len + dependencies.len() as u64 * size_of::<TransactionIdx>() as u64 + size_of::<u64>() as u64;
@@ -368,6 +372,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 if self.block.len() as u64 == self.max_txns {
                     self.full = true;
+                    return rejected;
                 }
             }
             index+=1;
@@ -378,6 +383,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
+    }
+
+    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
+        self.block.clone()
     }
 
     fn is_full(&self) -> bool {

@@ -218,6 +218,8 @@ impl Mempool {
         }
         let result_size = result.len();
         let off = block_filler.add_all(result);
+        println!("lalallen: {}", off.len());
+        println!("blalalen: {}", block_filler.get_blockx().len());
 
         debug!(
             LogSchema::new(LogEntry::GetBlock),
