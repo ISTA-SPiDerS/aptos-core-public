@@ -213,12 +213,9 @@ impl Default for EmitJobRequest {
             reuse_accounts: false,
             mint_to_root: false,
             init_gas_price_multiplier: 10,
-            transaction_mix_per_phase: vec![vec![(TransactionType::CoinTransfer {
-                invalid_transaction_ratio: 0,
-                sender_use_account_pool: true,
-            }, 1)]],
+            transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
             txn_expiration_time_secs: 60,
-            max_transactions_per_account: 100,
+            max_transactions_per_account: 20,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
@@ -496,9 +493,9 @@ impl EmitModeParams {
                 result
             },
         }
-        .into_iter()
-        .map(Duration::from_millis)
-        .collect()
+            .into_iter()
+            .map(Duration::from_millis)
+            .collect()
     }
 }
 
@@ -622,7 +619,7 @@ impl TxnEmitter {
             &init_txn_factory,
             stats.clone(),
         )
-        .await;
+            .await;
 
         if !req.delay_after_minting.is_zero() {
             info!(
@@ -706,9 +703,9 @@ impl TxnEmitter {
             let stats = self.peek_job_stats(job);
             let delta = &stats[cur_phase]
                 - prev_stats
-                    .as_ref()
-                    .map(|p| &p[cur_phase])
-                    .unwrap_or(&default_stats);
+                .as_ref()
+                .map(|p| &p[cur_phase])
+                .unwrap_or(&default_stats);
             prev_stats = Some(stats);
             info!("phase {}: {}", cur_phase, delta.rate());
         }
@@ -774,7 +771,7 @@ impl TxnEmitter {
             duration,
             Some(interval_secs),
         )
-        .await
+            .await
     }
 
     pub async fn submit_single_transaction(
@@ -948,8 +945,8 @@ pub async fn query_sequence_numbers<'a, I>(
     client: &RestClient,
     addresses: I,
 ) -> Result<(Vec<(AccountAddress, u64)>, u64)>
-where
-    I: Iterator<Item = &'a AccountAddress>,
+    where
+        I: Iterator<Item = &'a AccountAddress>,
 {
     let (addresses, futures): (Vec<_>, Vec<_>) = addresses
         .map(|address| {
