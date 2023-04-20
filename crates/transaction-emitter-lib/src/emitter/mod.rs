@@ -206,7 +206,7 @@ impl Default for EmitJobRequest {
         Self {
             rest_clients: Vec::new(),
             mode: EmitJobMode::MaxLoad {
-                mempool_backlog: 5000,
+                mempool_backlog: 3000,
             },
             gas_price: aptos_global_constants::GAS_UNIT_PRICE,
             max_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
