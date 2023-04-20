@@ -17,8 +17,6 @@ use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, Transac
 
 const TXN_IDX_MASK: u64 = (1 << 32) - 1;
 
-//todo: Remove parallel pre-exec and pre-exec in general from this one!
-
 // Type aliases.
 pub type TxnIndex = usize;
 pub type Incarnation = usize;

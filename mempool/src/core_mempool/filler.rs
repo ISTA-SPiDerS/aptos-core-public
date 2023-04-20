@@ -3,17 +3,20 @@ use std::collections::{BTreeMap, HashSet};
 use std::mem;
 use std::mem::size_of;
 use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
+use std::collections::HashMap;
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
+    fn get_blockx(&mut self) -> Vec<SignedTransaction>;
 
     fn is_full(&self) -> bool;
 }
@@ -87,6 +90,9 @@ impl BlockFiller for SimpleFiller {
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
+    }
+    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
+        self.block.clone()
     }
 
     fn is_full(&self) -> bool {
@@ -259,30 +265,30 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
     }
 
     fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction> {
-        let result : Vec<anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
-            (&txn).into_par_iter().map(|tx| self.transaction_validation.speculate_transaction(&tx))
+        let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
+            (&txn).into_par_iter().enumerate().map(|(i, tx)| (i, self.transaction_validation.speculate_transaction(&tx)))
                 .collect()
         });
 
         let mut rejected = vec![];
 
-        let mut index = 0;
-        for res in result
+        let mut index:usize = 0;
+        for tx in txn
         {
-            let tx = txn[index].clone();
+            let res = result.get(&index);
             if self.full {
                 rejected.push(tx);
-                continue;
+                return rejected;
             }
 
             let txn_len = tx.raw_txn_bytes_len() as u64;
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
                 rejected.push(tx);
-                continue;
+                return rejected;
             }
 
-            if let anyhow::Result::Ok((speculation, status)) = res {
+            if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();
                 let delta_set = speculation.output.delta_change_set();
@@ -307,7 +313,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_estimated_gas + gas_used > self.gas_per_core * C {
                     self.full = true;
                     rejected.push(tx);
-                    continue;
+                    return rejected;
                 }
 
                 let mut dependencies = HashSet::new();
@@ -322,7 +328,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                     self.full = true;
                     rejected.push(tx);
-                    continue;
+                    return rejected;
                 }
 
                 self.total_bytes += txn_len + dependencies.len() as u64 * size_of::<TransactionIdx>() as u64 + size_of::<u64>() as u64;
@@ -368,6 +374,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 if self.block.len() as u64 == self.max_txns {
                     self.full = true;
+                    return rejected;
                 }
             }
             index+=1;
@@ -378,6 +385,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
+    }
+
+    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
+        self.block.clone()
     }
 
     fn is_full(&self) -> bool {
