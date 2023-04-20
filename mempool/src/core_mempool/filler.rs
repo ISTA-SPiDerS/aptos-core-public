@@ -3,11 +3,13 @@ use std::collections::{BTreeMap, HashSet};
 use std::mem;
 use std::mem::size_of;
 use rayon::iter::IntoParallelIterator;
-use rayon::iter::ParallelIterator;
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
+use std::collections::HashMap;
+use rayon::iter::IndexedParallelIterator;
+use rayon::iter::ParallelIterator;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
@@ -263,17 +265,17 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
     }
 
     fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction> {
-        let result : Vec<anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
-            (&txn).into_par_iter().map(|tx| self.transaction_validation.speculate_transaction(&tx))
+        let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
+            (&txn).into_par_iter().enumerate().map(|(i, tx)| (i, self.transaction_validation.speculate_transaction(&tx)))
                 .collect()
         });
 
         let mut rejected = vec![];
 
-        let mut index = 0;
-        for res in result
+        let mut index:usize = 0;
+        for tx in txn
         {
-            let tx = txn[index].clone();
+            let res = result.get(&index);
             if self.full {
                 rejected.push(tx);
                 return rejected;
@@ -286,7 +288,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 return rejected;
             }
 
-            if let anyhow::Result::Ok((speculation, status)) = res {
+            if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();
                 let delta_set = speculation.output.delta_change_set();
