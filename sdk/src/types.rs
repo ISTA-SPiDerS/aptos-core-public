@@ -23,7 +23,7 @@ use std::str::FromStr;
 /// holds the private / public key pair and the address of the account. You can
 /// use this struct to help transact with the blockchain, e.g. by generating a
 /// new account and signing transactions.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LocalAccount {
     /// Address of the account.
     address: AccountAddress,
@@ -164,7 +164,7 @@ impl LocalAccount {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AccountKey {
     private_key: Ed25519PrivateKey,
     public_key: Ed25519PublicKey,

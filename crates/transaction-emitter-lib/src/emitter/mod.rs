@@ -214,8 +214,8 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             init_gas_price_multiplier: 10,
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
-            txn_expiration_time_secs: 120,
-            max_transactions_per_account: 20,
+            txn_expiration_time_secs: 180,
+            max_transactions_per_account: 50,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
@@ -320,7 +320,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 50;
+                let num_workers_per_endpoint = 40;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -339,13 +339,13 @@ impl EmitJobRequest {
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Jitter {
-                        jitter_millis: 5000,
+                        jitter_millis: 20000,
                     },
-                    accounts_per_worker: 50,
+                    accounts_per_worker: 1000,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
-                    check_account_sequence_sleep_millis: 300,
+                    check_account_sequence_sleep_millis: 100,
                 }
             },
             EmitJobMode::ConstTps { tps }
@@ -493,9 +493,9 @@ impl EmitModeParams {
                 result
             },
         }
-            .into_iter()
-            .map(Duration::from_millis)
-            .collect()
+        .into_iter()
+        .map(Duration::from_millis)
+        .collect()
     }
 }
 
@@ -619,7 +619,7 @@ impl TxnEmitter {
             &init_txn_factory,
             stats.clone(),
         )
-            .await;
+        .await;
 
         if !req.delay_after_minting.is_zero() {
             info!(
@@ -651,7 +651,9 @@ impl TxnEmitter {
         let mut workers = vec![];
         for _ in 0..workers_per_endpoint {
             for client in &req.rest_clients {
-                let accounts = all_accounts.clone();
+                let accounts = (&mut all_accounts_iter)
+                    .take(mode_params.accounts_per_worker)
+                    .collect::<Vec<_>>();
                 let stop = stop.clone();
                 let stats = Arc::clone(&stats);
                 let txn_generator = txn_generator_creator.create_transaction_generator().await;

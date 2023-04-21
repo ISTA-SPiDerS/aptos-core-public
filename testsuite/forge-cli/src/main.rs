@@ -240,7 +240,7 @@ fn main() -> Result<()> {
                     let previous_emit_job = test_suite.get_emit_job().clone();
                     let test_suite =
                         test_suite.with_emit_job(previous_emit_job.mode(EmitJobMode::MaxLoad {
-                            mempool_backlog: 5000,
+                            mempool_backlog: 50000,
                         }));
 
                     run_forge(
@@ -883,7 +883,7 @@ fn three_region_sim_graceful_overload(config: ForgeConfig) -> ForgeConfig {
 
 fn individual_workload_tests(test_name: String, config: ForgeConfig) -> ForgeConfig {
     let job = EmitJobRequest::default().mode(EmitJobMode::MaxLoad {
-        mempool_backlog: 30000,
+        mempool_backlog: 50000,
     });
     config
         .with_network_tests(vec![&PerformanceBenchmarkWithFN])
@@ -1141,7 +1141,7 @@ fn state_sync_perf_fullnodes_fast_sync(forge_config: ForgeConfig<'static>) -> Fo
         .with_emit_job(
             EmitJobRequest::default()
                 .mode(EmitJobMode::MaxLoad {
-                    mempool_backlog: 30000,
+                    mempool_backlog: 50000,
                 })
                 .transaction_type(TransactionType::default_account_generation()), // Create many state values
         )
