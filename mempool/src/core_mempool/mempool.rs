@@ -219,8 +219,10 @@ impl Mempool {
             }
         }
 
-
+        println!("blalalen1: {}", block_filler.get_blockx().len());
         let result_size = result.len();
+        println!("blalalen1: {}", result_size);
+
         let off = block_filler.add_all(result);
         for tx in off
         {

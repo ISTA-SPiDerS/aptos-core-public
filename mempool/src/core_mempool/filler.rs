@@ -272,7 +272,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
         let mut rejected = vec![];
 
-        let lent = txn.len();
         let mut index:usize = 0;
         while let Some(tx) = txn.pop_front()
         {
