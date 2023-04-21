@@ -1,5 +1,5 @@
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::mem;
 use std::mem::size_of;
 use rayon::iter::IntoParallelIterator;
@@ -13,7 +13,7 @@ use rayon::iter::ParallelIterator;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
-    fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction>;
+    fn add_all(&mut self, txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
     fn get_blockx(&mut self) -> Vec<SignedTransaction>;
@@ -63,7 +63,7 @@ impl BlockFiller for SimpleFiller {
         true
     }
 
-    fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction> {
+    fn add_all(&mut self, txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction> {
         let mut rejected = vec![];
 
         for tx in txn
@@ -264,7 +264,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         return false;
     }
 
-    fn add_all(&mut self, txn: Vec<SignedTransaction>) -> Vec<SignedTransaction> {
+    fn add_all(&mut self, mut txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction> {
         let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
             (&txn).into_par_iter().enumerate().map(|(i, tx)| (i, self.transaction_validation.speculate_transaction(&tx)))
                 .collect()
@@ -272,12 +272,14 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
         let mut rejected = vec![];
 
+        let lent = txn.len();
         let mut index:usize = 0;
-        for tx in txn
+        while let Some(tx) = txn.pop_front()
         {
             let res = result.get(&index);
             if self.full {
                 rejected.push(tx);
+                rejected.extend(txn);
                 return rejected;
             }
 
@@ -285,6 +287,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
                 rejected.push(tx);
+                rejected.extend(txn);
                 return rejected;
             }
 
@@ -313,6 +316,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_estimated_gas + gas_used > self.gas_per_core * C {
                     self.full = true;
                     rejected.push(tx);
+                    rejected.extend(txn);
                     return rejected;
                 }
 
@@ -328,6 +332,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                     self.full = true;
                     rejected.push(tx);
+                    rejected.extend(txn);
                     return rejected;
                 }
 
@@ -374,6 +379,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 if self.block.len() as u64 == self.max_txns {
                     self.full = true;
+                    rejected.extend(txn);
                     return rejected;
                 }
             }

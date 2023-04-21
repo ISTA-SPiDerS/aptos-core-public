@@ -29,6 +29,7 @@ use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
 };
+use std::collections::VecDeque;
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
@@ -171,7 +172,7 @@ impl Mempool {
     ) {
         println!("fetch batch");
         
-        let mut result = vec![];
+        let mut result = VecDeque::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
         // and gas_price 1, 10 respectively)
@@ -188,6 +189,7 @@ impl Mempool {
             if seen.contains(&TxnPointer::from(txn)) {
                 continue;
             }
+
             let tx_seq = txn.sequence_number.transaction_sequence_number;
             let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
             let seen_previous = tx_seq > 0 && seen.contains(&(txn.address, tx_seq - 1));
@@ -196,7 +198,7 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
-                result.push(self.transactions.get(&ptr.0, ptr.1).unwrap());
+                result.push_front(self.transactions.get(&ptr.0, ptr.1).unwrap());
                 if (result.len() as u64) == 10000 {
                     break;
                 }
@@ -206,7 +208,7 @@ impl Mempool {
                 let mut skipped_txn = (txn.address, tx_seq + 1);
                 while skipped.contains(&skipped_txn) {
                     seen.insert(skipped_txn);
-                    result.push(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    result.push_front(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
                     if (result.len() as u64) == 10000 {
                         break 'main;
                     }
@@ -216,9 +218,15 @@ impl Mempool {
                 skipped.insert(TxnPointer::from(txn));
             }
         }
+
+
         let result_size = result.len();
         let off = block_filler.add_all(result);
-        println!("blalalen1: {}", off.len());
+        for tx in off
+        {
+            seen.remove(&(tx.sender(), tx.sequence_number()));
+        }
+
         println!("blalalen2: {}", block_filler.get_blockx().len());
         println!("blalalen3: {}", result_size);
 
@@ -228,13 +236,13 @@ impl Mempool {
             walked = txn_walked,
             seen_after = seen.len(),
             result_size = result_size,
-            block_size = result_size - off.len(),
+            block_size = block_filler.get_blockx().len(),
             byte_size = total_bytes,
         );
 
-        println!("{}", result_size - off.len());
+        println!("{}", block_filler.get_blockx().len());
 
-        counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, result_size - off.len());
+        counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
         counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
     }
 
