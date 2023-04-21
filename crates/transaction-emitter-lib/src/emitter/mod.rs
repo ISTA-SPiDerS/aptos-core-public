@@ -206,7 +206,7 @@ impl Default for EmitJobRequest {
         Self {
             rest_clients: Vec::new(),
             mode: EmitJobMode::MaxLoad {
-                mempool_backlog: 5000,
+                mempool_backlog: 100000,
             },
             gas_price: aptos_global_constants::GAS_UNIT_PRICE,
             max_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
@@ -214,7 +214,7 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             init_gas_price_multiplier: 10,
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
-            txn_expiration_time_secs: 60,
+            txn_expiration_time_secs: 120,
             max_transactions_per_account: 20,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
@@ -320,7 +320,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 20;
+                let num_workers_per_endpoint = 50;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -651,9 +651,7 @@ impl TxnEmitter {
         let mut workers = vec![];
         for _ in 0..workers_per_endpoint {
             for client in &req.rest_clients {
-                let accounts = (&mut all_accounts_iter)
-                    .take(mode_params.accounts_per_worker)
-                    .collect::<Vec<_>>();
+                let accounts = all_accounts.clone();
                 let stop = stop.clone();
                 let stats = Arc::clone(&stats);
                 let txn_generator = txn_generator_creator.create_transaction_generator().await;
