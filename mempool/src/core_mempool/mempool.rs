@@ -220,18 +220,20 @@ impl Mempool {
         }
 
         let result_size = result.len();
-        println!("blalalen1: {}", result_size);
-
-        let off = block_filler.add_all(result);
-        for tx in off
+        if result_size > 0
         {
-            seen.remove(&(tx.sender(), tx.sequence_number()));
-        }
+            println!("blalalen1: {}", result_size);
 
-        println!("blalalen2: {}", block_filler.get_blockx().len());
-        println!("blalalen3: {}", result_size);
+            let off = block_filler.add_all(result);
+            for tx in off
+            {
+                seen.remove(&(tx.sender(), tx.sequence_number()));
+            }
 
-        debug!(
+            println!("blalalen2: {}", block_filler.get_blockx().len());
+            println!("blalalen3: {}", result_size);
+
+            debug!(
             LogSchema::new(LogEntry::GetBlock),
             seen_consensus = seen_size,
             walked = txn_walked,
@@ -241,10 +243,22 @@ impl Mempool {
             byte_size = total_bytes,
         );
 
-        println!("{}", block_filler.get_blockx().len());
+            println!("{}", block_filler.get_blockx().len());
 
-        counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
-        counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
+            counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
+            counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
+        }
+        else {
+            debug!(
+            LogSchema::new(LogEntry::GetBlock),
+            seen_consensus = seen_size,
+            walked = txn_walked,
+            seen_after = seen.len(),
+            result_size = 0,
+            block_size = 0,
+            byte_size = 0,
+        );
+        }
     }
 
     /// Periodic core mempool garbage collection.
