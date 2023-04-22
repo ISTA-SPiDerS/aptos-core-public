@@ -214,7 +214,7 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             init_gas_price_multiplier: 10,
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
-            txn_expiration_time_secs: 540,
+            txn_expiration_time_secs: 180,
             max_transactions_per_account: 50,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
@@ -343,7 +343,7 @@ impl EmitJobRequest {
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
-                    check_account_sequence_sleep_millis: 100,
+                    check_account_sequence_sleep_millis: 300,
                 }
             },
             EmitJobMode::ConstTps { tps }

@@ -86,7 +86,7 @@ impl SubmissionWorker {
                 && loop_start_time.duration_since(wait_until) > wait_duration
             {
                 sample!(
-                    SampleRate::Duration(Duration::from_secs(120)),
+                    SampleRate::Duration(Duration::from_secs(60)),
                     warn!(
                         "[{:?}] txn_emitter worker drifted out of sync too much: {}s",
                         self.client.path_prefix_string(),
