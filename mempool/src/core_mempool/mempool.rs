@@ -223,6 +223,7 @@ impl Mempool {
         if result_size > 0
         {
             println!("blalalen1: {}", result_size);
+            println!("blalalen2: {}", seen.len());
 
             let off = block_filler.add_all(result);
             for tx in off
@@ -230,8 +231,9 @@ impl Mempool {
                 seen.remove(&(tx.sender(), tx.sequence_number()));
             }
 
+            println!("blalalen3: {}", off.len());
             println!("blalalen2: {}", block_filler.get_blockx().len());
-            println!("blalalen3: {}", result_size);
+            println!("blalalen3: {}", seen.len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
