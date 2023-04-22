@@ -472,6 +472,7 @@ where
             match interm_res {
                 ExtrResult::Error(v) => {
                     maybe_err = Some(v);
+                    println!("Aaaarrrrr {}", v);
                     break;
                 }
                 ExtrResult::Value(v) => {
@@ -498,7 +499,7 @@ where
                             .collect(),
                     )
                 } else {
-                    println!("err");
+                    println!("errar");
                     Err(err)
                 }
             }
