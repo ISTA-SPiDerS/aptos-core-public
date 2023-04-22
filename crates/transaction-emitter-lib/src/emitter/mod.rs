@@ -339,7 +339,7 @@ impl EmitJobRequest {
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 1000,
+                    accounts_per_worker: 100,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
