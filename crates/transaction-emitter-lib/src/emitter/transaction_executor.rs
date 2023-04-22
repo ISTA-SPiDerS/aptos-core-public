@@ -96,7 +96,7 @@ async fn submit_and_check(
             txn.clone().committed_hash(),
             txn.expiration_timestamp_secs(),
             None,
-            Some(Duration::from_secs(30)),
+            Some(Duration::from_secs(10)),
         )
         .await
     {
