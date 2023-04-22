@@ -226,12 +226,13 @@ impl Mempool {
             println!("blalalen2: {}", seen.len());
 
             let off = block_filler.add_all(result);
+            println!("blalalen3: {}", off.len());
+
             for tx in off
             {
                 seen.remove(&(tx.sender(), tx.sequence_number()));
             }
 
-            println!("blalalen3: {}", off.len());
             println!("blalalen2: {}", block_filler.get_blockx().len());
             println!("blalalen3: {}", seen.len());
 
