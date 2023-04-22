@@ -214,8 +214,8 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             init_gas_price_multiplier: 10,
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
-            txn_expiration_time_secs: 60,
-            max_transactions_per_account: 20,
+            txn_expiration_time_secs: 540,
+            max_transactions_per_account: 50,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
@@ -320,7 +320,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 20;
+                let num_workers_per_endpoint = 1;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -338,14 +338,12 @@ impl EmitJobRequest {
                     transactions_per_account: transactions_per_account
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
-                    worker_offset_mode: WorkerOffsetMode::Jitter {
-                        jitter_millis: 5000,
-                    },
-                    accounts_per_worker: 50,
+                    worker_offset_mode: WorkerOffsetMode::Spread,
+                    accounts_per_worker: 1000,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
-                    check_account_sequence_sleep_millis: 300,
+                    check_account_sequence_sleep_millis: 100,
                 }
             },
             EmitJobMode::ConstTps { tps }

@@ -101,7 +101,7 @@ async fn submit_and_check(
         .await
     {
         sample!(
-            SampleRate::Duration(Duration::from_secs(60)),
+            SampleRate::Duration(Duration::from_secs(120)),
             warn!(
                 "[{}] Failed waiting on a transaction: {}",
                 rest_client.path_prefix_string(),

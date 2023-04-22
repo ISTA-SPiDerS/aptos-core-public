@@ -131,7 +131,20 @@ impl BlockAptosVM {
             });
 
         match ret {
-            Ok(outputs) => Ok(outputs),
+            Ok(outputs) => {
+                let ot:Vec<TransactionOutput> = outputs;
+                for result in &ot {
+                    match result.status() {
+                        TransactionStatus::Keep(status) => { // do nothin
+                        }
+                        TransactionStatus::Discard(status) => println!("transaction discarded with {:?}", status),
+                        TransactionStatus::Retry => println!("transaction status is retry"),
+                    };
+                }
+
+
+                Ok(ot)
+            },
             Err(Error::ModulePathReadWrite) => {
                 unreachable!("[Execution]: Must be handled by sequential fallback")
             },

@@ -1069,6 +1069,7 @@ impl VMExecutor for AptosVM {
         if ret.is_ok() {
             // Record the histogram count for transactions per block.
             BLOCK_TRANSACTION_COUNT.observe(count as f64);
+            println!("tx exec: {}", count)
         }
         ret
     }

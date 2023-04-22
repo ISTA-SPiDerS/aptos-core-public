@@ -121,7 +121,7 @@ impl SubmissionWorker {
                 .max()
                 .unwrap_or(0);
 
-            let txn_offset_time = Arc::new(AtomicU64::new(0));
+            let txn_offset_time = Arc::new(AtomicU64::new(10));
 
             join_all(
                 requests
