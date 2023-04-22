@@ -94,7 +94,6 @@ impl LocalAccount {
         let raw_txn = builder
             .sender(self.address())
             .sequence_number(self.sequence_number())
-            .expiration_timestamp_secs(30)
             .build();
         *self.sequence_number_mut() += 1;
         self.sign_transaction(raw_txn)
