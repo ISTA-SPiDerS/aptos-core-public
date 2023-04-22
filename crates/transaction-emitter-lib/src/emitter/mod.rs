@@ -338,9 +338,7 @@ impl EmitJobRequest {
                     transactions_per_account: transactions_per_account
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
-                    worker_offset_mode: WorkerOffsetMode::Jitter{
-                        jitter_millis: 5000
-                    },
+                    worker_offset_mode: WorkerOffsetMode::Spread,
                     accounts_per_worker: 100,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
