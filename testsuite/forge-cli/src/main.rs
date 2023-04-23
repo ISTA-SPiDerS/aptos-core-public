@@ -1557,7 +1557,7 @@ impl Test for EmitTransaction {
 
 impl NetworkTest for EmitTransaction {
     fn run<'t>(&self, ctx: &mut NetworkContext<'t>) -> Result<()> {
-        let duration = Duration::from_secs(10);
+        let duration = Duration::from_secs(30);
         let all_validators = ctx
             .swarm()
             .validators()

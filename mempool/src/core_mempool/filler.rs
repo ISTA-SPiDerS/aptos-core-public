@@ -68,7 +68,7 @@ impl BlockFiller for SimpleFiller {
 
         for tx in txn
         {
-            if self.full {
+            /*if self.full {
                 rejected.push(tx);
                 continue;
             }
@@ -77,7 +77,7 @@ impl BlockFiller for SimpleFiller {
                 self.full = true;
                 rejected.push(tx);
                 continue;
-            }
+            }*/
 
             self.block.push(tx);
 
