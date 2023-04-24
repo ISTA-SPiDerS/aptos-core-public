@@ -300,6 +300,7 @@ pub async fn submit_transactions(
         match &result {
             Err(e) => {
                 if index > 100 {
+                    println!("reached 100");
                     break;
                 }
                 else {
