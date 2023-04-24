@@ -288,7 +288,7 @@ fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecuto
         &mut transaction_validation,
         1_000_000_000,
         1_000_000_000,
-        10_00_000
+        10_000_000
     );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
 

@@ -198,10 +198,18 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
-                result.push_back(self.transactions.get(&ptr.0, ptr.1).unwrap());
-                if (result.len() as u64) == 10000 {
+
+                if (result.len() as u64) == block_filler.get_max_txn() {
                     break;
                 }
+
+                let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
+                if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
+                    break;
+                }
+                total_bytes+= full_tx.raw_txn_bytes_len() as u64;
+                result.push_back(full_tx);
+
 
                 // check if we can now include some transactions
                 // that were skipped before for given account
@@ -209,7 +217,7 @@ impl Mempool {
                 while skipped.contains(&skipped_txn) {
                     seen.insert(skipped_txn);
                     result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
-                    if (result.len() as u64) == 10000 {
+                    if (result.len() as u64) == block_filler.get_max_txn() {
                         break 'main;
                     }
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
