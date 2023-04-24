@@ -115,7 +115,7 @@ impl TransactionType {
 
 impl Default for TransactionType {
     fn default() -> Self {
-        Self::default_call_custom_module()
+        Self::default_call_different_modules()
     }
 }
 
