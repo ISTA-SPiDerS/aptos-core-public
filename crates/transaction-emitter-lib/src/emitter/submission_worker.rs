@@ -303,7 +303,7 @@ pub async fn submit_transactions(
     loop {
         match &result {
             Err(e) => {
-                if index > 10 {
+                if index > 50 {
                     break;
                 }
                 else {
