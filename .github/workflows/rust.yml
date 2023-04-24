@@ -14,5 +14,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Dependencies
+      run: sudo apt install binutils
     - name: Benchmark
       run: cargo run -p aptos-forge-cli --release -- --suite "local_test_suite" --num-validators 4 test local-swarm
