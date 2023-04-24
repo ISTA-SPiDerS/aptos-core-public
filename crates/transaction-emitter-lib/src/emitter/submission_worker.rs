@@ -24,11 +24,7 @@ use core::{
 use futures::future::join_all;
 use itertools::Itertools;
 use rand::seq::IteratorRandom;
-use std::{
-    collections::HashMap,
-    sync::{atomic::AtomicU64, Arc},
-    time::Instant,
-};
+use std::{collections::HashMap, sync::{atomic::AtomicU64, Arc}, thread, time::Instant};
 use tokio::time::sleep;
 
 pub struct SubmissionWorker {
@@ -309,7 +305,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
-                    sleep(Duration::from_millis(10));
+                    thread::sleep(Duration::from_millis(10));
                 }
             },
             _ => {
