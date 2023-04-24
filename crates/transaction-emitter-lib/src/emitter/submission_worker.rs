@@ -311,8 +311,9 @@ pub async fn submit_transactions(
                 }
                 else {
                     index+=1;
+                    let rnd = rng.gen_range(1, index*100);
                     result = client.submit_batch_bcs(txns).await;
-                    thread::sleep(Duration::from_millis( rng.gen_range(1, index*100)));
+                    thread::sleep(Duration::from_millis(rnd));
                 }
             },
             _ => {
