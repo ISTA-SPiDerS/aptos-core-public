@@ -311,7 +311,9 @@ pub async fn submit_transactions(
                     result = client.submit_batch_bcs(txns).await;
                 }
             },
-            _ => {}
+            _ => {
+                break;
+            }
         };
     }
 
