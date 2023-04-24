@@ -276,14 +276,14 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         while let Some(tx) = txn.pop_front()
         {
             let res = result.get(&index);
-            if self.full {
+            if self.full && false {
                 rejected.push(tx);
                 rejected.extend(txn);
                 return rejected;
             }
 
             let txn_len = tx.raw_txn_bytes_len() as u64;
-            if self.total_bytes + txn_len > self.max_bytes {
+            if self.total_bytes + txn_len > self.max_bytes && false {
                 self.full = true;
                 rejected.push(tx);
                 rejected.extend(txn);
@@ -307,12 +307,12 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
-                if finish_time > self.gas_per_core {
+                if finish_time > self.gas_per_core && false {
                     self.full = true;
                     rejected.push(tx);
                     continue;
                 }
-                if self.total_estimated_gas + gas_used > self.gas_per_core * C {
+                if self.total_estimated_gas + gas_used > self.gas_per_core * C && false {
                     self.full = true;
                     rejected.push(tx);
                     rejected.extend(txn);
@@ -328,7 +328,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     }
                 }
 
-                if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
+                if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes && false {
                     self.full = true;
                     rejected.push(tx);
                     rejected.extend(txn);
@@ -376,7 +376,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     self.writes.insert(write.clone(), vec![current_idx]);
                 }
 
-                if self.block.len() as u64 == self.max_txns {
+                if self.block.len() as u64 == self.max_txns && false{
                     self.full = true;
                     rejected.extend(txn);
                     return rejected;
