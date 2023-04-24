@@ -20,7 +20,9 @@ pub trait BlockFiller {
 
     fn is_full(&self) -> bool;
 
-    fn get_max(&self) -> u64;
+    fn get_max_bytes(&self) -> u64;
+
+    fn get_max_txn(&self) -> u64;
 }
 
 pub struct SimpleFiller {
@@ -103,8 +105,12 @@ impl BlockFiller for SimpleFiller {
         self.full
     }
 
-    fn get_max(&self) -> u64 {
+    fn get_max_bytes(&self) -> u64 {
         self.max_bytes
+    }
+
+    fn get_max_txn(&self) -> u64 {
+        self.max_txns
     }
 }
 
@@ -408,7 +414,11 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         self.full
     }
 
-    fn get_max(&self) -> u64 {
+    fn get_max_bytes(&self) -> u64 {
         self.max_bytes
+    }
+
+    fn get_max_txn(&self) -> u64 {
+        self.max_txns
     }
 }
