@@ -306,7 +306,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
-                    thread::sleep(Duration::from_millis(100));
+                    thread::sleep(Duration::from_millis(index*10));
                 }
             },
             _ => {
