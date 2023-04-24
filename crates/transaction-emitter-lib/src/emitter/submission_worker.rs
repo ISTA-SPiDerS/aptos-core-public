@@ -313,7 +313,7 @@ pub async fn submit_transactions(
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
                     let mut rng = rand::thread_rng();
-                    let rnd = rng.gen_range(1, index*100);
+                    let rnd = rng.gen_range(1, index*10);
                     thread::sleep(Duration::from_millis(rnd));
                 }
             },
