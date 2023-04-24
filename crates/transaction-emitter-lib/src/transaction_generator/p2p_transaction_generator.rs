@@ -111,8 +111,8 @@ impl TransactionGenerator for P2PTransactionGenerator {
     ) -> Vec<SignedTransaction> {
         println!("wat {}", accounts.len());
 
-        let mut requests = Vec::with_capacity(accounts.len()*10);
-        let mut num_valid_tx = accounts.len()*10;
+        let mut requests = Vec::with_capacity(accounts.len() * transactions_per_account);
+        let mut num_valid_tx = accounts.len() * transactions_per_account;
 
         let to_dist:WeightedIndex<f64> = WeightedIndex::new(&self.toVec).unwrap();
         let from_dist:WeightedIndex<f64> = WeightedIndex::new(&self.fromVec).unwrap();

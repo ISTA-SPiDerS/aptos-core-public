@@ -198,7 +198,7 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
-                result.push_front(self.transactions.get(&ptr.0, ptr.1).unwrap());
+                result.push_back(self.transactions.get(&ptr.0, ptr.1).unwrap());
                 if (result.len() as u64) == 10000 {
                     break;
                 }
@@ -208,7 +208,7 @@ impl Mempool {
                 let mut skipped_txn = (txn.address, tx_seq + 1);
                 while skipped.contains(&skipped_txn) {
                     seen.insert(skipped_txn);
-                    result.push_front(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
                     if (result.len() as u64) == 10000 {
                         break 'main;
                     }
