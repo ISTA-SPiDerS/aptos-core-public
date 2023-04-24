@@ -115,7 +115,7 @@ impl TransactionType {
 
 impl Default for TransactionType {
     fn default() -> Self {
-        Self::default_call_custom_module()
+        Self::default_call_different_modules()
     }
 }
 
@@ -334,7 +334,7 @@ impl EmitJobRequest {
                 );
 
                 EmitModeParams {
-                    wait_millis: 0,
+                    wait_millis: 100,
                     txn_expiration_time_secs: self.txn_expiration_time_secs,
                     transactions_per_account: transactions_per_account
                         .min(num_workers_per_endpoint * clients_count),
