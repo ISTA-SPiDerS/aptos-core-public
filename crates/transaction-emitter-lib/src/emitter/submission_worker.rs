@@ -300,7 +300,7 @@ pub async fn submit_transactions(
     let mut index = 1;
     let mut result = client.submit_batch_bcs(txns).await;
 
-    let mut rng = rand::thread_rng();
+
 
     loop {
         match &result {
@@ -311,8 +311,9 @@ pub async fn submit_transactions(
                 }
                 else {
                     index+=1;
-                    let rnd = rng.gen_range(1, index*100);
                     result = client.submit_batch_bcs(txns).await;
+                    let mut rng = rand::thread_rng();
+                    let rnd = rng.gen_range(1, index*100);
                     thread::sleep(Duration::from_millis(rnd));
                 }
             },
