@@ -248,7 +248,7 @@ impl TransactionGenerator for CallCustomModulesGenerator {
 
         }
 
-        for i in 0..transactions_per_account * accounts.len() {
+        for i in 0..needed {
             let mut idx = (i as usize) % accounts.len();
             let coin_1_num;
             if matches!(loadtype, DEXAVG) || matches!(loadtype, DEXBURSTY)
