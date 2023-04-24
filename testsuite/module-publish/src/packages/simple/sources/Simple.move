@@ -8,9 +8,13 @@
 // A helper file is provided to manipulate that file to generate
 // multiple, publishable module.
 module 0xABCD::Simple {
+    use aptos_framework::account;
     use std::signer;
-    use std::string::{Self, String, utf8};
+    use aptos_framework::coin;
+    use aptos_framework::managed_coin;
+    use std::error;
     use std::vector;
+    use std::table::{Self, Table};
 
     // Through the constant pool it will be possible to change this
     // constant to be as big or as small as desired.
@@ -382,4 +386,173 @@ module 0xABCD::Simple {
             ret2
         }
     }
+        /// Account has no perms for this.
+    const NO_PERMS: u64 = 7;
+
+    struct Container has key {
+        escrow_signer_cap: account::SignerCapability,
+    }
+
+    struct TestTables has key {
+        resource_table: Table<u64, u64>
+    }
+
+    fun init_module(sender: &signer) {
+        let seed = b"seed";
+        let (escrow_signer, escrow_signer_cap) = account::create_resource_account(sender, seed);
+
+        move_to(
+            sender,
+            Container {
+                escrow_signer_cap
+            }
+        );
+
+        let test_tables = TestTables {
+            resource_table: table::new()
+        };
+        let t = &mut test_tables;
+        let i = 0;
+        while (i < 100) {
+            table::add(&mut t.resource_table, i, 1);
+            i = i +1;
+        };
+
+        move_to(sender, test_tables);
+    }
+
+    public entry fun register_coin<CoinType>(owner: &signer, coin: vector<u8>) acquires Container {
+        let cap = &borrow_global<Container>(@Owner).escrow_signer_cap;
+        let escrow_signer = &account::create_signer_with_capability(cap);
+
+       aptos_framework::managed_coin::initialize<CoinType>(
+            owner,
+            coin,
+            coin,
+            10,
+            false,
+        );
+
+        managed_coin::register<CoinType>(escrow_signer);
+        managed_coin::mint<CoinType>(owner, signer::address_of(escrow_signer), 100000000);
+    }
+
+    public entry fun init(owner: &signer, seed: vector<u8>) {
+        assert!(
+            @Owner == signer::address_of(owner),
+            error::not_found(NO_PERMS),
+        );
+    }
+
+    public entry fun loop_exchange(s: &signer, loop_count: u64, resources: vector<u64>) acquires TestTables {
+        let res_table = &mut borrow_global_mut<TestTables>(@Owner).resource_table;
+
+        let i = 0;
+        let length = vector::length(&resources);
+        while (i < length) {
+            let res = *vector::borrow(&resources, i);
+            i = i + 1;
+
+            if (!table::contains(res_table, res)) {
+                table::add(res_table, res, 1);
+            } else {
+                let dst_token = table::borrow_mut(res_table, res);
+                *dst_token = *dst_token + 1;
+            };
+        };
+
+        i = 0;
+        while (i < loop_count) {
+            let j = i % length;
+            i = i + 1;
+
+            let res = *vector::borrow(&resources, j);
+
+            if (!table::contains(res_table, res)) {
+                table::add(res_table, res, 1);
+            } else {
+                let dst_token = table::borrow_mut(res_table, res);
+                *dst_token = *dst_token + 1;
+            };
+        };
+    }
+
+    public entry fun exchange<CoinType1, CoinType2>(s: &signer) acquires Container {
+        let addr = signer::address_of(s);
+
+        let cap = &borrow_global<Container>(@Owner).escrow_signer_cap;
+        let escrow_signer = &account::create_signer_with_capability(cap);
+        let escrow_addr = signer::address_of(escrow_signer);
+
+        // Make sure each participant can receive some of this.
+        if (!coin::is_account_registered<CoinType1>(addr)) {
+            managed_coin::register<CoinType1>(s);
+        };
+        if (!coin::is_account_registered<CoinType2>(addr)) {
+            managed_coin::register<CoinType2>(s);
+        };
+
+        if (!coin::is_account_registered<CoinType1>(escrow_addr)) {
+            managed_coin::register<CoinType1>(escrow_signer);
+        };
+        if (!coin::is_account_registered<CoinType2>(escrow_addr)) {
+            managed_coin::register<CoinType2>(escrow_signer);
+        };
+
+        coin::transfer<CoinType2>(escrow_signer, addr, 1);
+        coin::transfer<CoinType1>(s, escrow_addr, 1);
+    }
+   struct CoinC0 {}
+   struct CoinC1 {}
+   struct CoinC2 {}
+   struct CoinC3 {}
+   struct CoinC4 {}
+   struct CoinC5 {}
+   struct CoinC6 {}
+   struct CoinC7 {}
+   struct CoinC8 {}
+   struct CoinC9 {}
+   struct CoinC10 {}
+   struct CoinC11 {}
+   struct CoinC12 {}
+   struct CoinC13 {}
+   struct CoinC14 {}
+   struct CoinC15 {}
+   struct CoinC16 {}
+   struct CoinC17 {}
+   struct CoinC18 {}
+   struct CoinC19 {}
+   struct CoinC20 {}
+   struct CoinC21 {}
+   struct CoinC22 {}
+   struct CoinC23 {}
+   struct CoinC24 {}
+   struct CoinC25 {}
+   struct CoinC26 {}
+   struct CoinC27 {}
+   struct CoinC28 {}
+   struct CoinC29 {}
+   struct CoinC30 {}
+   struct CoinC31 {}
+   struct CoinC32 {}
+   struct CoinC33 {}
+   struct CoinC34 {}
+   struct CoinC35 {}
+   struct CoinC36 {}
+   struct CoinC37 {}
+   struct CoinC38 {}
+   struct CoinC39 {}
+   struct CoinC40 {}
+   struct CoinC41 {}
+   struct CoinC42 {}
+   struct CoinC43 {}
+   struct CoinC44 {}
+   struct CoinC45 {}
+   struct CoinC46 {}
+   struct CoinC47 {}
+   struct CoinC48 {}
+   struct CoinC49 {}
+   struct CoinC50 {}
+   struct CoinC51 {}
+   struct CoinC52 {}
 }

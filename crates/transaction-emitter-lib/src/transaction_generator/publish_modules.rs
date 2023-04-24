@@ -51,11 +51,11 @@ impl TransactionGenerator for PublishPackageGenerator {
             requests.push(txn);
             // use module published
             // for _ in 1..transactions_per_account - 1 {
-            for _ in 1..transactions_per_account {
-                let request =
-                    package.use_random_transaction(&mut self.rng, account, &self.txn_factory);
-                requests.push(request);
-            }
+            // for _ in 1..transactions_per_account {
+            //     let request =
+            //         package.use_random_transaction(&mut self.rng, account, &self.txn_factory);
+            //     requests.push(request);
+            // }
             // republish
             // let package = self
             //     .package_handler

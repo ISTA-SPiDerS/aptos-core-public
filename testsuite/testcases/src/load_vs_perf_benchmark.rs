@@ -72,13 +72,13 @@ impl TransactinWorkload {
 
         match self {
             Self::NoOp => request.transaction_type(TransactionType::CallCustomModules {
-                entry_point: EntryPoints::Nop,
+                entry_point: EntryPoints::DEXAVG,
                 num_modules: 1,
                 use_account_pool: false,
             }),
             Self::LargeModuleWorkingSet => {
                 request.transaction_type(TransactionType::CallCustomModules {
-                    entry_point: EntryPoints::Nop,
+                    entry_point: EntryPoints::DEXAVG,
                     num_modules: 1000,
                     use_account_pool: false,
                 })
@@ -130,7 +130,7 @@ impl TransactinWorkload {
                     }
                 } else {
                     TransactionType::CallCustomModules {
-                        entry_point: EntryPoints::Nop,
+                        entry_point: EntryPoints::DEXAVG,
                         num_modules: 1,
                         use_account_pool: true,
                     }

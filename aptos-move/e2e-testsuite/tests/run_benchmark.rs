@@ -356,7 +356,7 @@ fn create_block(
 ) -> Vec<SignedTransaction> {
 
     let mut result = vec![];
-    let mut rng = thread_rng();
+    let mut rng: ThreadRng = thread_rng();
 
     if matches!(load_type, P2PTX)
     {
@@ -500,7 +500,8 @@ fn create_block(
         }
 
 
-        let coin_2_num = coin_1_num;
+
+        let coin_2_num: usize = coin_1_num;
 
         // let coin_2_num = rng.gen::<usize>() % MAX_COIN_NUM;
         // let coin_1_num = idx;

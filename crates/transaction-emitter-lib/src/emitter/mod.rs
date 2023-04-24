@@ -6,7 +6,8 @@ pub mod stats;
 pub mod submission_worker;
 pub mod transaction_executor;
 pub mod account_activity_distribution;
-
+pub mod solana_distribution;
+pub mod uniswap_distribution;
 use crate::{
     emitter::{
         account_minter::AccountMinter,
@@ -97,7 +98,7 @@ impl TransactionType {
 
     pub fn default_call_custom_module() -> Self {
         Self::CallCustomModules {
-            entry_point: EntryPoints::Nop,
+            entry_point: EntryPoints::SOLANA,
             num_modules: 1,
             use_account_pool: false,
         }
@@ -105,7 +106,7 @@ impl TransactionType {
 
     pub fn default_call_different_modules() -> Self {
         Self::CallCustomModules {
-            entry_point: EntryPoints::Nop,
+            entry_point: EntryPoints::DEXAVG,
             num_modules: 100,
             use_account_pool: false,
         }
@@ -114,7 +115,7 @@ impl TransactionType {
 
 impl Default for TransactionType {
     fn default() -> Self {
-        Self::default_coin_transfer()
+        Self::default_call_custom_module()
     }
 }
 
