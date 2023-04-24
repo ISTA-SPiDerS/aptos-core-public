@@ -10,7 +10,7 @@ use crate::{
     EmitModeParams,
 };
 use aptos_logger::{sample, sample::SampleRate, warn};
-use aptos_rest_client::Client as RestClient;
+use aptos_rest_client::{Client as RestClient, Client};
 use aptos_sdk::{
     move_types::account_address::AccountAddress,
     types::{transaction::SignedTransaction, vm_status::StatusCode, LocalAccount},
@@ -25,6 +25,10 @@ use futures::future::join_all;
 use itertools::Itertools;
 use rand::seq::IteratorRandom;
 use std::{collections::HashMap, sync::{atomic::AtomicU64, Arc}, thread, time::Instant};
+use rand::prelude::StdRng;
+use rand::{Rng, rngs};
+use rand::distributions::Uniform;
+use rand_core::RngCore;
 use tokio::time::sleep;
 
 pub struct SubmissionWorker {
@@ -129,6 +133,7 @@ impl SubmissionWorker {
                             loop_start_time.clone(),
                             txn_offset_time.clone(),
                             loop_stats,
+                            &mut self.rng
                         )
                     }),
             )
@@ -282,6 +287,7 @@ pub async fn submit_transactions(
     loop_start_time: Arc<Instant>,
     txn_offset_time: Arc<AtomicU64>,
     stats: &StatsAccumulator,
+    rng: &mut StdRng,
 ) {
     let cur_time = Instant::now();
     let offset = cur_time - *loop_start_time;
@@ -306,7 +312,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
-                    thread::sleep(Duration::from_millis(index*100));
+                    thread::sleep(Duration::from_millis( rng.sample(Uniform::new(1, index*100))));
                 }
             },
             _ => {
