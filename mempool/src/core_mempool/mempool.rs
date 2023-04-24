@@ -199,7 +199,7 @@ impl Mempool {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
                 result.push_back(self.transactions.get(&ptr.0, ptr.1).unwrap());
-                if (result.len() as u64) == 1000 {
+                if (result.len() as u64) == 10000 {
                     break;
                 }
 
@@ -209,7 +209,7 @@ impl Mempool {
                 while skipped.contains(&skipped_txn) {
                     seen.insert(skipped_txn);
                     result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
-                    if (result.len() as u64) == 1000 {
+                    if (result.len() as u64) == 10000 {
                         break 'main;
                     }
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
