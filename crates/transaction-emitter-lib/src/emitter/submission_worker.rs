@@ -303,31 +303,39 @@ pub async fn submit_transactions(
     loop {
         match &result {
             Err(e) => {
-                if index > 10
-                {
-                    stats
-                        .failed_submission
-                        .fetch_add(txns.len() as u64, Ordering::Relaxed);
-                    sample!(
+                if index > 10 {
+                    break;
+                }
+                else {
+                    index+=1;
+                    result = client.submit_batch_bcs(txns).await;
+                }
+            },
+            _ => {}
+        };
+    }
+
+    match result {
+        Err(e) => {
+            stats
+                .failed_submission
+                .fetch_add(txns.len() as u64, Ordering::Relaxed);
+            sample!(
                 SampleRate::Duration(Duration::from_secs(60)),
                 warn!(
                     "[{:?}] Failed to submit batch request: {:?}",
                     client.path_prefix_string(),
                     e
                 ));
-                } else {
-                    index+=1;
-                    result = client.submit_batch_bcs(txns).await;
-                }
-            },
-            Ok(v) => {
-                let failures = v.into_inner().transaction_failures;
+        },
+        Ok(v) => {
+            let failures = v.into_inner().transaction_failures;
 
-                stats
-                    .failed_submission
-                    .fetch_add(failures.len() as u64, Ordering::Relaxed);
+            stats
+                .failed_submission
+                .fetch_add(failures.len() as u64, Ordering::Relaxed);
 
-                sample!(SampleRate::Duration(Duration::from_secs(60)), {
+            sample!(SampleRate::Duration(Duration::from_secs(60)), {
                 let by_error = failures
                     .iter()
                     .map(|f| {
@@ -372,8 +380,6 @@ pub async fn submit_transactions(
                     );
                 }
             });
-                return;
-            }
-        };
+        }
     }
 }
