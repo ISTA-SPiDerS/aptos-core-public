@@ -132,8 +132,7 @@ impl SubmissionWorker {
                             reqs,
                             loop_start_time.clone(),
                             txn_offset_time.clone(),
-                            loop_stats,
-                            &mut self.rng
+                            loop_stats
                         )
                     }),
             )
@@ -286,8 +285,7 @@ pub async fn submit_transactions(
     txns: &[SignedTransaction],
     loop_start_time: Arc<Instant>,
     txn_offset_time: Arc<AtomicU64>,
-    stats: &StatsAccumulator,
-    rng: &mut StdRng,
+    stats: &StatsAccumulator
 ) {
     let cur_time = Instant::now();
     let offset = cur_time - *loop_start_time;
@@ -302,6 +300,8 @@ pub async fn submit_transactions(
     let mut index = 0;
     let mut result = client.submit_batch_bcs(txns).await;
 
+    let mut rng = rand::thread_rng();
+
     loop {
         match &result {
             Err(e) => {
@@ -312,7 +312,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
-                    thread::sleep(Duration::from_millis( rng.sample(Uniform::new(1, index*100))));
+                    thread::sleep(Duration::from_millis( rng.gen()* index*100));
                 }
             },
             _ => {
