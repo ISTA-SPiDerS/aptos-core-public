@@ -204,7 +204,7 @@ impl Mempool {
                 }
 
                 let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
-                if total_bytes + full_tx.raw_txn_bytes_len() as u64 > self.max_bytes {
+                if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max() {
                     break;
                 }
                 total_bytes+= full_tx.raw_txn_bytes_len();
