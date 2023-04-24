@@ -55,7 +55,7 @@ impl TransactionGenerator for CallCustomModulesGenerator {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-        let needed = accounts.len() * transactions_per_account;
+        let needed = accounts.len() * transactions_per_account * 10;
         let mut requests = Vec::with_capacity(needed);
         let loadtype = self.entry_point;
         let mut coin_1_num: usize = 0;
