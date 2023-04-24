@@ -297,7 +297,7 @@ pub async fn submit_transactions(
         .submitted
         .fetch_add(txns.len() as u64, Ordering::Relaxed);
 
-    let mut index = 0;
+    let mut index = 1;
     let mut result = client.submit_batch_bcs(txns).await;
 
     let mut rng = rand::thread_rng();
@@ -312,7 +312,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
-                    thread::sleep(Duration::from_millis( rng.gen()* index*100));
+                    thread::sleep(Duration::from_millis( rng.gen_range(1, index*100)));
                 }
             },
             _ => {
