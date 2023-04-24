@@ -10,7 +10,7 @@ use aptos_sdk::{
         account_address::AccountAddress, ident_str, identifier::Identifier,
         language_storage::ModuleId,
     },
-    types::transaction::{EntryFunction, TransactionPayload},
+    types::{transaction::{EntryFunction, TransactionPayload}, LocalAccount},
 };
 use move_binary_format::{
     file_format::{FunctionHandleIndex, IdentifierIndex, SignatureToken},
@@ -18,10 +18,24 @@ use move_binary_format::{
 };
 use rand::{distributions::Alphanumeric, prelude::StdRng, seq::SliceRandom, Rng};
 use rand_core::RngCore;
+use aptos_sdk::move_types::language_storage::TypeTag;
+use aptos_sdk::move_types::language_storage::StructTag;
+use rand::distributions::WeightedIndex;
+use std::{thread, time};
+use rand::prelude::*;
+
+// use rand::distributions::Distribution;
+
+// use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+// use aptos_language_e2e_tests::solana_distribution::{RES_DISTR, COST_DISTR, LEN_DISTR};
 
 //
 // Contains all the code to work on the Simple package
-//
+
+
+// To get the full distribution, put the first element in the tuple, second element times into an array.
+
+
 
 //
 // Functions to load and update the original package
@@ -105,13 +119,13 @@ pub fn scramble(module: &mut CompiledModule, fn_count: usize, rng: &mut StdRng) 
 pub enum EntryPoints {
     // 0 args
     /// Empty (NoOp) function
-    Nop,
+    DEXAVG,
     /// Increment global resource - COUNTER_STEP
-    Step,
+    DEXBURSTY,
     /// Fetch global resource - COUNTER_STEP
-    GetCounter,
+    NFT,
     /// Reset resource `Resource`
-    ResetData,
+    SOLANA,
     /// Double the size of `Resource`
     Double,
     /// Half the size of `Resource`
@@ -152,25 +166,22 @@ impl EntryPoints {
         module_id: ModuleId,
         rng: Option<&mut StdRng>,
         other: Option<AccountAddress>,
+        account: &mut LocalAccount,
+        coin_num: usize,
+        length: usize,
+        writes: Vec<u64>,
     ) -> TransactionPayload {
         match self {
             // 0 args
-            EntryPoints::Nop => get_payload_void(module_id, ident_str!("nop").to_owned()),
-            EntryPoints::Step => get_payload_void(module_id, ident_str!("step").to_owned()),
-            EntryPoints::GetCounter => {
-                get_payload_void(module_id, ident_str!("get_counter").to_owned())
-            },
-            EntryPoints::ResetData => {
-                get_payload_void(module_id, ident_str!("reset_data").to_owned())
-            },
+            //This nop is never used if implementation works as planned
+            EntryPoints::DEXAVG => dex_nft_payload(rng, module_id, account, coin_num),
+            EntryPoints::DEXBURSTY => dex_nft_payload(rng, module_id, account, coin_num),
+            EntryPoints::NFT=>  dex_nft_payload(rng, module_id, account, coin_num),
+            EntryPoints::SOLANA => sol_payload(rng, module_id, account, length, writes),
             EntryPoints::Double => get_payload_void(module_id, ident_str!("double").to_owned()),
             EntryPoints::Half => get_payload_void(module_id, ident_str!("half").to_owned()),
             // 1 arg
-            EntryPoints::Loopy { loop_count } => loopy(
-                module_id,
-                loop_count
-                    .unwrap_or_else(|| rng.expect("Must provide RNG").gen_range(0u64, 1000u64)),
-            ),
+            EntryPoints::Loopy { loop_count } => get_payload_void(module_id, ident_str!("step").to_owned()),
             EntryPoints::GetFromConst { const_idx } => get_from_random_const(
                 module_id,
                 const_idx.unwrap_or_else(
@@ -200,71 +211,122 @@ impl EntryPoints {
             },
         }
     }
+
 }
 
-const ZERO_ARG_ENTRY_POINTS: &[EntryPoints; 6] = &[
-    EntryPoints::Nop,
-    EntryPoints::Step,
-    EntryPoints::GetCounter,
-    EntryPoints::ResetData,
-    EntryPoints::Double,
-    EntryPoints::Half,
-];
-const ONE_ARG_ENTRY_POINTS: &[EntryPoints; 4] = &[
-    EntryPoints::Loopy { loop_count: None },
-    EntryPoints::GetFromConst { const_idx: None },
-    EntryPoints::SetId,
-    EntryPoints::SetName,
-];
-const SIMPLE_ENTRY_POINTS: &[EntryPoints; 9] = &[
-    EntryPoints::Nop,
-    EntryPoints::Step,
-    EntryPoints::GetCounter,
-    EntryPoints::ResetData,
-    EntryPoints::Double,
-    EntryPoints::Half,
-    EntryPoints::Loopy { loop_count: None },
-    EntryPoints::GetFromConst { const_idx: None },
-    EntryPoints::SetId,
-];
-const GEN_ENTRY_POINTS: &[EntryPoints; 12] = &[
-    EntryPoints::Nop,
-    EntryPoints::Step,
-    EntryPoints::GetCounter,
-    EntryPoints::ResetData,
-    EntryPoints::Double,
-    EntryPoints::Half,
-    EntryPoints::Loopy { loop_count: None },
-    EntryPoints::GetFromConst { const_idx: None },
-    EntryPoints::SetId,
-    EntryPoints::SetName,
-    EntryPoints::MakeOrChange {
-        string_length: None,
-        data_length: None,
-    },
-    EntryPoints::BytesMakeOrChange { data_length: None },
-];
+// const ZERO_ARG_ENTRY_POINTS: &[EntryPoints; 6] = &[
+//     EntryPoints::DEXAVG,
+//     EntryPoints::Step,
+//     EntryPoints::GetCounter,
+//     EntryPoints::ResetData,
+//     EntryPoints::Double,
+//     EntryPoints::Half,
+// ];
+// const ONE_ARG_ENTRY_POINTS: &[EntryPoints; 4] = &[
+//     EntryPoints::Loopy { loop_count: None },
+//     EntryPoints::GetFromConst { const_idx: None },
+//     EntryPoints::SetId,
+//     EntryPoints::SetName,
+// ];
+// const SIMPLE_ENTRY_POINTS: &[EntryPoints; 9] = &[
+//     EntryPoints::DEXAVG,
+//     EntryPoints::Step,
+//     EntryPoints::GetCounter,
+//     EntryPoints::ResetData,
+//     EntryPoints::Double,
+//     EntryPoints::Half,
+//     EntryPoints::Loopy { loop_count: None },
+//     EntryPoints::GetFromConst { const_idx: None },
+//     EntryPoints::SetId,
+// ];
+// const GEN_ENTRY_POINTS: &[EntryPoints; 12] = &[
+//     EntryPoints::DEXAVG,
+//     EntryPoints::Step,
+//     EntryPoints::GetCounter,
+//     EntryPoints::ResetData,
+//     EntryPoints::Double,
+//     EntryPoints::Half,
+//     EntryPoints::Loopy { loop_count: None },
+//     EntryPoints::GetFromConst { const_idx: None },
+//     EntryPoints::SetId,
+//     EntryPoints::SetName,
+//     EntryPoints::MakeOrChange {
+//         string_length: None,
+//         data_length: None,
+//     },
+//     EntryPoints::BytesMakeOrChange { data_length: None },
+// ];
 
-pub fn rand_simple_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-    SIMPLE_ENTRY_POINTS
-        .choose(rng)
-        .unwrap()
-        .create_payload(module_id, Some(rng), None)
+
+pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, coin_num: usize) -> TransactionPayload {
+    let coin_1_num = coin_num;
+    let coin_2_num: usize = coin_1_num;
+    let mut coin: String = "CoinC".to_string();
+    let mut coin_clone = coin.clone();
+    let coin_number1_string = coin_1_num.to_string();
+    let coin_number2_string = coin_2_num.to_string();
+    coin.push_str(&coin_number1_string);
+    coin_clone.push_str(&coin_number2_string);
+    // println!("Coin1:{}", coin);
+    // println!("Coin2:{}", coin_clone);
+
+    //let coin_clone: &str = &coin.clone();
+    let coin_id1 = Identifier::new(coin).unwrap();
+    let coin_id2 = Identifier::new(coin_clone).unwrap();
+
+    let coin_1 = TypeTag::Struct(Box::new(StructTag {
+        address: account.address().clone(),
+        module: ident_str!("Exchange").to_owned(),
+        name: coin_id1,
+        type_params: vec![],
+    }));
+
+    let coin_2 = TypeTag::Struct(Box::new(StructTag {
+        address: account.address().clone(),
+        module: ident_str!("Exchange").to_owned(),
+        name: coin_id2,
+        type_params: vec![],
+    }));
+
+    let entry_function = EntryFunction::new(
+        module_id.clone(),
+        ident_str!("exchange").to_owned(),
+        vec![coin_1.clone(), coin_2.clone()],
+        vec![],
+    );
+    TransactionPayload::EntryFunction(entry_function)
 }
 
-pub fn zero_args_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-    ZERO_ARG_ENTRY_POINTS
-        .choose(rng)
-        .unwrap()
-        .create_payload(module_id, Some(rng), None)
-}
 
-pub fn rand_gen_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-    GEN_ENTRY_POINTS
-        .choose(rng)
-        .unwrap()
-        .create_payload(module_id, Some(rng), None)
+ pub fn sol_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, length: usize, writes: Vec<u64>) -> TransactionPayload {
+    let entry_function = EntryFunction::new(
+        module_id.clone(),
+        ident_str!("loop_exchange").to_owned(),
+        vec![],
+        vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+    );
+    TransactionPayload::EntryFunction(entry_function)
 }
+// pub fn rand_simple_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+//     SIMPLE_ENTRY_POINTS
+//         .choose(rng)
+//         .unwrap()
+//         .create_payload(module_id, Some(rng), None)
+// }
+
+// pub fn zero_args_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+//     ZERO_ARG_ENTRY_POINTS
+//         .choose(rng)
+//         .unwrap()
+//         .create_payload(module_id, Some(rng), None)
+// }
+
+// pub fn rand_gen_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+//     GEN_ENTRY_POINTS
+//         .choose(rng)
+//         .unwrap()
+//         .create_payload(module_id, Some(rng), None)
+//}
 
 //
 // Entry points payload

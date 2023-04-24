@@ -147,21 +147,21 @@ impl Package {
     }
 
     // Return a transaction to use the current package
-    pub fn use_random_transaction(
-        &self,
-        rng: &mut StdRng,
-        account: &mut LocalAccount,
-        txn_factory: &TransactionFactory,
-    ) -> SignedTransaction {
-        match self {
-            Self::Simple(modules, _) => {
-                let module_id = modules[0].self_id();
-                // let payload = module_simple::rand_gen_function(rng, module_id);
-                let payload = module_simple::rand_simple_function(rng, module_id);
-                account.sign_with_transaction_builder(txn_factory.payload(payload))
-            },
-        }
-    }
+    // pub fn use_random_transaction(
+    //     &self,
+    //     rng: &mut StdRng,
+    //     account: &mut LocalAccount,
+    //     txn_factory: &TransactionFactory,
+    // ) -> SignedTransaction {
+    //     match self {
+    //         Self::Simple(modules, _) => {
+    //             let module_id = modules[0].self_id();
+    //             // let payload = module_simple::rand_gen_function(rng, module_id);
+    //             let payload = module_simple::rand_simple_function(rng, module_id);
+    //             account.sign_with_transaction_builder(txn_factory.payload(payload))
+    //         },
+    //     }
+    // }
 
     pub fn use_specific_transaction(
         &self,
@@ -170,11 +170,14 @@ impl Package {
         txn_factory: &TransactionFactory,
         rng: Option<&mut StdRng>,
         other: Option<AccountAddress>,
+        coin_num: usize,
+        length: usize,
+        writes: Vec<u64>
     ) -> SignedTransaction {
         match self {
             Self::Simple(modules, _) => {
                 let module_id = modules[0].self_id();
-                let payload = fun.create_payload(module_id, rng, other);
+                let payload = fun.create_payload(module_id, rng, other, account, coin_num, length, writes);
                 account.sign_with_transaction_builder(txn_factory.payload(payload))
             },
         }
