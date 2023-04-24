@@ -82,13 +82,13 @@ pub fn allow_module_bundle_for_test() {
 }
 
 #[derive(Clone)]
-pub struct AptosVM(pub(crate) AptosVMImpl);
+pub struct AptosVM(pub(crate) AptosVMImpl, bool);
 
 struct AptosSimulationVM(AptosVM);
 
 impl AptosVM {
     pub fn new<S: StateView>(state: &S) -> Self {
-        Self(AptosVMImpl::new(state))
+        Self(AptosVMImpl::new(state), true)
     }
 
     pub fn new_for_validation<S: StateView>(state: &S) -> Self {
@@ -96,7 +96,7 @@ impl AptosVM {
             AdapterLogSchema::new(state.id(), 0),
             "Adapter created for Validation"
         );
-        Self::new(state)
+        Self(AptosVMImpl::new(state), false)
     }
 
     /// Sets execution concurrency level when invoked the first time.
@@ -1018,6 +1018,10 @@ impl AptosVM {
         txn_data: &TransactionMetadata,
         log_context: &AdapterLogSchema,
     ) -> Result<(), VMStatus> {
+        if !self.1 {
+            return Ok(());
+        }
+
         match payload {
             TransactionPayload::Script(_) => {
                 self.0.check_gas(storage, txn_data, log_context)?;
