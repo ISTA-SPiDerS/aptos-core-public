@@ -299,10 +299,12 @@ pub async fn submit_transactions(
 
     match client.submit_batch_bcs(txns).await {
         Err(e) => {
-            stats
-                .failed_submission
-                .fetch_add(txns.len() as u64, Ordering::Relaxed);
-            sample!(
+            match client.submit_batch_bcs(txns).await {
+                Err(e) => {
+                    stats
+                        .failed_submission
+                        .fetch_add(txns.len() as u64, Ordering::Relaxed);
+                    sample!(
                 SampleRate::Duration(Duration::from_secs(60)),
                 warn!(
                     "[{:?}] Failed to submit batch request: {:?}",
@@ -310,7 +312,62 @@ pub async fn submit_transactions(
                     e
                 )
             );
-        },
+                }
+                Ok(v) => {
+                    let failures = v.into_inner().transaction_failures;
+
+                    stats
+                        .failed_submission
+                        .fetch_add(failures.len() as u64, Ordering::Relaxed);
+
+                    sample!(SampleRate::Duration(Duration::from_secs(60)), {
+                let by_error = failures
+                    .iter()
+                    .map(|f| {
+                        f.error
+                            .vm_error_code
+                            .and_then(|c| StatusCode::try_from(c).ok())
+                    })
+                    .counts();
+                if let Some(failure) = failures.first() {
+                    let sender = txns[failure.transaction_index].sender();
+
+                    let last_transactions =
+                        if let Ok(account) = client.get_account_bcs(sender).await {
+                            client
+                                .get_account_transactions_bcs(
+                                    sender,
+                                    Some(account.into_inner().sequence_number().saturating_sub(1)),
+                                    Some(5),
+                                )
+                                .await
+                                .ok()
+                                .map(|r| r.into_inner())
+                        } else {
+                            None
+                        };
+                    let balance = client
+                        .get_account_balance(sender)
+                        .await
+                        .map_or(-1, |v| v.into_inner().get() as i64);
+
+                    warn!(
+                        "[{:?}] Failed to submit {} txns in a batch, first failure due to {:?}, for account {}, first asked: {}, failed seq nums: {:?}, failed error codes: {:?}, balance of {} and last transaction for account: {:?}",
+                        client.path_prefix_string(),
+                        failures.len(),
+                        failure,
+                        sender,
+                        txns[0].sequence_number(),
+                        failures.iter().map(|f| txns[f.transaction_index].sequence_number()).collect::<Vec<_>>(),
+                        by_error,
+                        balance,
+                        last_transactions,
+                    );
+                }
+            });
+                }
+            }
+        }
         Ok(v) => {
             let failures = v.into_inner().transaction_failures;
 
@@ -363,6 +420,6 @@ pub async fn submit_transactions(
                     );
                 }
             });
-        },
+        }
     };
 }
