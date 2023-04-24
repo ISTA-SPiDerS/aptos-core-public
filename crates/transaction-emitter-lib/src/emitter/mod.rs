@@ -340,11 +340,11 @@ impl EmitJobRequest {
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 100,
+                    accounts_per_worker: 1000,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
-                    check_account_sequence_sleep_millis: 300,
+                    check_account_sequence_sleep_millis: 100,
                 }
             },
             EmitJobMode::ConstTps { tps }
@@ -702,9 +702,9 @@ impl TxnEmitter {
             let stats = self.peek_job_stats(job);
             let delta = &stats[cur_phase]
                 - prev_stats
-                    .as_ref()
-                    .map(|p| &p[cur_phase])
-                    .unwrap_or(&default_stats);
+                .as_ref()
+                .map(|p| &p[cur_phase])
+                .unwrap_or(&default_stats);
             prev_stats = Some(stats);
             info!("phase {}: {}", cur_phase, delta.rate());
         }
@@ -770,7 +770,7 @@ impl TxnEmitter {
             duration,
             Some(interval_secs),
         )
-        .await
+            .await
     }
 
     pub async fn submit_single_transaction(
@@ -944,8 +944,8 @@ pub async fn query_sequence_numbers<'a, I>(
     client: &RestClient,
     addresses: I,
 ) -> Result<(Vec<(AccountAddress, u64)>, u64)>
-where
-    I: Iterator<Item = &'a AccountAddress>,
+    where
+        I: Iterator<Item = &'a AccountAddress>,
 {
     let (addresses, futures): (Vec<_>, Vec<_>) = addresses
         .map(|address| {
