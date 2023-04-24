@@ -309,6 +309,7 @@ pub async fn submit_transactions(
                 else {
                     index+=1;
                     result = client.submit_batch_bcs(txns).await;
+                    sleep(Duration::from_millis(10));
                 }
             },
             _ => {
