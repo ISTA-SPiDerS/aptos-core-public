@@ -207,7 +207,7 @@ impl Mempool {
                 if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max() {
                     break;
                 }
-                total_bytes+= full_tx.raw_txn_bytes_len();
+                total_bytes+= full_tx.raw_txn_bytes_len() as u64;
                 result.push_back(full_tx);
 
 
