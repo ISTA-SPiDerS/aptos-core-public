@@ -23,6 +23,7 @@ use aptos_sdk::move_types::language_storage::StructTag;
 use rand::distributions::WeightedIndex;
 use std::{thread, time};
 use rand::prelude::*;
+use aptos_sdk::types::account_config;
 
 // use rand::distributions::Distribution;
 
@@ -60,53 +61,6 @@ pub fn version(module: &mut CompiledModule, rng: &mut StdRng) {
             v += 1;
             constant.data = bcs::to_bytes(&v).expect("U64 must serialize");
             break;
-        }
-    }
-}
-
-pub fn scramble(module: &mut CompiledModule, fn_count: usize, rng: &mut StdRng) {
-    // change `const RANDOM` in Simple.move
-    // That is the only vector<u64> in the constant pool
-    let const_len = rng.gen_range(0usize, 5000usize);
-    let mut v = Vec::<u64>::with_capacity(const_len);
-    for i in 0..const_len {
-        v.push(i as u64);
-    }
-    // module.constant_pool
-    for constant in &mut module.constant_pool {
-        if constant.type_ == SignatureToken::Vector(Box::new(SignatureToken::U64)) {
-            constant.data = bcs::to_bytes(&v).expect("U64 vector must serialize");
-            break;
-        }
-    }
-
-    // find the copy_pasta* function in Simple.move
-    let mut def = None;
-    let mut handle = None;
-    let mut func_name = String::new();
-    for func_def in &module.function_defs {
-        let func_handle = &module.function_handles[func_def.function.0 as usize];
-        let name = module.identifiers[func_handle.name.0 as usize].as_str();
-        if name.starts_with("copy_pasta") {
-            def = Some(func_def.clone());
-            handle = Some(func_handle.clone());
-            func_name = String::from(name);
-            break;
-        }
-    }
-    if let Some(fd) = def {
-        for suffix in 0..fn_count {
-            let mut func_handle = handle.clone().expect("Handle must be defined");
-            let mut func_def = fd.clone();
-            let mut name = func_name.clone();
-            name.push_str(suffix.to_string().as_str());
-            module
-                .identifiers
-                .push(Identifier::new(name.as_str()).expect("Identifier name must be valid"));
-            func_handle.name = IdentifierIndex((module.identifiers.len() - 1) as u16);
-            module.function_handles.push(func_handle);
-            func_def.function = FunctionHandleIndex((module.function_handles.len() - 1) as u16);
-            module.function_defs.push(func_def);
         }
     }
 }
@@ -261,8 +215,10 @@ impl EntryPoints {
 pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, coin_num: usize) -> TransactionPayload {
     let coin_1_num = coin_num;
     let coin_2_num: usize = coin_1_num;
+
     let mut coin: String = "CoinC".to_string();
     let mut coin_clone = coin.clone();
+
     let coin_number1_string = coin_1_num.to_string();
     let coin_number2_string = coin_2_num.to_string();
     coin.push_str(&coin_number1_string);
@@ -275,21 +231,24 @@ pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &
     let coin_id2 = Identifier::new(coin_clone).unwrap();
 
     let coin_1 = TypeTag::Struct(Box::new(StructTag {
-        address: account.address().clone(),
-        module: ident_str!("Exchange").to_owned(),
+        address: account_config::CORE_CODE_ADDRESS,
+        module: ident_str!("Benchmark").to_owned(),
         name: coin_id1,
         type_params: vec![],
     }));
 
     let coin_2 = TypeTag::Struct(Box::new(StructTag {
-        address: account.address().clone(),
-        module: ident_str!("Exchange").to_owned(),
+        address: account_config::CORE_CODE_ADDRESS,
+        module: ident_str!("Benchmark").to_owned(),
         name: coin_id2,
         type_params: vec![],
     }));
 
     let entry_function = EntryFunction::new(
-        module_id.clone(),
+        ModuleId::new(
+            account_config::CORE_CODE_ADDRESS,
+            ident_str!("Benchmark").to_owned(),
+        ),
         ident_str!("exchange").to_owned(),
         vec![coin_1.clone(), coin_2.clone()],
         vec![],
@@ -300,7 +259,10 @@ pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &
 
  pub fn sol_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, length: usize, writes: Vec<u64>) -> TransactionPayload {
     let entry_function = EntryFunction::new(
-        module_id.clone(),
+        ModuleId::new(
+             account_config::CORE_CODE_ADDRESS,
+            ident_str!("Benchmark").to_owned(),
+        ),
         ident_str!("loop_exchange").to_owned(),
         vec![],
         vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],

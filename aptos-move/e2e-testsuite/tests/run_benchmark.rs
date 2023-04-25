@@ -20,7 +20,7 @@ use std::{collections::hash_map::HashMap, fmt, format, fs, str::FromStr, time::I
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
@@ -282,7 +282,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
     println!("#-------------------------------------------------------------------------");
 }
 
-fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
     let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
         &mut transaction_validation,
@@ -306,8 +306,8 @@ fn register_coins(
     module_id: &ModuleId,
     module_owner: &AccountData,
     seq_num: &mut HashMap<usize, u64>,
-) -> Vec<SignedTransaction> {
-    let mut result = vec![];
+) -> VecDeque<SignedTransaction> {
+    let mut result = VecDeque::new();
     for coin_number in 0_usize..MAX_COIN_NUM {
         let mut coin: String = "CoinC".to_string();
         let coin_number_string = coin_number.to_string();
@@ -338,7 +338,7 @@ fn register_coins(
             .sequence_number(seq_num[&usize::MAX])
             .sign();
 
-        result.push(register_txn);
+        result.push_back(register_txn);
         // let _result = executor.execute_and_apply(register_txn);
         seq_num.insert(usize::MAX, seq_num[&usize::MAX] + 1);
     }
@@ -353,9 +353,9 @@ fn create_block(
     module_id: &ModuleId,
     coins: usize,
     load_type: LoadType,
-) -> Vec<SignedTransaction> {
+) -> VecDeque<SignedTransaction> {
 
-    let mut result = vec![];
+    let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
 
     if matches!(load_type, P2PTX)
@@ -399,7 +399,7 @@ fn create_block(
                 .sequence_number(seq_num[&idx_from])
                 .sign();
             seq_num.insert(idx_from, seq_num[&idx_from] + 1);
-            result.push(txn);
+            result.push_back(txn);
         }
         return result;
     }
@@ -573,7 +573,7 @@ fn create_block(
             .sequence_number(seq_num[&idx])
             .sign();
         seq_num.insert(idx, seq_num[&idx] + 1);
-        result.push(txn);
+        result.push_back(txn);
     }
     // println!("{:?}", result);
 

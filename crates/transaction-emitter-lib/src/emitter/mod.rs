@@ -78,6 +78,9 @@ pub enum TransactionType {
         num_modules: usize,
         use_account_pool: bool,
     },
+    OurBenchmark {
+        entry_point: EntryPoints
+    },
 }
 
 impl TransactionType {
@@ -93,6 +96,12 @@ impl TransactionType {
             add_created_accounts_to_pool: true,
             max_account_working_set: 1_000_000,
             creation_balance: 0,
+        }
+    }
+
+    pub fn default_script() -> Self {
+        Self::OurBenchmark {
+            entry_point: EntryPoints::SOLANA,
         }
     }
 
@@ -115,7 +124,7 @@ impl TransactionType {
 
 impl Default for TransactionType {
     fn default() -> Self {
-        Self::default_call_different_modules()
+        Self::default_script()
     }
 }
 
@@ -340,7 +349,7 @@ impl EmitJobRequest {
                         .min(num_workers_per_endpoint * clients_count),
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 1000,
+                    accounts_per_worker: 100,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
@@ -613,6 +622,7 @@ impl TxnEmitter {
             &req.transaction_mix_per_phase,
             num_workers,
             &mut all_accounts,
+            root_account,
             &txn_executor,
             &txn_factory,
             &init_txn_factory,
