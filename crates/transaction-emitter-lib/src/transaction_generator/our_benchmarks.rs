@@ -272,19 +272,34 @@ impl TransactionGenerator for OurBenchmark {
                     writes.push(dist.sample(&mut rng) as u64);
                 }
                 length = cost.round() as usize;
+
+                let entry_function = EntryFunction::new(
+                    ModuleId::new(
+                        account_config::CORE_CODE_ADDRESS,
+                        ident_str!("benchmark").to_owned(),
+                    ),
+                    ident_str!("loop_exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+                );
+
+                requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
+            }
+            else {
+                let entry_function = EntryFunction::new(
+                    ModuleId::new(
+                        account_config::CORE_CODE_ADDRESS,
+                        ident_str!("benchmark").to_owned(),
+                    ),
+                    ident_str!("exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(&coin_1_num).unwrap()],
+                );
+
+                requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
             }
 
-            let entry_function = EntryFunction::new(
-                ModuleId::new(
-                    account_config::CORE_CODE_ADDRESS,
-                    ident_str!("benchmark").to_owned(),
-                ),
-                ident_str!("exchange").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(&coin_1_num).unwrap()],
-            );
 
-            requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
         }
         requests
     }
