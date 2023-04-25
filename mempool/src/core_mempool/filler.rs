@@ -308,6 +308,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 let delta_set = speculation.output.delta_change_set();
                 let gas_used = speculation.output.txn_output().gas_used();
 
+                if gas_used > 100000
+                {
+                    println!("bla Wat a big tx: {}", gas_used);
+                }
 
                 // When transaction can start assuming unlimited resources.
                 let mut arrival_time = 0;
@@ -319,6 +323,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
+                if finish_time > 500000
+                {
+                    println!("bla Wat a long chain: {}", finish_time);
+                }
                 if finish_time > self.gas_per_core {
                     self.full = true;
                     rejected.push(tx);
