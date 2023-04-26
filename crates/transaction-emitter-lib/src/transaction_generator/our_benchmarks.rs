@@ -100,7 +100,7 @@ impl TransactionGenerator for OurBenchmark {
                     idx_to = to_dist.sample(&mut rng) % accounts.len();
                 }
 
-                let receiver = &(accounts[idx_to].address()).clone();
+                let receiver = accounts[idx_to].address().clone();
                 requests.push(accounts[idx_from].sign_with_transaction_builder(self.txn_factory.transfer(receiver, 1)));
             }
             return requests;
