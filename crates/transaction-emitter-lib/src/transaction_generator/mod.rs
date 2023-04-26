@@ -144,9 +144,6 @@ pub async fn create_txn_generator_creator(
                     load_type} => Box::new(
                     OurBenchmarkGeneratorCreator::new(
                         txn_factory.clone(),
-                        init_txn_factory.clone(),
-                        root_account,
-                        txn_executor,
                         *load_type,
                     ).await,
                 ),
