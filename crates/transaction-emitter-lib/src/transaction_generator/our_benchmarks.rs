@@ -100,7 +100,7 @@ impl TransactionGenerator for OurBenchmark {
                     idx_to = to_dist.sample(&mut rng) % accounts.len();
                 }
 
-                requests.push(accounts[idx_from].sign_with_transaction_builder(self.txn_factory.transfer(accounts[idx_to].address(), 1)));
+                requests.push(accounts[idx_from].sign_with_transaction_builder(self.txn_factory.transfer(mut accounts[idx_to].address(), 1)));
             }
             return requests;
         }
