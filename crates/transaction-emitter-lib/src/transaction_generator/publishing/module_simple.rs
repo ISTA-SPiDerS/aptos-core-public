@@ -23,10 +23,7 @@ use aptos_sdk::move_types::language_storage::StructTag;
 use rand::distributions::WeightedIndex;
 use std::{thread, time};
 use rand::prelude::*;
-<<<<<<< HEAD
-=======
 use aptos_sdk::types::account_config;
->>>>>>> pythia
 
 // use rand::distributions::Distribution;
 
@@ -205,15 +202,10 @@ impl EntryPoints {
 pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, coin_num: usize) -> TransactionPayload {
     let coin_1_num = coin_num;
     let coin_2_num: usize = coin_1_num;
-<<<<<<< HEAD
-    let mut coin: String = "CoinC".to_string();
-    let mut coin_clone = coin.clone();
-=======
 
     let mut coin: String = "CoinC".to_string();
     let mut coin_clone = coin.clone();
 
->>>>>>> pythia
     let coin_number1_string = coin_1_num.to_string();
     let coin_number2_string = coin_2_num.to_string();
     coin.push_str(&coin_number1_string);
@@ -226,38 +218,24 @@ pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &
     let coin_id2 = Identifier::new(coin_clone).unwrap();
 
     let coin_1 = TypeTag::Struct(Box::new(StructTag {
-<<<<<<< HEAD
-        address: account.address().clone(),
-        module: ident_str!("Exchange").to_owned(),
-=======
         address: account_config::CORE_CODE_ADDRESS,
         module: ident_str!("Benchmark").to_owned(),
->>>>>>> pythia
         name: coin_id1,
         type_params: vec![],
     }));
 
     let coin_2 = TypeTag::Struct(Box::new(StructTag {
-<<<<<<< HEAD
-        address: account.address().clone(),
-        module: ident_str!("Exchange").to_owned(),
-=======
         address: account_config::CORE_CODE_ADDRESS,
         module: ident_str!("Benchmark").to_owned(),
->>>>>>> pythia
         name: coin_id2,
         type_params: vec![],
     }));
 
     let entry_function = EntryFunction::new(
-<<<<<<< HEAD
-        module_id.clone(),
-=======
         ModuleId::new(
             account_config::CORE_CODE_ADDRESS,
             ident_str!("Benchmark").to_owned(),
         ),
->>>>>>> pythia
         ident_str!("exchange").to_owned(),
         vec![coin_1.clone(), coin_2.clone()],
         vec![],
@@ -266,16 +244,12 @@ pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &
 }
 
 
- pub fn sol_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, length: usize, writes: Vec<u64>) -> TransactionPayload {
+pub fn sol_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, length: usize, writes: Vec<u64>) -> TransactionPayload {
     let entry_function = EntryFunction::new(
-<<<<<<< HEAD
-        module_id.clone(),
-=======
         ModuleId::new(
-             account_config::CORE_CODE_ADDRESS,
+            account_config::CORE_CODE_ADDRESS,
             ident_str!("Benchmark").to_owned(),
         ),
->>>>>>> pythia
         ident_str!("loop_exchange").to_owned(),
         vec![],
         vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
