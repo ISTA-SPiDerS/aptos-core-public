@@ -136,7 +136,7 @@ impl LocalSwarm {
             .with_init_config(Some(Arc::new(
                 move |index, config, genesis_stake_amount| {
                     // for local tests, turn off parallel execution:
-                    config.execution.concurrency_level = 1;
+                    config.execution.concurrency_level = 6;
 
                     // Single node orders blocks too fast which would trigger backpressure and stall for 1 sec
                     // which cause flakiness in tests.
