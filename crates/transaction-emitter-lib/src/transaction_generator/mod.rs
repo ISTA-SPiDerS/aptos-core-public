@@ -138,6 +138,13 @@ pub async fn create_txn_generator_creator(
                     *use_account_pool,
                     accounts_pool.clone(),
                 ),
+                TransactionType::OurBenchmark{
+                    load_type} => Box::new(
+                    OurBenchmarkGeneratorCreator::new(
+                        txn_factory.clone(),
+                        *load_type,
+                    ).await,
+                ),
                 TransactionType::CallCustomModules {
                     entry_point,
                     num_modules,

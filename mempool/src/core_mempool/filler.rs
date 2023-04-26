@@ -241,21 +241,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
             // Update last touched time for used resources.
             const ZERO: u64 = 0u64;
-            for (delta, _op) in delta_set {
-                let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&ZERO));
-                self.last_touched.insert(delta.clone(), mx.into());
-
-                if !self.writes.contains_key(delta) {
-                    self.writes.insert(delta.clone(), vec![]);
-                }
-
-                if read_set.contains(delta) {
-                    self.writes.remove(delta);
-                    self.writes.insert(delta.clone(), vec![]);
-                }
-                self.writes.get_mut(delta).unwrap().push(current_idx);
-            }
-
             for (write, _op) in write_set {
                 let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&ZERO));
                 self.last_touched.insert(write.clone(), mx.into());
@@ -293,6 +278,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             if self.full {
                 rejected.push(tx);
                 rejected.extend(txn);
+                println!("bla final gas1: {}", self.total_estimated_gas);
+
                 return rejected;
             }
 
@@ -301,6 +288,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 self.full = true;
                 rejected.push(tx);
                 rejected.extend(txn);
+                println!("bla final gas2: {}", self.total_estimated_gas);
+
                 return rejected;
             }
 
@@ -310,6 +299,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 let delta_set = speculation.output.delta_change_set();
                 let gas_used = speculation.output.txn_output().gas_used();
 
+                if gas_used > 10000
+                {
+                    println!("bla Wat a big tx: {}", gas_used);
+                }
 
                 // When transaction can start assuming unlimited resources.
                 let mut arrival_time = 0;
@@ -321,15 +314,23 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
+                if finish_time > 100000
+                {
+                    println!("bla Wat a long chain: {}", finish_time);
+                }
                 if finish_time > self.gas_per_core {
                     self.full = true;
                     rejected.push(tx);
+                    println!("bla final gas3: {}", self.total_estimated_gas);
+
                     continue;
                 }
                 if self.total_estimated_gas + gas_used > self.gas_per_core * C {
                     self.full = true;
                     rejected.push(tx);
                     rejected.extend(txn);
+                    println!("bla final gas4: {}", self.total_estimated_gas);
+
                     return rejected;
                 }
 
@@ -346,6 +347,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     self.full = true;
                     rejected.push(tx);
                     rejected.extend(txn);
+                    println!("bla final gas5: {}", self.total_estimated_gas);
+
                     return rejected;
                 }
 
@@ -362,24 +365,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 //self.transaction_validation.add_write_set(write_set);
 
                 // Update last touched time for used resources.
-                const ZERO: u64 = 0u64;
-                for (delta, _op) in delta_set {
-                    let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&ZERO));
-                    self.last_touched.insert(delta.clone(), mx.into());
-
-                    if !self.writes.contains_key(delta) {
-                        self.writes.insert(delta.clone(), vec![]);
-                    }
-
-                    if read_set.contains(delta) {
-                        self.writes.remove(delta);
-                        self.writes.insert(delta.clone(), vec![]);
-                    }
-                    self.writes.get_mut(delta).unwrap().push(current_idx);
-                }
-
                 for (write, _op) in write_set {
-                    let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&ZERO));
+                    let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&0u64));
                     self.last_touched.insert(write.clone(), mx.into());
 
                     if !self.writes.contains_key(write) {
@@ -393,11 +380,15 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if self.block.len() as u64 == self.max_txns {
                     self.full = true;
                     rejected.extend(txn);
+                    println!("bla final gas6: {}", self.total_estimated_gas);
+
                     return rejected;
                 }
             }
             index+=1;
         }
+
+        println!("bla final gas7: {}", self.total_estimated_gas);
 
         return rejected;
     }

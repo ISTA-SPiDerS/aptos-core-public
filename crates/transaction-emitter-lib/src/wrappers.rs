@@ -60,7 +60,7 @@ pub async fn emit_transactions_with_cluster(
             },
             TransactionTypeArg::CustomFunctionLargeModuleWorkingSet => {
                 TransactionType::CallCustomModules {
-                    entry_point: EntryPoints::DEXAVG,
+                    entry_point: EntryPoints::Half,
                     num_modules: 1000,
                     use_account_pool: false,
                 }
@@ -73,7 +73,7 @@ pub async fn emit_transactions_with_cluster(
                 use_account_pool: true,
             },
             TransactionTypeArg::NoOp => TransactionType::CallCustomModules {
-                entry_point: EntryPoints::DEXAVG,
+                entry_point: EntryPoints::Half,
                 num_modules: 1,
                 use_account_pool: false,
             },

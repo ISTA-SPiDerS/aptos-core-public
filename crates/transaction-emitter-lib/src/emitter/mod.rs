@@ -41,6 +41,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{runtime::Handle, task::JoinHandle, time};
+use crate::transaction_generator::our_benchmarks::LoadType;
 
 // Max is 100k TPS for a full day.
 const MAX_TXNS: u64 = 10_000_000_000;
@@ -78,6 +79,9 @@ pub enum TransactionType {
         num_modules: usize,
         use_account_pool: bool,
     },
+    OurBenchmark {
+        load_type: LoadType
+    },
 }
 
 impl TransactionType {
@@ -96,19 +100,9 @@ impl TransactionType {
         }
     }
 
-    pub fn default_call_custom_module() -> Self {
-        Self::CallCustomModules {
-            entry_point: EntryPoints::SOLANA,
-            num_modules: 1,
-            use_account_pool: false,
-        }
-    }
-
-    pub fn default_call_different_modules() -> Self {
-        Self::CallCustomModules {
-            entry_point: EntryPoints::DEXAVG,
-            num_modules: 100,
-            use_account_pool: false,
+    pub fn default_script() -> Self {
+        Self::OurBenchmark {
+            load_type: LoadType::DEXAVG,
         }
     }
 }
