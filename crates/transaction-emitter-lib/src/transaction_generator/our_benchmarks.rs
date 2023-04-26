@@ -189,11 +189,13 @@ impl TransactionGenerator for OurBenchmark {
             if matches!(load_type, LoadType::DEXAVG) || matches!(load_type, LoadType::DEXBURSTY)
             {
                 coin_1_num = (dist.sample(&mut rng) % coins) as u64;
-            } else if matches!(load_type, LoadType::NFT)
+            }
+            else if matches!(load_type, LoadType::NFT)
             {
                 idx = from_dist.sample(&mut rng) % accounts.len();
                 coin_1_num = (dist.sample(&mut rng) % coins) as u64;
-            } else {
+            }
+            else {
                 coin_1_num = (rng.gen::<usize>() % coins) as u64;
             }
 

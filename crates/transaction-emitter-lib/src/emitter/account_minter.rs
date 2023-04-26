@@ -193,7 +193,7 @@ impl<'t> AccountMinter<'t> {
                     seed_account,
                     num_new_child_accounts,
                     coins_per_account,
-                    mode_params.max_submit_batch_size,
+                    25,
                     txn_executor,
                     &txn_factory,
                     req.reuse_accounts,
