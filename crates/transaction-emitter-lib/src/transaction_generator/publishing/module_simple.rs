@@ -71,15 +71,6 @@ pub fn version(module: &mut CompiledModule, rng: &mut StdRng) {
 // More info in the Simple.move
 #[derive(Debug, Copy, Clone)]
 pub enum EntryPoints {
-    // 0 args
-    /// Empty (NoOp) function
-    DEXAVG,
-    /// Increment global resource - COUNTER_STEP
-    DEXBURSTY,
-    /// Fetch global resource - COUNTER_STEP
-    NFT,
-    /// Reset resource `Resource`
-    SOLANA,
     /// Double the size of `Resource`
     Double,
     /// Half the size of `Resource`

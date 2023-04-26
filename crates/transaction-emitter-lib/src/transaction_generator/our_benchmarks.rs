@@ -31,18 +31,29 @@ use aptos_sdk::types::transaction::{EntryFunction, Module};
 
 pub struct OurBenchmark {
     txn_factory: TransactionFactory,
-    entry_point: EntryPoints,
+    load_type: LoadType,
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum LoadType
+{
+    DEXAVG,
+    DEXBURSTY,
+    P2PTX,
+    SOLANA,
+    NFT
+}
+
 
 impl OurBenchmark {
     pub async fn new(
         txn_factory: TransactionFactory,
-        entry_point: EntryPoints,
+        load_type: LoadType,
 
     ) -> Self {
         Self {
             txn_factory,
-            entry_point
+            load_type
         }
     }
 }
@@ -55,225 +66,152 @@ impl TransactionGenerator for OurBenchmark {
     ) -> Vec<SignedTransaction> {
         let needed = accounts.len() * transactions_per_account * 10;
         let mut requests = Vec::with_capacity(needed);
-        let loadtype = self.entry_point;
+        let load_type = self.entry_point;
         let coins = COIN_DISTR.len();
         let mut rng: ThreadRng = thread_rng();
-        let mut from_dist: Box<WeightedIndex<usize>> = Box::new(WeightedIndex::new(&vec![17,42]).unwrap());
-        let mut dist: Box<WeightedIndex<f64>> = Box::new(WeightedIndex::new(&vec![17.0,42.0]).unwrap());
-        let mut tx_num_writes_distr : Box<WeightedIndex<usize>> = Box::new(WeightedIndex::new(&vec![17,42]).unwrap());
-        let mut tx_cost_distr : Box<WeightedIndex<usize>> = Box::new(WeightedIndex::new(&vec![17,42]).unwrap());
-        let mut cost_options:Vec<f64> = vec![];
-        let mut len_options:Vec<usize> = vec![];
 
-        if matches!(loadtype, DEXAVG) {
-            let mut distr:Vec<f64> = vec![];
+        if matches!(load_type, LoadType::P2PTX)
+        {
+            let mut fromVec:Vec<f64> = vec![];
+            let mut toVec:Vec<f64> = vec![];
 
+            for (key, value) in TX_TO {
+                for i in 0..value {
+                    toVec.push(key);
+                }
+            }
+
+            for (key, value) in TX_FROM {
+                for i in 0..value {
+                    fromVec.push(key);
+                }
+            }
+
+            let to_dist:WeightedIndex<f64> = WeightedIndex::new(&toVec).unwrap();
+            let from_dist:WeightedIndex<f64> = WeightedIndex::new(&fromVec).unwrap();
+
+            for i in 0..needed {
+                // get account with likelyhood of similar distribution
+                let mut idx_from: usize = from_dist.sample(&mut rng) % accounts.len();
+                // get account with likelyhood of similar distribution
+                let mut idx_to: usize = to_dist.sample(&mut rng) % accounts.len();
+
+                while idx_from == idx_to {
+                    idx_to = to_dist.sample(&mut rng) % accounts.len();
+                }
+
+                requests.push(accounts[idx_from].sign_with_transaction_builder(self.txn_factory.transfer(accounts[idx_to].address(), 1)));
+            }
+            return requests;
+        }
+
+        let mut distr:Vec<f64> = vec![];
+        if matches!(load_type, LoadType::DEXAVG)
+        {
             for (key, value) in AVG {
                 for i in 0..value {
                     distr.push(key)
                 }
             }
-            // println!("{}", distr.len());
-
-            let mut len_distr:Vec<usize> = vec![];
-
-            for (key, value) in LEN_DISTR {
-                len_options.push(key.round() as usize);
-                len_distr.push(value as usize);
-            }
-
-            // let mut cost_options:Vec<f64> = vec![];
-            // let mut cost_distr:Vec<usize> = vec![];
-
-            // for (key, value) in COST_DISTR {
-            //     cost_options.push(key);
-            //     cost_distr.push(value as usize);
-            // }
-
-            // let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-            // let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
-
-            *dist = WeightedIndex::new(&distr).unwrap();
-
-            let mut fromVec: Vec<usize> = vec![];
-            for (key, value) in TX_NFT_FROM {
-                for i in 0..(value as usize) {
-                    fromVec.push(key as usize)
-                }
-            }
-            *from_dist = WeightedIndex::new(&fromVec).unwrap();
-
-            let mut max_count:usize = 1;
-            let max_value_opt = len_options.iter().max();
-            match max_value_opt {
-                Some(max) => { max_count = *max; },
-                None      => println!("vec empty, wat!")
-            }
-            // todo: change the 100 to number of coins
+            println!("{}", distr.len())
         }
-        if matches!(loadtype, DEXBURSTY) {
-            let mut distr:Vec<f64> = vec![];
-
+        else if matches!(load_type, LoadType::DEXBURSTY)
+        {
             for (key, value) in BURSTY {
                 for i in 0..value {
                     distr.push(key)
                 }
             }
-            // println!("{}", distr.len());
-
-            // let mut len_options:Vec<usize> = vec![];
-            let mut len_distr:Vec<usize> = vec![];
-
-            for (key, value) in LEN_DISTR {
-                len_options.push(key.round() as usize);
-                len_distr.push(value as usize);
-            }
-
-            // let mut cost_options:Vec<f64> = vec![];
-            // let mut cost_distr:Vec<usize> = vec![];
-
-            // for (key, value) in COST_DISTR {
-            //     cost_options.push(key);
-            //     cost_distr.push(value as usize);
-            // }
-
-            // let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-            // let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
-
-            *dist = WeightedIndex::new(&distr).unwrap();
-
-            let mut fromVec: Vec<usize> = vec![];
-            for (key, value) in TX_NFT_FROM {
-                for i in 0..(value as usize) {
-                    fromVec.push(key as usize)
-                }
-            }
-            *from_dist  = WeightedIndex::new(&fromVec).unwrap();
-
-            let mut max_count:usize = 1;
-            let max_value_opt = len_options.iter().max();
-            match max_value_opt {
-                Some(max) => { max_count = *max; },
-                None      => println!("vec empty, wat!")
-            }
-            // todo: change the 100 to number of coins
         }
-        if matches!(loadtype, NFT) {
-            let mut distr:Vec<f64> = vec![];
+        else if matches!(load_type, LoadType::NFT)
+        {
             for (key, value) in TX_NFT_TO {
                 for i in 0..value {
                     distr.push(key)
                 }
             }
-            // let mut len_options:Vec<usize> = vec![];
-            let mut len_distr:Vec<usize> = vec![];
-
-            for (key, value) in LEN_DISTR {
-                len_options.push(key.round() as usize);
-                len_distr.push(value as usize);
-            }
-
-            // let mut cost_options:Vec<f64> = vec![];
-            // let mut cost_distr:Vec<usize> = vec![];
-
-            // for (key, value) in COST_DISTR {
-            //     cost_options.push(key);
-            //     cost_distr.push(value as usize);
-            // }
-
-            // let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-            // let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
-
-            *dist = WeightedIndex::new(&distr).unwrap();
-
-            let mut fromVec: Vec<usize> = vec![];
-            for (key, value) in TX_NFT_FROM {
-                for i in 0..(value as usize) {
-                    fromVec.push(key as usize)
-                }
-            }
-            *from_dist = WeightedIndex::new(&fromVec).unwrap();
-
-            let mut max_count:usize = 1;
-            let max_value_opt = len_options.iter().max();
-            match max_value_opt {
-                Some(max) => { max_count = *max; },
-                None      => println!("vec empty, wat!")
-            }
         }
-        if matches!(loadtype, SOLANA) {
-            let mut distr:Vec<f64> = vec![];
+        else if matches!(load_type, LoadType::SOLANA)
+        {
             for (key, value) in RES_DISTR {
                 for i in 0..value {
                     distr.push(key)
                 }
             }
-            // let mut len_options:Vec<usize> = vec![];
-            let mut len_distr:Vec<usize> = vec![];
+        }
+        else
+        {
+            distr = Vec::from(COIN_DISTR);
+        }
 
-            for (key, value) in LEN_DISTR {
-                len_options.push(key.round() as usize);
-                len_distr.push(value as usize);
+        let mut len_options:Vec<usize> = vec![];
+        let mut len_distr:Vec<usize> = vec![];
+
+        for (key, value) in LEN_DISTR {
+            len_options.push(key.round() as usize);
+            len_distr.push(value as usize);
+        }
+
+        let mut cost_options:Vec<f64> = vec![];
+        let mut cost_distr:Vec<usize> = vec![];
+
+        for (key, value) in COST_DISTR {
+            cost_options.push(key);
+            cost_distr.push(value as usize);
+        }
+
+        let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
+        let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
+
+        let dist : WeightedIndex<f64> = WeightedIndex::new(&distr).unwrap();
+
+        let mut fromVec: Vec<usize> = vec![];
+        for (key, value) in TX_NFT_FROM {
+            for i in 0..(value as usize) {
+                fromVec.push(key as usize)
             }
+        }
+        let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
 
-            let mut cost_distr:Vec<usize> = vec![];
-
-            for (key, value) in COST_DISTR {
-                cost_options.push(key);
-                cost_distr.push(value as usize);
-            }
-
-            *tx_num_writes_distr = WeightedIndex::new(&len_distr).unwrap();
-            *tx_cost_distr = WeightedIndex::new(&cost_distr).unwrap();
-
-            *dist = WeightedIndex::new(&distr).unwrap();
-
-            let mut fromVec: Vec<usize> = vec![];
-            for (key, value) in TX_NFT_FROM {
-                for i in 0..(value as usize) {
-                    fromVec.push(key as usize)
-                }
-            }
-            *from_dist = WeightedIndex::new(&fromVec).unwrap();
-
-            let mut max_count:usize = 1;
-            let max_value_opt = len_options.iter().max();
-            match max_value_opt {
-                Some(max) => { max_count = *max; },
-                None      => println!("vec empty, wat!")
-            }
-
+        let mut max_count:usize = 1;
+        let max_value_opt = len_options.iter().max();
+        match max_value_opt {
+            Some(max) => { max_count = *max; },
+            None      => println!("vec empty, wat!")
         }
 
         for i in 0..needed {
-            let mut idx = (i as usize) % accounts.len();
+            let mut idx: usize = (i as usize) % accounts.len();
+
             let coin_1_num:u64;
-            if matches!(loadtype, DEXAVG) || matches!(loadtype, DEXBURSTY)
+            if matches!(load_type, LoadType::DEXAVG) || matches!(load_type, LoadType::DEXBURSTY)
             {
                 coin_1_num = (dist.sample(&mut rng) % coins) as u64;
-            }
-            else if matches!(loadtype, NFT)
+            } else if matches!(load_type, NFT)
             {
                 idx = from_dist.sample(&mut rng) % accounts.len();
                 coin_1_num = (dist.sample(&mut rng) % coins) as u64;
+            } else {
+                coin_1_num = (rng.gen::<usize>() % coin) as u64s;
             }
-            else {
-                coin_1_num = (rng.gen::<usize>() % coins) as u64;
-            }
-            let mut length: usize = 0;
-            let mut writes: Vec<u64> = vec![];
-            if matches!(loadtype, SOLANA) {
+
+            let entry_function;
+
+            if matches!(load_type, LoadType::SOLANA)
+            {
                 let cost = cost_options[tx_cost_distr.sample(&mut rng)];
                 let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
-                // let mut writes: Vec<u64> = Vec::new();
+
+                let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
                 while i < num_writes {
-                    i+=1;
+                    i += 1;
                     writes.push(dist.sample(&mut rng) as u64);
                 }
-                length = cost.round() as usize;
 
-                let entry_function = EntryFunction::new(
+                let length = cost.round() as usize;
+
+                entry_function = EntryFunction::new(
                     ModuleId::new(
                         account_config::CORE_CODE_ADDRESS,
                         ident_str!("benchmark").to_owned(),
@@ -282,11 +220,8 @@ impl TransactionGenerator for OurBenchmark {
                     vec![],
                     vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
                 );
-
-                requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
-            }
-            else {
-                let entry_function = EntryFunction::new(
+            } else {
+                entry_function = EntryFunction::new(
                     ModuleId::new(
                         account_config::CORE_CODE_ADDRESS,
                         ident_str!("benchmark").to_owned(),
@@ -295,32 +230,28 @@ impl TransactionGenerator for OurBenchmark {
                     vec![],
                     vec![bcs::to_bytes(&coin_1_num).unwrap()],
                 );
-
-                requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
             }
 
-
+            requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
         }
+
         requests
     }
 }
 
 pub struct OurBenchmarkGeneratorCreator {
     txn_factory: TransactionFactory,
-    entry_point: EntryPoints,
+    load_type: LoadType,
 }
 
 impl OurBenchmarkGeneratorCreator {
     pub async fn new(
         txn_factory: TransactionFactory,
-        init_txn_factory: TransactionFactory,
-        root_account: &mut LocalAccount,
-        txn_executor: &dyn TransactionExecutor,
-        entry_point: EntryPoints,
+        load_type: LoadType,
     ) -> Self {
         Self {
             txn_factory,
-            entry_point
+            load_type
         }
     }
 }
@@ -331,7 +262,7 @@ impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
         Box::new(
             OurBenchmark::new(
                 self.txn_factory.clone(),
-                self.entry_point
+                self.load_type
             )
             .await,
         )

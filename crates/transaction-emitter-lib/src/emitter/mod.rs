@@ -41,6 +41,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{runtime::Handle, task::JoinHandle, time};
+use crate::transaction_generator::our_benchmarks::LoadType;
 
 // Max is 100k TPS for a full day.
 const MAX_TXNS: u64 = 10_000_000_000;
@@ -79,7 +80,7 @@ pub enum TransactionType {
         use_account_pool: bool,
     },
     OurBenchmark {
-        entry_point: EntryPoints
+        load_type: LoadType
     },
 }
 
@@ -101,7 +102,7 @@ impl TransactionType {
 
     pub fn default_script() -> Self {
         Self::OurBenchmark {
-            entry_point: EntryPoints::SOLANA,
+            load_type: LoadType::DEXAVG,
         }
     }
 
