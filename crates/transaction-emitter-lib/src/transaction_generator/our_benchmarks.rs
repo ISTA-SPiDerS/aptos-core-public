@@ -192,7 +192,7 @@ impl TransactionGenerator for OurBenchmark {
                 idx = from_dist.sample(&mut rng) % accounts.len();
                 coin_1_num = (dist.sample(&mut rng) % coins) as u64;
             } else {
-                coin_1_num = (rng.gen::<usize>() % coin) as u64s;
+                coin_1_num = (rng.gen::<usize>() % coins) as u64;
             }
 
             let entry_function;
