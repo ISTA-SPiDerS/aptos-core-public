@@ -102,7 +102,7 @@ impl TransactionType {
 
     pub fn default_script() -> Self {
         Self::OurBenchmark {
-            load_type: LoadType::DEXBURSTY,
+            load_type: LoadType::P2PTX,
         }
     }
 }
