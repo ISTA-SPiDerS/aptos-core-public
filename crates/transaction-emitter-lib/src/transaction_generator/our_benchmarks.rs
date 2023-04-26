@@ -69,6 +69,7 @@ impl TransactionGenerator for OurBenchmark {
         let load_type = self.load_type;
         let coins = COIN_DISTR.len();
         let mut rng: ThreadRng = thread_rng();
+        println!("Generating {} transactions", needed);
 
         if matches!(load_type, LoadType::P2PTX)
         {
@@ -260,6 +261,7 @@ impl OurBenchmarkGeneratorCreator {
 #[async_trait]
 impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
     async fn create_transaction_generator(&mut self) -> Box<dyn TransactionGenerator> {
+        println!("Starting our Benchmark creator!");
         Box::new(
             OurBenchmark::new(
                 self.txn_factory.clone(),
