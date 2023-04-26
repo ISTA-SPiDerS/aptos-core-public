@@ -102,7 +102,7 @@ impl TransactionType {
 
     pub fn default_script() -> Self {
         Self::OurBenchmark {
-            load_type: LoadType::DEXAVG,
+            load_type: LoadType::DEXBURSTY,
         }
     }
 }
