@@ -10,7 +10,7 @@ use aptos_sdk::{
 };
 use async_trait::async_trait;
 use std::sync::{atomic::AtomicUsize, Arc};
-
+pub mod our_benchmarks;
 pub mod account_generator;
 pub mod accounts_pool_wrapper;
 pub mod call_custom_modules;
@@ -20,7 +20,7 @@ pub mod publish_modules;
 mod publishing;
 pub mod transaction_mix_generator;
 use self::{
-    account_generator::AccountGeneratorCreator, call_custom_modules::CallCustomModulesCreator,
+    account_generator::AccountGeneratorCreator, call_custom_modules::CallCustomModulesCreator, our_benchmarks::OurBenchmarkGeneratorCreator,
     nft_mint_and_transfer::NFTMintAndTransferGeneratorCreator,
     p2p_transaction_generator::P2PTransactionGeneratorCreator,
     publish_modules::PublishPackageCreator,
@@ -31,6 +31,7 @@ use crate::{
     transaction_generator::accounts_pool_wrapper::AccountsPoolWrapperCreator, TransactionType,
 };
 pub use publishing::module_simple::EntryPoints;
+use crate::TransactionType::OurBenchmark;
 
 pub const SEND_AMOUNT: u64 = 1;
 
@@ -66,6 +67,7 @@ pub async fn create_txn_generator_creator(
     transaction_mix_per_phase: &[Vec<(TransactionType, usize)>],
     num_workers: usize,
     all_accounts: &mut [LocalAccount],
+    root_account: &mut LocalAccount,
     txn_executor: &dyn TransactionExecutor,
     txn_factory: &TransactionFactory,
     init_txn_factory: &TransactionFactory,

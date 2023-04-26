@@ -607,6 +607,7 @@ impl TxnEmitter {
             &req.transaction_mix_per_phase,
             num_workers,
             &mut all_accounts,
+            root_account,
             &txn_executor,
             &txn_factory,
             &init_txn_factory,

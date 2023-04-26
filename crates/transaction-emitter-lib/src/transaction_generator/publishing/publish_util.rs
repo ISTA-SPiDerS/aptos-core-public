@@ -86,7 +86,6 @@ impl PackageHandler {
         if version {
             package.version(rng);
         }
-        package.scramble(tracker.publishers[idx].fn_count, rng);
         // info!("PACKAGE: {:#?}", package);
         package
     }
@@ -119,16 +118,6 @@ impl Package {
         match self {
             Self::Simple(modules, _) => {
                 module_simple::version(&mut modules[0], rng);
-            },
-        }
-    }
-
-    // Scrambles the package, passing a function count for the functions that can
-    // be duplicated and a `StdRng` to generate random values
-    pub fn scramble(&mut self, fn_count: usize, rng: &mut StdRng) {
-        match self {
-            Self::Simple(modules, _) => {
-                module_simple::scramble(&mut modules[0], fn_count, rng);
             },
         }
     }
