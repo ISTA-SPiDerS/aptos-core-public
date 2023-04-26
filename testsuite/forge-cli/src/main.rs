@@ -924,12 +924,7 @@ fn individual_workload_tests(test_name: String, config: ForgeConfig) -> ForgeCon
                     "nft_mint" => TransactionType::NftMintAndTransfer,
                     "publishing" => TransactionType::PublishPackage {
                         use_account_pool: false,
-                    },
-                    "module_loading" => TransactionType::CallCustomModules {
-                        entry_point: EntryPoints::DEXAVG,
-                        num_modules: 1000,
-                        use_account_pool: false,
-                    },
+                    }
                     _ => unreachable!("{}", test_name),
                 })
             },

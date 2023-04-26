@@ -105,22 +105,6 @@ impl TransactionType {
             load_type: LoadType::DEXAVG,
         }
     }
-
-    pub fn default_call_custom_module() -> Self {
-        Self::CallCustomModules {
-            entry_point: EntryPoints::SOLANA,
-            num_modules: 1,
-            use_account_pool: false,
-        }
-    }
-
-    pub fn default_call_different_modules() -> Self {
-        Self::CallCustomModules {
-            entry_point: EntryPoints::DEXAVG,
-            num_modules: 100,
-            use_account_pool: false,
-        }
-    }
 }
 
 impl Default for TransactionType {

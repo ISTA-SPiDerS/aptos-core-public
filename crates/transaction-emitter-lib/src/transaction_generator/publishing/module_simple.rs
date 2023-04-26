@@ -119,10 +119,6 @@ impl EntryPoints {
         match self {
             // 0 args
             //This nop is never used if implementation works as planned
-            EntryPoints::DEXAVG => dex_nft_payload(rng, module_id, account, coin_num),
-            EntryPoints::DEXBURSTY => dex_nft_payload(rng, module_id, account, coin_num),
-            EntryPoints::NFT=>  dex_nft_payload(rng, module_id, account, coin_num),
-            EntryPoints::SOLANA => sol_payload(rng, module_id, account, length, writes),
             EntryPoints::Double => get_payload_void(module_id, ident_str!("double").to_owned()),
             EntryPoints::Half => get_payload_void(module_id, ident_str!("half").to_owned()),
             // 1 arg
