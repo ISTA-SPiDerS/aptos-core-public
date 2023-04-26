@@ -240,7 +240,7 @@ fn main() -> Result<()> {
                     let previous_emit_job = test_suite.get_emit_job().clone();
                     let test_suite =
                         test_suite.with_emit_job(previous_emit_job.mode(EmitJobMode::MaxLoad {
-                            mempool_backlog: 50000,
+                            mempool_backlog: 5000,
                         }));
 
                     run_forge(
