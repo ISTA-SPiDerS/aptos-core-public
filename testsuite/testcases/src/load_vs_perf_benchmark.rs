@@ -130,7 +130,7 @@ impl TransactinWorkload {
                     }
                 } else {
                     TransactionType::CallCustomModules {
-                        entry_point: EntryPoints::DEXAVG,
+                        entry_point: EntryPoints::Half,
                         num_modules: 1,
                         use_account_pool: true,
                     }

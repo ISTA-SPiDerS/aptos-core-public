@@ -66,7 +66,7 @@ impl TransactionGenerator for OurBenchmark {
     ) -> Vec<SignedTransaction> {
         let needed = accounts.len() * transactions_per_account * 10;
         let mut requests = Vec::with_capacity(needed);
-        let load_type = self.entry_point;
+        let load_type = self.load_type;
         let coins = COIN_DISTR.len();
         let mut rng: ThreadRng = thread_rng();
 
