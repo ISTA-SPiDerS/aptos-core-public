@@ -18,7 +18,7 @@ pub trait BlockFiller {
     fn add_all(
         &mut self,
         txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+        past_results: &DashMap<TransactionAuthenticator, (VMSpeculationResult, VMStatus)>,
     ) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
@@ -76,7 +76,7 @@ impl BlockFiller for SimpleFiller {
     fn add_all(
         &mut self,
         txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>
+        past_results: &DashMap<TransactionAuthenticator, (VMSpeculationResult, VMStatus)>
     ) -> Vec<SignedTransaction> {
         let mut rejected = vec![];
 

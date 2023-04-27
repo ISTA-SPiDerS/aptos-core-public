@@ -40,7 +40,7 @@ pub struct Mempool {
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
-    pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    pre_execution_storage: DashMap<TransactionAuthenticator, (VMSpeculationResult, VMStatus)>,
 }
 
 impl Mempool {
