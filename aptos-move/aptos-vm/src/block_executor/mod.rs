@@ -109,9 +109,9 @@ impl BlockAptosVM {
 
         drop(signature_verification_timer);
 
-        BLOCK_EXECUTOR_CONCURRENCY.set(6 as i64);
+        BLOCK_EXECUTOR_CONCURRENCY.set(concurrency_level as i64);
         let executor = BlockExecutor::<PreprocessedTransaction, AptosExecutorTask<S>, S>::new(
-            6,
+            concurrency_level,
         );
 
         let ret = executor
