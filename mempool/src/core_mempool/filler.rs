@@ -317,12 +317,12 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     println!("bla Wat a long chain: {}", finish_time);
                 }
                 if finish_time > self.gas_per_core {
-                    self.full = true;
+                    //self.full = true;
                     rejected.push(tx);
                     println!("bla final gas3: {}", self.total_estimated_gas);
-
                     continue;
                 }
+
                 if self.total_estimated_gas + gas_used > self.gas_per_core * C {
                     self.full = true;
                     rejected.push(tx);
