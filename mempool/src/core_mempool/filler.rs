@@ -312,10 +312,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
-                if finish_time > 100000
-                {
-                    println!("bla Wat a long chain: {}", finish_time);
-                }
                 if finish_time > self.gas_per_core {
                     //self.full = true;
                     rejected.push(tx);
