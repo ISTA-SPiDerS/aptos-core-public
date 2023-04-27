@@ -274,7 +274,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
     fn add_all(
         &mut self,
         mut txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>,
+        past_results: &DashMap<TransactionAuthenticator, (VMSpeculationResult, VMStatus)>,
     ) -> Vec<SignedTransaction> {
         let result : HashMap<usize, Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
             (&txn)
@@ -282,14 +282,11 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 .enumerate()
                 .map(|(i, tx)| {
                     match past_results.get(&tx.authenticator()) {
-                        Some(result) => (i, match result.value() {
-                            Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
-                            Err(ref e) => Err(anyhow!("Error during pre execution")),
-                        }),
+                        Some(result) => (i, result.value()),
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
                             match result {
-                                Ok((ref a, ref b)) => past_results.insert(tx.authenticator(),anyhow::Ok((a.clone(), b.clone()))),
+                                Ok((ref a, ref b)) => past_results.insert(tx.authenticator(),(a.clone(), b.clone())),
                                 Err(ref e) => Err(anyhow!("Error during pre execution")),
                             };
                             (i, result)
