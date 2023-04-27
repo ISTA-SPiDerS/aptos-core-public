@@ -274,24 +274,24 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
     fn add_all(
         &mut self,
         mut txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+        past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>,
     ) -> Vec<SignedTransaction> {
-        let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
+        let result : HashMap<usize, Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
             (&txn)
                 .into_par_iter()
                 .enumerate()
                 .map(|(i, tx)| {
                     match past_results.get(&tx.authenticator()) {
                         Some(result) => (i, match result.value() {
-                            Result::Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
-                            Result::Err(ref e) => Err(anyhow!("Error during pre execution")),
+                            Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
+                            Err(ref e) => Err(anyhow!("Error during pre execution")),
                         }),
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
-                            past_results.insert(tx.authenticator(), match result {
-                                Result::Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
-                                Result::Err(ref e) => Err(anyhow!("Error during pre execution")),
-                            });
+                            match result {
+                                Ok((ref a, ref b)) => past_results.insert(tx.authenticator(),anyhow::Ok((a.clone(), b.clone()))),
+                                Err(ref e) => Err(anyhow!("Error during pre execution")),
+                            };
                             (i, result)
                         }
                     }
