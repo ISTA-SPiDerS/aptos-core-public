@@ -21,6 +21,7 @@ use once_cell::sync::Lazy;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use crate::core_mempool::SimpleFiller;
 
 pub(crate) fn setup_mempool() -> (CoreMempool, ConsensusMock) {
     let mut config = NodeConfig::random();
@@ -171,7 +172,12 @@ impl ConsensusMock {
         max_txns: u64,
         max_bytes: u64,
     ) -> Vec<SignedTransaction> {
-        let block = mempool.get_batch(max_txns, max_bytes, self.0.clone());
+
+        let mut block_filler: SimpleFiller = SimpleFiller::new(
+            max_bytes,
+            max_txns);
+
+        let block = mempool.get_batch(HashSet::new(), &mut block_filler);
         self.0 = self
             .0
             .union(
