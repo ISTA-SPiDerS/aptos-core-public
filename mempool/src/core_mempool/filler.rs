@@ -315,7 +315,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if finish_time > self.gas_per_core {
                     //self.full = true;
                     rejected.push(tx);
-                    println!("bla final gas3: {}", self.total_estimated_gas);
                     continue;
                 }
 
