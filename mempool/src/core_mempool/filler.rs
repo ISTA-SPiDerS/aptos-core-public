@@ -288,7 +288,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                             match result {
                                 Ok((ref a, ref b)) => past_results.insert(tx.authenticator(),(a.clone(), b.clone())),
                                 Err(ref e) => Err(anyhow!("Error during pre execution")),
-                            };
+                            }
                             (i, result)
                         }
                     }
