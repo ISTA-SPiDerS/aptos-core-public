@@ -292,9 +292,9 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                                 },
                                 Err(ref e) => {
                                     println!("Error during pre execution, {}", e);
-                                    None
+                                    (i, None)
                                 },
-                            };
+                            }
                         }
                     }
                 })
