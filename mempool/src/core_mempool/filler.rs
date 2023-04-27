@@ -2,18 +2,24 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::mem;
 use std::mem::size_of;
+use dashmap::{DashMap, DashSet};
 use rayon::iter::IntoParallelIterator;
 use aptos_types::state_store::state_key::StateKey;
-use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction};
+use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
 use std::collections::HashMap;
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
+use anyhow::{anyhow, Result, Error};
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
-    fn add_all(&mut self, txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction>;
+    fn add_all(
+        &mut self,
+        txn: VecDeque<SignedTransaction>,
+        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    ) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
     fn get_blockx(&mut self) -> Vec<SignedTransaction>;
@@ -67,7 +73,11 @@ impl BlockFiller for SimpleFiller {
         true
     }
 
-    fn add_all(&mut self, txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction> {
+    fn add_all(
+        &mut self,
+        txn: VecDeque<SignedTransaction>,
+        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>
+    ) -> Vec<SignedTransaction> {
         let mut rejected = vec![];
 
         for tx in txn
@@ -261,9 +271,31 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         return false;
     }
 
-    fn add_all(&mut self, mut txn: VecDeque<SignedTransaction>) -> Vec<SignedTransaction> {
+    fn add_all(
+        &mut self,
+        mut txn: VecDeque<SignedTransaction>,
+        past_results: &DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    ) -> Vec<SignedTransaction> {
         let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
-            (&txn).into_par_iter().enumerate().map(|(i, tx)| (i, self.transaction_validation.speculate_transaction(&tx)))
+            (&txn)
+                .into_par_iter()
+                .enumerate()
+                .map(|(i, tx)| {
+                    match past_results.get(&tx.authenticator()) {
+                        Some(result) => (i, match result.value() {
+                            Result::Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
+                            Result::Err(ref e) => Err(anyhow!("Error during pre execution")),
+                        }),
+                        None => {
+                            let result = self.transaction_validation.speculate_transaction(&tx);
+                            past_results.insert(tx.authenticator(), match result {
+                                Result::Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
+                                Result::Err(ref e) => Err(anyhow!("Error during pre execution")),
+                            });
+                            (i, result)
+                        }
+                    }
+                })
                 .collect()
         });
 
@@ -274,6 +306,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         {
             let res = result.get(&index);
             if self.full {
+                println!("bla estgas1 {}", self.total_estimated_gas);
+
                 rejected.push(tx);
                 rejected.extend(txn);
                 println!("bla final gas1: {}", self.total_estimated_gas);
@@ -283,6 +317,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
             let txn_len = tx.raw_txn_bytes_len() as u64;
             if self.total_bytes + txn_len > self.max_bytes {
+                println!("bla estgas2 {}", self.total_estimated_gas);
                 self.full = true;
                 rejected.push(tx);
                 rejected.extend(txn);
@@ -292,6 +327,12 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             }
 
             if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
+                match status {
+                    VMStatus::Executed => {}
+                    VMStatus::Error(e) => {println!("blub exec failure1 {:?}", e)}
+                    VMStatus::MoveAbort(e1, e2) => {println!("blub exec failure2 {:?}", e1)}
+                    VMStatus::ExecutionFailure { .. } => {println!("blub exec failure3")}
+                }
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();
                 let delta_set = speculation.output.delta_change_set();
@@ -300,6 +341,11 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 if gas_used > 10000
                 {
                     println!("bla Wat a big tx: {}", gas_used);
+                }
+
+                if write_set.is_empty() && delta_set.is_empty()
+                {
+                   println!("Empty????");
                 }
 
                 // When transaction can start assuming unlimited resources.
@@ -312,6 +358,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
+                if finish_time > 50000
+                {
+                    println!("bla Wat a long chain: {}", finish_time);
+                }
                 if finish_time > self.gas_per_core {
                     //self.full = true;
                     rejected.push(tx);
@@ -323,7 +373,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     rejected.push(tx);
                     rejected.extend(txn);
                     println!("bla final gas4: {}", self.total_estimated_gas);
-
                     return rejected;
                 }
 
@@ -341,7 +390,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     rejected.push(tx);
                     rejected.extend(txn);
                     println!("bla final gas5: {}", self.total_estimated_gas);
-
                     return rejected;
                 }
 
@@ -350,6 +398,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 let current_idx = self.block.len() as TransactionIdx;
 
+                past_results.remove(&tx.authenticator());
                 self.block.push(tx);
                 self.estimated_gas.push(gas_used);
                 // println!("len {}", dependencies.len());
@@ -372,6 +421,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 if self.block.len() as u64 == self.max_txns {
                     self.full = true;
+                    println!("bla estgas5 {}", self.total_estimated_gas);
                     rejected.extend(txn);
                     println!("bla final gas6: {}", self.total_estimated_gas);
 
@@ -382,7 +432,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         }
 
         println!("bla final gas7: {}", self.total_estimated_gas);
-
         return rejected;
     }
 

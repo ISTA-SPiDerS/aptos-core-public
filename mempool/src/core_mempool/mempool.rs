@@ -23,19 +23,24 @@ use aptos_types::{
     account_address::AccountAddress,
     account_config::AccountSequenceInfo,
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    transaction::SignedTransaction,
+    transaction::{SignedTransaction, authenticator::TransactionAuthenticator},
 };
+use aptos_types::vm_status::VMStatus;
+use aptos_vm_validator::vm_validator::{VMSpeculationResult};
 use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
 };
 use std::collections::VecDeque;
+use anyhow;
+use dashmap::{DashMap, DashSet};
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
+    pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
 }
 
 impl Mempool {
@@ -45,6 +50,7 @@ impl Mempool {
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
+            pre_execution_storage: DashMap::new(),
         }
     }
 
@@ -233,7 +239,7 @@ impl Mempool {
             println!("bla result: {}", result_size);
             println!("bla seen: {}", seen.len());
 
-            let off = block_filler.add_all(result);
+            let off = block_filler.add_all(result, &self.pre_execution_storage);
             println!("bla unsee: {}", off.len());
 
             for tx in off

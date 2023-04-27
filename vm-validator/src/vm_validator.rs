@@ -37,6 +37,7 @@ use aptos_aggregator::transaction::TransactionOutputExt;
 #[path = "unit_tests/vm_validator_test.rs"]
 mod vm_validator_test;
 
+#[derive(Clone)]
 pub struct VMSpeculationResult {
     pub input: TransactionReadSet,
     pub output: TransactionOutputExt,
