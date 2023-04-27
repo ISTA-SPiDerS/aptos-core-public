@@ -276,20 +276,25 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
         mut txn: VecDeque<SignedTransaction>,
         past_results: &DashMap<TransactionAuthenticator, (VMSpeculationResult, VMStatus)>,
     ) -> Vec<SignedTransaction> {
-        let result : HashMap<usize, Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
+        let result : HashMap<usize, Option<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
             (&txn)
                 .into_par_iter()
                 .enumerate()
                 .map(|(i, tx)| {
                     match past_results.get(&tx.authenticator()) {
-                        Some(result) => (i, anyhow::Ok(result.value())),
+                        Some(result) => (i, result.value()),
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
                             match result {
-                                Ok((ref a, ref b)) => {past_results.insert(tx.authenticator(),(a.clone(), b.clone()));},
-                                Err(ref e) => { println!("Error during pre execution, {}", e);},
+                                Ok((ref a, ref b)) => {
+                                    past_results.insert(tx.authenticator(),(a.clone(), b.clone()));
+                                    (i, &(a.clone(), b.clone()))
+                                },
+                                Err(ref e) => {
+                                    println!("Error during pre execution, {}", e);
+                                    None
+                                },
                             };
-                            (i, result)
                         }
                     }
                 })
@@ -323,7 +328,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 return rejected;
             }
 
-            if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
+            if let Some((speculation, status)) = res.unwrap() {
                 match status {
                     VMStatus::Executed => {}
                     VMStatus::Error(e) => {println!("blub exec failure1 {:?}", e)}
