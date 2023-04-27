@@ -20,6 +20,8 @@ use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
 };
+use aptos_types::test_helpers::transaction_test_helpers::block;
+use crate::core_mempool::{BlockFiller, SimpleFiller};
 
 #[test]
 fn test_transaction_ordering_only_seqnos() {
@@ -254,7 +256,10 @@ fn test_system_ttl() {
 
     // GC routine should clear transaction from first insert but keep last one.
     mempool.gc();
-    let batch = mempool.get_batch(1, 1024, HashSet::new());
+    let mut block_filler: SimpleFiller = SimpleFiller::new(
+        max_bytes,
+        max_txns);
+    let batch = mempool.get_batch( HashSet::new(), &mut block_filler);
     assert_eq!(vec![transaction.make_signed_transaction()], batch);
 }
 
@@ -265,12 +270,21 @@ fn test_commit_callback() {
     // Insert transaction with sequence number 6 to pool (while last known executed transaction is 0).
     let txns = add_txns_to_mempool(&mut pool, vec![TestTransaction::new(1, 6, 1)]);
 
+    let mut block_filler: SimpleFiller = SimpleFiller::new(
+        max_bytes,
+        max_txns);
+    pool.get_batch(HashSet::new(), &mut block_filler);
     // Check that pool is empty.
-    assert!(pool.get_batch(1, 1024, HashSet::new()).is_empty());
+    assert!(block_filler.get_block().is_empty());
     // Transaction 5 got back from consensus.
     pool.commit_transaction(&TestTransaction::get_address(1), 5);
     // Verify that we can execute transaction 6.
-    assert_eq!(pool.get_batch(1, 1024, HashSet::new())[0], txns[0]);
+    block_filler: SimpleFiller = SimpleFiller::new(
+        max_bytes,
+        max_txns);
+    pool.get_batch(HashSet::new(), &mut block_filler);
+
+    assert_eq!(block_filler.get_block()[0], txns[0]);
 }
 
 #[test]
@@ -558,9 +572,12 @@ fn test_parking_lot_eviction() {
         add_txn(&mut pool, TestTransaction::new(0, *seq, 1)).unwrap();
     }
     // Make sure that we have correct txns in Mempool.
-    let mut txns: Vec<_> = pool
-        .get_batch(5, 5120, HashSet::new())
-        .iter()
+    let mut block_filler: SimpleFiller = SimpleFiller::new(
+        max_bytes,
+        max_txns);
+    pool.get_batch(HashSet::new(), &mut block_filler);
+    let mut txns: Vec<_> =
+        block_filler.get_block().iter()
         .map(SignedTransaction::sequence_number)
         .collect();
     txns.sort_unstable();
@@ -586,9 +603,12 @@ fn test_parking_lot_evict_only_for_ready_txn_insertion() {
         add_txn(&mut pool, TestTransaction::new(1, seq, 1)).unwrap();
     }
 
-    // Make sure that we have correct txns in Mempool.
-    let mut txns: Vec<_> = pool
-        .get_batch(5, 5120, HashSet::new())
+    let mut block_filler: SimpleFiller = SimpleFiller::new(
+        max_bytes,
+        max_txns);
+    pool.get_batch(HashSet::new(), &mut block_filler);
+    let mut txns: Vec<_> =
+        block_filler.get_block().iter()
         .iter()
         .map(SignedTransaction::sequence_number)
         .collect();

@@ -42,6 +42,7 @@ use std::{
     sync::Arc,
 };
 use tokio::runtime::{Handle, Runtime};
+use crate::core_mempool::{BlockFiller, SimpleFiller};
 
 /// Mock of a running instance of shared mempool.
 pub struct MockSharedMempool {
@@ -182,8 +183,12 @@ impl MockSharedMempool {
 
     pub fn get_txns(&self, size: u64) -> Vec<SignedTransaction> {
         let pool = self.mempool.lock();
+        let mut block_filler: SimpleFiller = SimpleFiller::new(
+            max_bytes,
+            max_txns);
         // assume txn size is less than 100kb
-        pool.get_batch(size, size * 102400, HashSet::new())
+        pool.get_batch(HashSet::new(), &mut block_filler);
+        block_filler.get_block()
     }
 
     pub fn remove_txn(&self, txn: &SignedTransaction) {
