@@ -286,9 +286,9 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
                             match result {
-                                Ok((ref a, ref b)) => past_results.insert(tx.authenticator(),(a.clone(), b.clone())),
-                                Err(ref e) => Err(anyhow!("Error during pre execution")),
-                            }
+                                Ok((ref a, ref b)) => {past_results.insert(tx.authenticator(),(a.clone(), b.clone()));},
+                                Err(ref e) => { println!("Error during pre execution, {}", e);},
+                            };
                             (i, result)
                         }
                     }
