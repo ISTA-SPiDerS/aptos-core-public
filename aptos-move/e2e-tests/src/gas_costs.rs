@@ -14,7 +14,7 @@ use once_cell::sync::Lazy;
 /// The gas each transaction is configured to reserve. If the gas available in the account,
 /// converted to microaptos, falls below this threshold, transactions are expected to fail with
 /// an insufficient balance.
-pub const TXN_RESERVED: u64 = 1;
+pub const TXN_RESERVED: u64 = 10_000;
 
 /// The gas cost of a first time create-account transaction.
 ///
