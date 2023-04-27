@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::cmp::max;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::mem;
@@ -282,13 +283,13 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 .enumerate()
                 .map(|(i, tx)| {
                     match past_results.get(&tx.authenticator()) {
-                        Some(result) => (i, result.value()),
+                        Some(result) => (i, Some((*result.value().1, *result.value().2))),
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
                             match result {
                                 Ok((ref a, ref b)) => {
                                     past_results.insert(tx.authenticator(),(a.clone(), b.clone()));
-                                    (i, &(a.clone(), b.clone()))
+                                    (i, Some((a.clone(), b.clone())))
                                 },
                                 Err(ref e) => {
                                     println!("Error during pre execution, {}", e);
