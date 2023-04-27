@@ -283,7 +283,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 .enumerate()
                 .map(|(i, tx)| {
                     match past_results.get(&tx.authenticator()) {
-                        Some(result) => (i, result.value()),
+                        Some(result) => (i, Ok(result.value())),
                         None => {
                             let result = self.transaction_validation.speculate_transaction(&tx);
                             (i, match result {
