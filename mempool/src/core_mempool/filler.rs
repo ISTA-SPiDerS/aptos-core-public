@@ -324,7 +324,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 return rejected;
             }
 
-            if let Some((speculation, status)) = res.unwrap() {
+            if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
                 match status {
                     VMStatus::Executed => {}
                     VMStatus::Error(e) => {println!("blub exec failure1 {:?}", e)}
