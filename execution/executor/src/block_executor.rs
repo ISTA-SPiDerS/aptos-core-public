@@ -227,7 +227,7 @@ where
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::[execute]_transaction_block(transactions.into_txns(), state_view)?
+                V::execute_transaction_block(transactions.into_txns(), state_view)?
             };
             chunk_output.trace_log_transaction_status();
 
