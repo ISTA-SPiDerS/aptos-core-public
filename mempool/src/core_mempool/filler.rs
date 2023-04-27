@@ -290,7 +290,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                                 Result::Ok((ref a, ref b)) => Ok(&past_results.insert(tx.authenticator(), ((a.clone(), b.clone()))).unwrap()),
                                 Result::Err(ref e) => {
                                     println!("Error during pre execution {}", e);
-                                    &Err(anyhow!("Error during pre execution"))
+                                    Err(anyhow!("Error during pre execution")).as_ref()
                                 },
                             })
                         }
