@@ -77,6 +77,21 @@ pub async fn emit_transactions_with_cluster(
                 num_modules: 1,
                 use_account_pool: false,
             },
+            TransactionTypeArg::NFT => TransactionType::OurBenchmark {
+                load_type: LoadType::NFT
+            },
+            TransactionTypeArg::SOLANA => TransactionType::OurBenchmark {
+                load_type: LoadType::SOLANA
+            },
+            TransactionTypeArg::P2P => TransactionType::OurBenchmark {
+                load_type: LoadType::P2PTX
+            },
+            TransactionTypeArg::DEXAVG => TransactionType::OurBenchmark {
+                load_type: LoadType::DEXAVG
+            },
+            TransactionTypeArg::DEXBURSTY => TransactionType::OurBenchmark {
+                load_type: LoadType::DEXBURSTY
+            },
         })
         .collect::<Vec<_>>();
 
