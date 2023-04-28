@@ -101,7 +101,8 @@ impl AptosVM {
 
     /// Sets execution concurrency level when invoked the first time.
     pub fn set_concurrency_level_once(mut concurrency_level: usize) {
-        concurrency_level = min(concurrency_level, 4);
+        concurrency_level = min(concurrency_level, num_cpus::get());
+
         // Only the first call succeeds, due to OnceCell semantics.
         EXECUTION_CONCURRENCY_LEVEL.set(concurrency_level).ok();
     }
