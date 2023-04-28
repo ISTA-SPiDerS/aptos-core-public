@@ -6,7 +6,7 @@ use crate::{
     cluster::Cluster,
     emitter::{stats::TxnStats, EmitJobMode, EmitJobRequest, TxnEmitter},
     instance::Instance,
-    EntryPoints, TransactionType, TransactionTypeArg,
+    EntryPoints, TransactionType, TransactionTypeArg, LoadType
 };
 use anyhow::{Context, Result};
 use aptos_sdk::transaction_builder::TransactionFactory;

@@ -4,7 +4,7 @@
 use crate::smoke_test_environment::new_local_swarm_with_aptos;
 use anyhow::ensure;
 use aptos_forge::{
-    EmitJobMode, EmitJobRequest, EntryPoints, NodeExt, Result, Swarm, TransactionType, TxnEmitter,
+    EmitJobMode, EmitJobRequest, EntryPoints, LoadType, NodeExt, Result, Swarm, TransactionType, TxnEmitter,
     TxnStats,
 };
 use aptos_sdk::{transaction_builder::TransactionFactory, types::PeerId};

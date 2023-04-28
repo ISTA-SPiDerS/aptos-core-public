@@ -43,31 +43,13 @@ use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM, BlockSTM_Sig};
 use aptos_types::transaction::{Profiler, TransactionOutput};
-use crate::LoadType::{COINS, DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
+use crate::transaction_generator::publishing::module_simple::LoadType::{COINS, DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
 
 const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
-
-#[derive(Clone, Copy, Debug)]
-enum LoadType
-{
-    COINS,
-    DEXAVG,
-    DEXBURSTY,
-    P2PTX,
-    SOLANA,
-    NFT
-}
-
-impl Display for LoadType {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 
 fn main() {
     let module_path = "test_module_new.move";
@@ -415,7 +397,7 @@ fn create_block(
         }
         println!("{}", distr.len())
     }
-    else if matches!(load_type, DEXBURSTY)
+    else if matches!(load_type, LoadType::DEXBURSTY)
     {
         for (key, value) in BURSTY {
             for i in 0..value {

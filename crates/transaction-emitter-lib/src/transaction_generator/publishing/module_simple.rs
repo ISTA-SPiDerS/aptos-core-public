@@ -65,6 +65,16 @@ pub fn version(module: &mut CompiledModule, rng: &mut StdRng) {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum LoadType {
+    DEXAVG,
+    DEXBURSTY,
+    P2PTX,
+    SOLANA,
+    NFT
+}
+
+
 //
 // List of entry points to expose
 //
