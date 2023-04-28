@@ -83,6 +83,11 @@ pub enum TransactionTypeArg {
     CustomFunctionLargeModuleWorkingSet,
     CreateNewResource,
     NoOp,
+    P2P,
+    NFT,
+    SOLANA,
+    DEXAVG,
+    DEXBURSTY
 }
 
 impl Default for TransactionTypeArg {
