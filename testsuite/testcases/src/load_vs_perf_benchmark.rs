@@ -3,8 +3,7 @@
 
 use crate::NetworkLoadTest;
 use aptos_forge::{
-    EmitJobMode, EmitJobRequest, EntryPoints, NetworkContext, NetworkTest, Result, Test,
-    TransactionType, TxnStats,
+    EmitJobMode, EmitJobRequest, NetworkContext, NetworkTest, Result, Test, TxnStats
 };
 use aptos_logger::info;
 use rand::SeedableRng;
@@ -13,6 +12,7 @@ use std::{
     time::Duration,
 };
 use tokio::runtime::Runtime;
+use aptos_transaction_generator_lib::{EntryPoints, LoadType, TransactionType};
 
 pub struct SingleRunStats {
     name: String,
@@ -60,6 +60,11 @@ pub enum TransactinWorkload {
     CoinTransfer,
     CoinTransferUnique,
     NftMint,
+    NFT,
+    SOLANA,
+    DEXAVG,
+    DEXBURSTY,
+    P2P
 }
 
 impl TransactinWorkload {
@@ -72,13 +77,13 @@ impl TransactinWorkload {
 
         match self {
             Self::NoOp => request.transaction_type(TransactionType::CallCustomModules {
-                entry_point: EntryPoints::Half,
+                entry_point: EntryPoints::Nop,
                 num_modules: 1,
                 use_account_pool: false,
             }),
             Self::LargeModuleWorkingSet => {
                 request.transaction_type(TransactionType::CallCustomModules {
-                    entry_point: EntryPoints::Half,
+                    entry_point: EntryPoints::Nop,
                     num_modules: 1000,
                     use_account_pool: false,
                 })
@@ -122,6 +127,21 @@ impl TransactinWorkload {
             Self::CoinTransfer => {
                 request.transaction_type(TransactionType::default_coin_transfer())
             },
+            Self::NFT => {
+                request.transaction_type(TransactionType::default_script(LoadType::NFT))
+            },
+            Self::DEXAVG => {
+                request.transaction_type(TransactionType::default_script(LoadType::DEXAVG))
+            },
+            Self::DEXBURSTY => {
+                request.transaction_type(TransactionType::default_script(LoadType::DEXBURSTY))
+            },
+            Self::SOLANA => {
+                request.transaction_type(TransactionType::default_script(LoadType::SOLANA))
+            },
+            Self::P2P => {
+                request.transaction_type(TransactionType::default_script(LoadType::P2PTX))
+            },
             Self::NoOpUnique | Self::CoinTransferUnique => {
                 let write_type = if let Self::CoinTransferUnique = self {
                     TransactionType::CoinTransfer {
@@ -130,7 +150,7 @@ impl TransactinWorkload {
                     }
                 } else {
                     TransactionType::CallCustomModules {
-                        entry_point: EntryPoints::Half,
+                        entry_point: EntryPoints::Nop,
                         num_modules: 1,
                         use_account_pool: true,
                     }

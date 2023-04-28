@@ -6,16 +6,7 @@ use super::{
     publishing::{module_simple::EntryPoints, publish_util::Package},
     TransactionExecutor,
 };
-use crate::{
-    emitter::account_minter::create_and_fund_account_request,
-    transaction_generator::{TransactionGenerator, TransactionGeneratorCreator},
-    emitter::{account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO}},
-    emitter::{solana_distribution::{RES_DISTR, COST_DISTR, LEN_DISTR}},
-    emitter::uniswap_distribution::{AVG, BURSTY},
-};
 use aptos_logger::info;
-use aptos_sdk::{bcs, transaction_builder::{aptos_stdlib::aptos_token_stdlib, TransactionFactory}, types::{account_address::AccountAddress, transaction::SignedTransaction, LocalAccount}};
-
 use async_trait::async_trait;
 use rand::prelude::*;
 use std::collections::{BTreeMap, HashMap};
@@ -23,19 +14,31 @@ use anyhow::anyhow;
 use rand::distributions::WeightedIndex;
 use aptos_framework::named_addresses;
 use aptos_rest_client::aptos_api_types::AccountData;
+use aptos_sdk::bcs;
 use aptos_sdk::move_types::{ident_str, identifier};
 use aptos_sdk::move_types::identifier::Identifier;
 use aptos_sdk::move_types::language_storage::{ModuleId, StructTag, TypeTag};
-use aptos_sdk::types::account_config;
-use aptos_sdk::types::transaction::{EntryFunction, Module};
-use crate::transaction_generator::publishing::module_simple::LoadType;
+use aptos_sdk::transaction_builder::TransactionFactory;
+use aptos_sdk::types::{account_config, LocalAccount};
+use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
+use crate::{TransactionGenerator, TransactionGeneratorCreator};
+use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
+use crate::uniswap_distribution::{AVG, BURSTY};
 
 pub struct OurBenchmark {
     txn_factory: TransactionFactory,
     load_type: LoadType,
 }
 
-
+#[derive(Debug, Copy, Clone)]
+pub enum LoadType {
+    NFT,
+    SOLANA,
+    DEXAVG,
+    DEXBURSTY,
+    P2PTX,
+}
 
 impl OurBenchmark {
     pub async fn new(

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(unused)]
 
-use crate::transaction_generator::publishing::raw_module_data;
+use crate::publishing::raw_module_data;
 use aptos_framework::natives::code::PackageMetadata;
 use aptos_sdk::{
     bcs,
@@ -10,7 +10,7 @@ use aptos_sdk::{
         account_address::AccountAddress, ident_str, identifier::Identifier,
         language_storage::ModuleId,
     },
-    types::{transaction::{EntryFunction, TransactionPayload}, LocalAccount},
+    types::transaction::{EntryFunction, TransactionPayload},
 };
 use move_binary_format::{
     file_format::{FunctionHandleIndex, IdentifierIndex, SignatureToken},
@@ -18,25 +18,10 @@ use move_binary_format::{
 };
 use rand::{distributions::Alphanumeric, prelude::StdRng, seq::SliceRandom, Rng};
 use rand_core::RngCore;
-use aptos_sdk::move_types::language_storage::TypeTag;
-use aptos_sdk::move_types::language_storage::StructTag;
-use rand::distributions::WeightedIndex;
-use std::{thread, time};
-use rand::prelude::*;
-use aptos_sdk::types::account_config;
-
-// use rand::distributions::Distribution;
-
-// use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
-// use aptos_language_e2e_tests::solana_distribution::{RES_DISTR, COST_DISTR, LEN_DISTR};
 
 //
 // Contains all the code to work on the Simple package
-
-
-// To get the full distribution, put the first element in the tuple, second element times into an array.
-
-
+//
 
 //
 // Functions to load and update the original package
@@ -65,15 +50,52 @@ pub fn version(module: &mut CompiledModule, rng: &mut StdRng) {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum LoadType {
-    DEXAVG,
-    DEXBURSTY,
-    P2PTX,
-    SOLANA,
-    NFT
-}
+pub fn scramble(module: &mut CompiledModule, fn_count: usize, rng: &mut StdRng) {
+    // change `const RANDOM` in Simple.move
+    // That is the only vector<u64> in the constant pool
+    let const_len = rng.gen_range(0usize, 5000usize);
+    let mut v = Vec::<u64>::with_capacity(const_len);
+    for i in 0..const_len {
+        v.push(i as u64);
+    }
+    // module.constant_pool
+    for constant in &mut module.constant_pool {
+        if constant.type_ == SignatureToken::Vector(Box::new(SignatureToken::U64)) {
+            constant.data = bcs::to_bytes(&v).expect("U64 vector must serialize");
+            break;
+        }
+    }
 
+    // find the copy_pasta* function in Simple.move
+    let mut def = None;
+    let mut handle = None;
+    let mut func_name = String::new();
+    for func_def in &module.function_defs {
+        let func_handle = &module.function_handles[func_def.function.0 as usize];
+        let name = module.identifiers[func_handle.name.0 as usize].as_str();
+        if name.starts_with("copy_pasta") {
+            def = Some(func_def.clone());
+            handle = Some(func_handle.clone());
+            func_name = String::from(name);
+            break;
+        }
+    }
+    if let Some(fd) = def {
+        for suffix in 0..fn_count {
+            let mut func_handle = handle.clone().expect("Handle must be defined");
+            let mut func_def = fd.clone();
+            let mut name = func_name.clone();
+            name.push_str(suffix.to_string().as_str());
+            module
+                .identifiers
+                .push(Identifier::new(name.as_str()).expect("Identifier name must be valid"));
+            func_handle.name = IdentifierIndex((module.identifiers.len() - 1) as u16);
+            module.function_handles.push(func_handle);
+            func_def.function = FunctionHandleIndex((module.function_handles.len() - 1) as u16);
+            module.function_defs.push(func_def);
+        }
+    }
+}
 
 //
 // List of entry points to expose
@@ -81,6 +103,15 @@ pub enum LoadType {
 // More info in the Simple.move
 #[derive(Debug, Copy, Clone)]
 pub enum EntryPoints {
+    // 0 args
+    /// Empty (NoOp) function
+    Nop,
+    /// Increment global resource - COUNTER_STEP
+    Step,
+    /// Fetch global resource - COUNTER_STEP
+    GetCounter,
+    /// Reset resource `Resource`
+    ResetData,
     /// Double the size of `Resource`
     Double,
     /// Half the size of `Resource`
@@ -121,18 +152,25 @@ impl EntryPoints {
         module_id: ModuleId,
         rng: Option<&mut StdRng>,
         other: Option<AccountAddress>,
-        account: &mut LocalAccount,
-        coin_num: usize,
-        length: usize,
-        writes: Vec<u64>,
     ) -> TransactionPayload {
         match self {
             // 0 args
-            //This nop is never used if implementation works as planned
+            EntryPoints::Nop => get_payload_void(module_id, ident_str!("nop").to_owned()),
+            EntryPoints::Step => get_payload_void(module_id, ident_str!("step").to_owned()),
+            EntryPoints::GetCounter => {
+                get_payload_void(module_id, ident_str!("get_counter").to_owned())
+            },
+            EntryPoints::ResetData => {
+                get_payload_void(module_id, ident_str!("reset_data").to_owned())
+            },
             EntryPoints::Double => get_payload_void(module_id, ident_str!("double").to_owned()),
             EntryPoints::Half => get_payload_void(module_id, ident_str!("half").to_owned()),
             // 1 arg
-            EntryPoints::Loopy { loop_count } => get_payload_void(module_id, ident_str!("step").to_owned()),
+            EntryPoints::Loopy { loop_count } => loopy(
+                module_id,
+                loop_count
+                    .unwrap_or_else(|| rng.expect("Must provide RNG").gen_range(0u64, 1000u64)),
+            ),
             EntryPoints::GetFromConst { const_idx } => get_from_random_const(
                 module_id,
                 const_idx.unwrap_or_else(
@@ -162,130 +200,71 @@ impl EntryPoints {
             },
         }
     }
-
 }
 
-// const ZERO_ARG_ENTRY_POINTS: &[EntryPoints; 6] = &[
-//     EntryPoints::DEXAVG,
-//     EntryPoints::Step,
-//     EntryPoints::GetCounter,
-//     EntryPoints::ResetData,
-//     EntryPoints::Double,
-//     EntryPoints::Half,
-// ];
-// const ONE_ARG_ENTRY_POINTS: &[EntryPoints; 4] = &[
-//     EntryPoints::Loopy { loop_count: None },
-//     EntryPoints::GetFromConst { const_idx: None },
-//     EntryPoints::SetId,
-//     EntryPoints::SetName,
-// ];
-// const SIMPLE_ENTRY_POINTS: &[EntryPoints; 9] = &[
-//     EntryPoints::DEXAVG,
-//     EntryPoints::Step,
-//     EntryPoints::GetCounter,
-//     EntryPoints::ResetData,
-//     EntryPoints::Double,
-//     EntryPoints::Half,
-//     EntryPoints::Loopy { loop_count: None },
-//     EntryPoints::GetFromConst { const_idx: None },
-//     EntryPoints::SetId,
-// ];
-// const GEN_ENTRY_POINTS: &[EntryPoints; 12] = &[
-//     EntryPoints::DEXAVG,
-//     EntryPoints::Step,
-//     EntryPoints::GetCounter,
-//     EntryPoints::ResetData,
-//     EntryPoints::Double,
-//     EntryPoints::Half,
-//     EntryPoints::Loopy { loop_count: None },
-//     EntryPoints::GetFromConst { const_idx: None },
-//     EntryPoints::SetId,
-//     EntryPoints::SetName,
-//     EntryPoints::MakeOrChange {
-//         string_length: None,
-//         data_length: None,
-//     },
-//     EntryPoints::BytesMakeOrChange { data_length: None },
-// ];
+const ZERO_ARG_ENTRY_POINTS: &[EntryPoints; 6] = &[
+    EntryPoints::Nop,
+    EntryPoints::Step,
+    EntryPoints::GetCounter,
+    EntryPoints::ResetData,
+    EntryPoints::Double,
+    EntryPoints::Half,
+];
+const ONE_ARG_ENTRY_POINTS: &[EntryPoints; 4] = &[
+    EntryPoints::Loopy { loop_count: None },
+    EntryPoints::GetFromConst { const_idx: None },
+    EntryPoints::SetId,
+    EntryPoints::SetName,
+];
+const SIMPLE_ENTRY_POINTS: &[EntryPoints; 9] = &[
+    EntryPoints::Nop,
+    EntryPoints::Step,
+    EntryPoints::GetCounter,
+    EntryPoints::ResetData,
+    EntryPoints::Double,
+    EntryPoints::Half,
+    EntryPoints::Loopy { loop_count: None },
+    EntryPoints::GetFromConst { const_idx: None },
+    EntryPoints::SetId,
+];
+const GEN_ENTRY_POINTS: &[EntryPoints; 12] = &[
+    EntryPoints::Nop,
+    EntryPoints::Step,
+    EntryPoints::GetCounter,
+    EntryPoints::ResetData,
+    EntryPoints::Double,
+    EntryPoints::Half,
+    EntryPoints::Loopy { loop_count: None },
+    EntryPoints::GetFromConst { const_idx: None },
+    EntryPoints::SetId,
+    EntryPoints::SetName,
+    EntryPoints::MakeOrChange {
+        string_length: None,
+        data_length: None,
+    },
+    EntryPoints::BytesMakeOrChange { data_length: None },
+];
 
-
-pub fn dex_nft_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, coin_num: usize) -> TransactionPayload {
-    let coin_1_num = coin_num;
-    let coin_2_num: usize = coin_1_num;
-
-    let mut coin: String = "CoinC".to_string();
-    let mut coin_clone = coin.clone();
-
-    let coin_number1_string = coin_1_num.to_string();
-    let coin_number2_string = coin_2_num.to_string();
-    coin.push_str(&coin_number1_string);
-    coin_clone.push_str(&coin_number2_string);
-    // println!("Coin1:{}", coin);
-    // println!("Coin2:{}", coin_clone);
-
-    //let coin_clone: &str = &coin.clone();
-    let coin_id1 = Identifier::new(coin).unwrap();
-    let coin_id2 = Identifier::new(coin_clone).unwrap();
-
-    let coin_1 = TypeTag::Struct(Box::new(StructTag {
-        address: account_config::CORE_CODE_ADDRESS,
-        module: ident_str!("Benchmark").to_owned(),
-        name: coin_id1,
-        type_params: vec![],
-    }));
-
-    let coin_2 = TypeTag::Struct(Box::new(StructTag {
-        address: account_config::CORE_CODE_ADDRESS,
-        module: ident_str!("Benchmark").to_owned(),
-        name: coin_id2,
-        type_params: vec![],
-    }));
-
-    let entry_function = EntryFunction::new(
-        ModuleId::new(
-            account_config::CORE_CODE_ADDRESS,
-            ident_str!("Benchmark").to_owned(),
-        ),
-        ident_str!("exchange").to_owned(),
-        vec![coin_1.clone(), coin_2.clone()],
-        vec![],
-    );
-    TransactionPayload::EntryFunction(entry_function)
+pub fn rand_simple_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+    SIMPLE_ENTRY_POINTS
+        .choose(rng)
+        .unwrap()
+        .create_payload(module_id, Some(rng), None)
 }
 
-
-pub fn sol_payload(rng: Option<&mut StdRng>, module_id: ModuleId, account: &mut LocalAccount, length: usize, writes: Vec<u64>) -> TransactionPayload {
-    let entry_function = EntryFunction::new(
-        ModuleId::new(
-            account_config::CORE_CODE_ADDRESS,
-            ident_str!("Benchmark").to_owned(),
-        ),
-        ident_str!("loop_exchange").to_owned(),
-        vec![],
-        vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
-    );
-    TransactionPayload::EntryFunction(entry_function)
+pub fn zero_args_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+    ZERO_ARG_ENTRY_POINTS
+        .choose(rng)
+        .unwrap()
+        .create_payload(module_id, Some(rng), None)
 }
-// pub fn rand_simple_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-//     SIMPLE_ENTRY_POINTS
-//         .choose(rng)
-//         .unwrap()
-//         .create_payload(module_id, Some(rng), None)
-// }
 
-// pub fn zero_args_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-//     ZERO_ARG_ENTRY_POINTS
-//         .choose(rng)
-//         .unwrap()
-//         .create_payload(module_id, Some(rng), None)
-// }
-
-// pub fn rand_gen_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
-//     GEN_ENTRY_POINTS
-//         .choose(rng)
-//         .unwrap()
-//         .create_payload(module_id, Some(rng), None)
-//}
+pub fn rand_gen_function(rng: &mut StdRng, module_id: ModuleId) -> TransactionPayload {
+    GEN_ENTRY_POINTS
+        .choose(rng)
+        .unwrap()
+        .create_payload(module_id, Some(rng), None)
+}
 
 //
 // Entry points payload

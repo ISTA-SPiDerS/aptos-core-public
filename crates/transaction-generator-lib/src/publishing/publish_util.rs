@@ -1,9 +1,8 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use super::module_simple::LoadType;
 use super::module_simple::EntryPoints;
-use crate::transaction_generator::publishing::module_simple;
+use crate::publishing::module_simple;
 use aptos_framework::natives::code::PackageMetadata;
 use aptos_sdk::{
     bcs,
@@ -47,6 +46,12 @@ pub struct PackageHandler {
     packages: Vec<PackageTracker>,
 }
 
+impl Default for PackageHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PackageHandler {
     pub fn new() -> Self {
         let packages = vec![PackageTracker {
@@ -87,6 +92,7 @@ impl PackageHandler {
         if version {
             package.version(rng);
         }
+        package.scramble(tracker.publishers[idx].fn_count, rng);
         // info!("PACKAGE: {:#?}", package);
         package
     }
@@ -123,6 +129,16 @@ impl Package {
         }
     }
 
+    // Scrambles the package, passing a function count for the functions that can
+    // be duplicated and a `StdRng` to generate random values
+    pub fn scramble(&mut self, fn_count: usize, rng: &mut StdRng) {
+        match self {
+            Self::Simple(modules, _) => {
+                module_simple::scramble(&mut modules[0], fn_count, rng);
+            },
+        }
+    }
+
     // Return a transaction to publish the current package
     pub fn publish_transaction(
         &self,
@@ -137,21 +153,21 @@ impl Package {
     }
 
     // Return a transaction to use the current package
-    // pub fn use_random_transaction(
-    //     &self,
-    //     rng: &mut StdRng,
-    //     account: &mut LocalAccount,
-    //     txn_factory: &TransactionFactory,
-    // ) -> SignedTransaction {
-    //     match self {
-    //         Self::Simple(modules, _) => {
-    //             let module_id = modules[0].self_id();
-    //             // let payload = module_simple::rand_gen_function(rng, module_id);
-    //             let payload = module_simple::rand_simple_function(rng, module_id);
-    //             account.sign_with_transaction_builder(txn_factory.payload(payload))
-    //         },
-    //     }
-    // }
+    pub fn use_random_transaction(
+        &self,
+        rng: &mut StdRng,
+        account: &mut LocalAccount,
+        txn_factory: &TransactionFactory,
+    ) -> SignedTransaction {
+        match self {
+            Self::Simple(modules, _) => {
+                let module_id = modules[0].self_id();
+                // let payload = module_simple::rand_gen_function(rng, module_id);
+                let payload = module_simple::rand_simple_function(rng, module_id);
+                account.sign_with_transaction_builder(txn_factory.payload(payload))
+            },
+        }
+    }
 
     pub fn use_specific_transaction(
         &self,
@@ -160,14 +176,11 @@ impl Package {
         txn_factory: &TransactionFactory,
         rng: Option<&mut StdRng>,
         other: Option<AccountAddress>,
-        coin_num: usize,
-        length: usize,
-        writes: Vec<u64>
     ) -> SignedTransaction {
         match self {
             Self::Simple(modules, _) => {
                 let module_id = modules[0].self_id();
-                let payload = fun.create_payload(module_id, rng, other, account, coin_num, length, writes);
+                let payload = fun.create_payload(module_id, rng, other);
                 account.sign_with_transaction_builder(txn_factory.payload(payload))
             },
         }

@@ -1,11 +1,6 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
-
-use crate::{
-    emitter::{account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO}},
-    transaction_generator::{TransactionGenerator, TransactionGeneratorCreator}
-};
-
+use crate::{TransactionGenerator, TransactionGeneratorCreator};
 use aptos_infallible::RwLock;
 use aptos_sdk::{
     move_types::account_address::AccountAddress,
@@ -20,7 +15,6 @@ use rand::{
     Rng, RngCore, SeedableRng,
 };
 use std::{cmp::max, sync::Arc};
-use rand::distributions::WeightedIndex;
 
 pub struct P2PTransactionGenerator {
     rng: StdRng,
@@ -28,8 +22,6 @@ pub struct P2PTransactionGenerator {
     txn_factory: TransactionFactory,
     all_addresses: Arc<RwLock<Vec<AccountAddress>>>,
     invalid_transaction_ratio: usize,
-    fromVec: Vec<f64>,
-    toVec: Vec<f64>,
 }
 
 impl P2PTransactionGenerator {
@@ -40,30 +32,12 @@ impl P2PTransactionGenerator {
         all_addresses: Arc<RwLock<Vec<AccountAddress>>>,
         invalid_transaction_ratio: usize,
     ) -> Self {
-
-        let mut fromVec:Vec<f64> = vec![];
-        let mut toVec:Vec<f64> = vec![];
-
-        for (key, value) in TX_TO {
-            for i in 0..value {
-                toVec.push(key);
-            }
-        }
-
-        for (key, value) in TX_FROM {
-            for i in 0..value {
-                fromVec.push(key);
-            }
-        }
-
         Self {
             rng,
             send_amount,
             txn_factory,
             all_addresses,
             invalid_transaction_ratio,
-            fromVec,
-            toVec
         }
     }
 
@@ -77,6 +51,46 @@ impl P2PTransactionGenerator {
         from.sign_with_transaction_builder(
             txn_factory.payload(aptos_stdlib::aptos_coin_transfer(*to, num_coins)),
         )
+    }
+
+    fn generate_invalid_transaction(
+        &self,
+        rng: &mut StdRng,
+        sender: &mut LocalAccount,
+        receiver: &AccountAddress,
+        reqs: &[SignedTransaction],
+    ) -> SignedTransaction {
+        let mut invalid_account = LocalAccount::generate(rng);
+        let invalid_address = invalid_account.address();
+        match Standard.sample(rng) {
+            InvalidTransactionType::ChainId => {
+                let txn_factory = &self.txn_factory.clone().with_chain_id(ChainId::new(255));
+                self.gen_single_txn(sender, receiver, self.send_amount, txn_factory)
+            },
+            InvalidTransactionType::Sender => self.gen_single_txn(
+                &mut invalid_account,
+                receiver,
+                self.send_amount,
+                &self.txn_factory,
+            ),
+            InvalidTransactionType::Receiver => self.gen_single_txn(
+                sender,
+                &invalid_address,
+                self.send_amount,
+                &self.txn_factory,
+            ),
+            InvalidTransactionType::Duplication => {
+                // if this is the first tx, default to generate invalid tx with wrong chain id
+                // otherwise, make a duplication of an exist valid tx
+                if reqs.is_empty() {
+                    let txn_factory = &self.txn_factory.clone().with_chain_id(ChainId::new(255));
+                    self.gen_single_txn(sender, receiver, self.send_amount, txn_factory)
+                } else {
+                    let random_index = rng.gen_range(0, reqs.len());
+                    reqs[random_index].clone()
+                }
+            },
+        }
     }
 }
 
@@ -106,33 +120,46 @@ impl Distribution<InvalidTransactionType> for Standard {
 impl TransactionGenerator for P2PTransactionGenerator {
     fn generate_transactions(
         &mut self,
-        mut accounts: Vec<&mut LocalAccount>,
+        accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-        println!("wat {}", accounts.len());
-
-        let mut requests = Vec::with_capacity(accounts.len() * transactions_per_account * 5);
-        let mut num_valid_tx = accounts.len() * transactions_per_account * 5;
-
-        let to_dist:WeightedIndex<f64> = WeightedIndex::new(&self.toVec).unwrap();
-        let from_dist:WeightedIndex<f64> = WeightedIndex::new(&self.fromVec).unwrap();
-
-        for i in 0..num_valid_tx {
-            // get account with likelyhood of similar distribution
-            let mut idx_from: usize = from_dist.sample(&mut self.rng) % accounts.len();
-            // get account with likelyhood of similar distribution
-            let mut idx_to: usize = to_dist.sample(&mut self.rng) % accounts.len();
-
-            while idx_from == idx_to {
-                idx_to = to_dist.sample(&mut self.rng) % accounts.len();
+        let mut requests = Vec::with_capacity(accounts.len() * transactions_per_account);
+        let invalid_size = if self.invalid_transaction_ratio != 0 {
+            // if enable mix invalid tx, at least 1 invalid tx per batch
+            max(1, accounts.len() * self.invalid_transaction_ratio / 100)
+        } else {
+            0
+        };
+        let mut num_valid_tx = transactions_per_account * (accounts.len() - invalid_size);
+        for sender in accounts {
+            let receivers = self
+                .all_addresses
+                .read()
+                .choose_multiple(&mut self.rng, transactions_per_account)
+                .cloned()
+                .collect::<Vec<_>>();
+            assert!(
+                receivers.len() >= transactions_per_account,
+                "failed: {} >= {}",
+                receivers.len(),
+                transactions_per_account
+            );
+            for i in 0..transactions_per_account {
+                let receiver = receivers.get(i).expect("all_addresses can't be empty");
+                let request = if num_valid_tx > 0 {
+                    num_valid_tx -= 1;
+                    self.gen_single_txn(sender, receiver, self.send_amount, &self.txn_factory)
+                } else {
+                    self.generate_invalid_transaction(
+                        &mut self.rng.clone(),
+                        sender,
+                        receiver,
+                        &requests,
+                    )
+                };
+                requests.push(request);
             }
-
-            let receiver = &(accounts[idx_to].address()).clone();
-            let request = self.gen_single_txn(accounts[idx_from], receiver, self.send_amount, &self.txn_factory);
-            requests.push(request);
         }
-
-        println!("generated {}", requests.len());
         requests
     }
 }

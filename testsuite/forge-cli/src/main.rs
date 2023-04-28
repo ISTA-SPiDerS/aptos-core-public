@@ -50,6 +50,7 @@ use std::{
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
 use url::Url;
+use aptos_transaction_generator_lib::{EntryPoints, LoadType, TransactionType};
 
 #[cfg(unix)]
 #[global_allocator]
