@@ -1,41 +1,123 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+#![forbid(unsafe_code)]
+
 use anyhow::Result;
 use aptos_infallible::RwLock;
+use aptos_logger::{sample, sample::SampleRate, warn};
 use aptos_sdk::{
     move_types::account_address::AccountAddress,
     transaction_builder::TransactionFactory,
-    types::{transaction::SignedTransaction, LocalAccount},
+    types::{LocalAccount, transaction::SignedTransaction},
 };
 use async_trait::async_trait;
-use std::sync::{atomic::AtomicUsize, Arc};
-pub mod our_benchmarks;
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
+
 pub mod account_generator;
 pub mod accounts_pool_wrapper;
 pub mod call_custom_modules;
 pub mod nft_mint_and_transfer;
 pub mod p2p_transaction_generator;
+pub mod our_benchmarks;
 pub mod publish_modules;
 mod publishing;
 pub mod transaction_mix_generator;
+pub mod account_activity_distribution;
+pub mod solana_distribution;
+pub mod uniswap_distribution;
+
 use self::{
-    account_generator::AccountGeneratorCreator, call_custom_modules::CallCustomModulesCreator, our_benchmarks::OurBenchmarkGeneratorCreator,
+    account_generator::AccountGeneratorCreator, call_custom_modules::CallCustomModulesCreator,
     nft_mint_and_transfer::NFTMintAndTransferGeneratorCreator,
+    our_benchmarks::OurBenchmarkGeneratorCreator,
     p2p_transaction_generator::P2PTransactionGeneratorCreator,
     publish_modules::PublishPackageCreator,
-    transaction_mix_generator::PhasedTxnMixGeneratorCreator,
+    transaction_mix_generator::PhasedTxnMixGeneratorCreator
 };
-use crate::{
-    emitter::stats::DynamicStatsTracking,
-    transaction_generator::accounts_pool_wrapper::AccountsPoolWrapperCreator, TransactionType,
-};
+use crate::accounts_pool_wrapper::AccountsPoolWrapperCreator;
 pub use publishing::module_simple::EntryPoints;
-pub use publishing::module_simple::LoadType;
-
-use crate::TransactionType::OurBenchmark;
+pub use crate::our_benchmarks::LoadType;
 
 pub const SEND_AMOUNT: u64 = 1;
+
+#[derive(Debug, Copy, Clone)]
+pub enum TransactionType {
+    CoinTransfer {
+        invalid_transaction_ratio: usize,
+        sender_use_account_pool: bool,
+    },
+    AccountGeneration {
+        add_created_accounts_to_pool: bool,
+        max_account_working_set: usize,
+        creation_balance: u64,
+    },
+    NftMintAndTransfer,
+    PublishPackage {
+        use_account_pool: bool,
+    },
+    CallCustomModules {
+        entry_point: EntryPoints,
+        num_modules: usize,
+        use_account_pool: bool,
+    },
+    OurBenchmark {
+        load_type: LoadType
+    },
+}
+
+impl TransactionType {
+
+    pub fn default_script(typex: LoadType) -> Self {
+        Self::OurBenchmark {
+            load_type: typex,
+        }
+    }
+
+    pub fn default_coin_transfer() -> Self {
+        Self::CoinTransfer {
+            invalid_transaction_ratio: 0,
+            sender_use_account_pool: false,
+        }
+    }
+
+    pub fn default_account_generation() -> Self {
+        Self::AccountGeneration {
+            add_created_accounts_to_pool: true,
+            max_account_working_set: 1_000_000,
+            creation_balance: 0,
+        }
+    }
+
+    pub fn default_call_custom_module() -> Self {
+        Self::CallCustomModules {
+            entry_point: EntryPoints::Nop,
+            num_modules: 1,
+            use_account_pool: false,
+        }
+    }
+
+    pub fn default_call_different_modules() -> Self {
+        Self::CallCustomModules {
+            entry_point: EntryPoints::Nop,
+            num_modules: 100,
+            use_account_pool: false,
+        }
+    }
+}
+
+impl Default for TransactionType {
+    fn default() -> Self {
+        Self::default_script(LoadType::DEXAVG)
+    }
+}
 
 pub trait TransactionGenerator: Sync + Send {
     fn generate_transactions(
@@ -43,6 +125,14 @@ pub trait TransactionGenerator: Sync + Send {
         accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction>;
+}
+
+pub struct CounterState {
+    pub submit_failures: Vec<AtomicUsize>,
+    pub wait_failures: Vec<AtomicUsize>,
+    pub successes: AtomicUsize,
+    // (success, submit_fail, wait_fail)
+    pub by_client: HashMap<String, (AtomicUsize, AtomicUsize, AtomicUsize)>,
 }
 
 #[async_trait]
@@ -61,19 +151,63 @@ pub trait TransactionExecutor: Sync + Send {
     async fn execute_transactions_with_counter(
         &self,
         txns: &[SignedTransaction],
-        failure_counter: &[AtomicUsize],
+        state: &CounterState,
     ) -> Result<()>;
+
+    fn create_counter_state(&self) -> CounterState;
+}
+
+fn failed_requests_to_trimmed_vec(failed_requests: &[AtomicUsize]) -> Vec<usize> {
+    let mut result = failed_requests
+        .iter()
+        .map(|c| c.load(Ordering::Relaxed))
+        .collect::<Vec<_>>();
+    while result.len() > 1 && *result.last().unwrap() == 0 {
+        result.pop();
+    }
+    result
+}
+
+impl CounterState {
+    pub fn show_simple(&self) -> String {
+        format!(
+            "success {}, failed submit {:?}, failed wait {:?}",
+            self.successes.load(Ordering::Relaxed),
+            failed_requests_to_trimmed_vec(&self.submit_failures),
+            failed_requests_to_trimmed_vec(&self.wait_failures)
+        )
+    }
+
+    pub fn show_detailed(&self) -> String {
+        format!(
+            "{}, by client: {}",
+            self.show_simple(),
+            self.by_client
+                .iter()
+                .flat_map(|(name, (success, fail_submit, fail_wait))| {
+                    let num_s = success.load(Ordering::Relaxed);
+                    let num_fs = fail_submit.load(Ordering::Relaxed);
+                    let num_fw = fail_wait.load(Ordering::Relaxed);
+                    if num_fs + num_fw > 0 {
+                        Some(format!("[({}, {}, {}): {}]", num_s, num_fs, num_fw, name))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
+    }
 }
 
 pub async fn create_txn_generator_creator(
     transaction_mix_per_phase: &[Vec<(TransactionType, usize)>],
     num_workers: usize,
     all_accounts: &mut [LocalAccount],
-    root_account: &mut LocalAccount,
     txn_executor: &dyn TransactionExecutor,
     txn_factory: &TransactionFactory,
     init_txn_factory: &TransactionFactory,
-    stats: Arc<DynamicStatsTracking>,
+    cur_phase: Arc<AtomicUsize>,
 ) -> Box<dyn TransactionGeneratorCreator> {
     let all_addresses = Arc::new(RwLock::new(
         all_accounts.iter().map(|d| d.address()).collect::<Vec<_>>(),
@@ -176,6 +310,24 @@ pub async fn create_txn_generator_creator(
 
     Box::new(PhasedTxnMixGeneratorCreator::new(
         txn_generator_creator_mix_per_phase,
-        stats,
+        cur_phase,
     ))
+}
+
+fn get_account_to_burn_from_pool(
+    accounts_pool: &Arc<RwLock<Vec<LocalAccount>>>,
+    needed: usize,
+) -> Vec<LocalAccount> {
+    let mut accounts_pool = accounts_pool.write();
+    let num_in_pool = accounts_pool.len();
+    if num_in_pool < needed {
+        sample!(
+            SampleRate::Duration(Duration::from_secs(10)),
+            warn!("Cannot fetch enough accounts from pool, left in pool {}, needed {}", num_in_pool, needed);
+        );
+        return Vec::new();
+    }
+    accounts_pool
+        .drain((num_in_pool - needed)..)
+        .collect::<Vec<_>>()
 }

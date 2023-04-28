@@ -5,17 +5,12 @@ pub mod account_minter;
 pub mod stats;
 pub mod submission_worker;
 pub mod transaction_executor;
-pub mod account_activity_distribution;
-pub mod solana_distribution;
-pub mod uniswap_distribution;
-use crate::{
-    emitter::{
-        account_minter::AccountMinter,
-        stats::{DynamicStatsTracking, TxnStats},
-        submission_worker::SubmissionWorker,
-        transaction_executor::RestApiTransactionExecutor,
-    },
-    transaction_generator::{create_txn_generator_creator, EntryPoints, LoadType},
+
+use crate::emitter::{
+    account_minter::AccountMinter,
+    stats::{DynamicStatsTracking, TxnStats},
+    submission_worker::SubmissionWorker,
+    transaction_executor::RestApiTransactionExecutor,
 };
 use again::RetryPolicy;
 use anyhow::{ensure, format_err, Result};
@@ -25,27 +20,28 @@ use aptos_rest_client::Client as RestClient;
 use aptos_sdk::{
     move_types::account_address::AccountAddress,
     transaction_builder::{aptos_stdlib, TransactionFactory},
-    types::{transaction::SignedTransaction, LocalAccount},
+    types::{LocalAccount, transaction::SignedTransaction},
 };
-use futures::future::{try_join_all, FutureExt};
+use aptos_transaction_generator_lib::{create_txn_generator_creator, TransactionType};
+use futures::future::{FutureExt, try_join_all};
 use once_cell::sync::Lazy;
-use rand::{rngs::StdRng, seq::IteratorRandom, Rng};
+use rand::{Rng, rngs::StdRng, seq::IteratorRandom};
 use rand_core::SeedableRng;
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
 use tokio::{runtime::Handle, task::JoinHandle, time};
 
-// Max is 100k TPS for a full day.
+// Max is 1m TPS for 3 hours
 const MAX_TXNS: u64 = 10_000_000_000;
 
-const MAX_RETRIES: usize = 6;
+const MAX_RETRIES: usize = 12;
 
 // This retry policy is used for important client calls necessary for setting
 // up the test (e.g. account creation) and collecting its results (e.g. checking
@@ -57,60 +53,6 @@ pub static RETRY_POLICY: Lazy<RetryPolicy> = Lazy::new(|| {
         .with_max_retries(MAX_RETRIES)
         .with_jitter(true)
 });
-
-#[derive(Debug, Copy, Clone)]
-pub enum TransactionType {
-    CoinTransfer {
-        invalid_transaction_ratio: usize,
-        sender_use_account_pool: bool,
-    },
-    AccountGeneration {
-        add_created_accounts_to_pool: bool,
-        max_account_working_set: usize,
-        creation_balance: u64,
-    },
-    NftMintAndTransfer,
-    PublishPackage {
-        use_account_pool: bool,
-    },
-    CallCustomModules {
-        entry_point: EntryPoints,
-        num_modules: usize,
-        use_account_pool: bool,
-    },
-    OurBenchmark {
-        load_type: LoadType
-    },
-}
-
-impl TransactionType {
-    pub fn default_coin_transfer() -> Self {
-        Self::CoinTransfer {
-            invalid_transaction_ratio: 0,
-            sender_use_account_pool: false,
-        }
-    }
-
-    pub fn default_account_generation() -> Self {
-        Self::AccountGeneration {
-            add_created_accounts_to_pool: true,
-            max_account_working_set: 1_000_000,
-            creation_balance: 0,
-        }
-    }
-
-    pub fn default_script() -> Self {
-        Self::OurBenchmark {
-            load_type: LoadType::P2PTX,
-        }
-    }
-}
-
-impl Default for TransactionType {
-    fn default() -> Self {
-        Self::default_script()
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct EmitModeParams {
@@ -177,22 +119,27 @@ pub struct EmitJobRequest {
     rest_clients: Vec<RestClient>,
     mode: EmitJobMode,
 
-    gas_price: u64,
-    max_gas_per_txn: u64,
-    reuse_accounts: bool,
-    mint_to_root: bool,
-    init_gas_price_multiplier: u64,
-
     transaction_mix_per_phase: Vec<Vec<(TransactionType, usize)>>,
 
+    max_gas_per_txn: u64,
+    gas_price: u64,
+    init_gas_price_multiplier: u64,
+
+    reuse_accounts: bool,
+    mint_to_root: bool,
+
     txn_expiration_time_secs: u64,
+    init_expiration_multiplier: f64,
+
+    init_retry_interval: Duration,
+
     max_transactions_per_account: usize,
 
     expected_max_txns: u64,
     expected_gas_per_txn: u64,
     prompt_before_spending: bool,
 
-    delay_after_minting: Duration,
+    coordination_delay_between_instances: Duration,
 }
 
 impl Default for EmitJobRequest {
@@ -202,18 +149,20 @@ impl Default for EmitJobRequest {
             mode: EmitJobMode::MaxLoad {
                 mempool_backlog: 5000,
             },
-            gas_price: aptos_global_constants::GAS_UNIT_PRICE,
+            transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
             max_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
+            gas_price: aptos_global_constants::GAS_UNIT_PRICE,
+            init_gas_price_multiplier: 1,
             reuse_accounts: false,
             mint_to_root: false,
-            init_gas_price_multiplier: 10,
-            transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
-            txn_expiration_time_secs: 120,
+            txn_expiration_time_secs: 60,
+            init_expiration_multiplier: 3.0,
+            init_retry_interval: Duration::from_secs(10),
             max_transactions_per_account: 50,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
-            delay_after_minting: Duration::from_secs(0),
+            coordination_delay_between_instances: Duration::from_secs(0),
         }
     }
 }
@@ -300,8 +249,11 @@ impl EmitJobRequest {
         self
     }
 
-    pub fn delay_after_minting(mut self, delay_after_minting: Duration) -> Self {
-        self.delay_after_minting = delay_after_minting;
+    pub fn coordination_delay_between_instances(
+        mut self,
+        coordination_delay_between_instances: Duration,
+    ) -> Self {
+        self.coordination_delay_between_instances = coordination_delay_between_instances;
         self
     }
 
@@ -314,7 +266,10 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 1;
+                let num_workers_per_endpoint = max(
+                    mempool_backlog / (clients_count * transactions_per_account),
+                    1,
+                );
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -337,7 +292,7 @@ impl EmitJobRequest {
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
-                    check_account_sequence_sleep_millis: 100,
+                    check_account_sequence_sleep_millis: 300,
                 }
             },
             EmitJobMode::ConstTps { tps }
@@ -578,9 +533,12 @@ impl TxnEmitter {
             .with_transaction_expiration_time(mode_params.txn_expiration_time_secs)
             .with_gas_unit_price(req.gas_price)
             .with_max_gas_amount(req.max_gas_per_txn);
+        let init_expiration_time =
+            (mode_params.txn_expiration_time_secs as f64 * req.init_expiration_multiplier) as u64;
         let init_txn_factory = txn_factory
             .clone()
-            .with_gas_unit_price(req.gas_price * req.init_gas_price_multiplier);
+            .with_gas_unit_price(req.gas_price * req.init_gas_price_multiplier)
+            .with_transaction_expiration_time(init_expiration_time);
         let seed = self.rng.gen();
         info!(
             "AccountMinter Seed (can be passed in to reuse accounts): {:?}",
@@ -591,9 +549,17 @@ impl TxnEmitter {
             init_txn_factory.clone(),
             StdRng::from_seed(seed),
         );
+        let init_retries: usize =
+            usize::try_from(init_expiration_time / req.init_retry_interval.as_secs()).unwrap();
+        info!(
+            "Using reliable/retriable init transaction executor with {} retries, every {}s",
+            init_retries,
+            req.init_retry_interval.as_secs_f32()
+        );
         let txn_executor = RestApiTransactionExecutor {
             rest_clients: req.rest_clients.clone(),
-            max_retries: MAX_RETRIES,
+            max_retries: init_retries,
+            retry_after: req.init_retry_interval,
         };
         let mut all_accounts = account_minter
             .create_accounts(&txn_executor, &req, &mode_params, num_accounts)
@@ -606,20 +572,19 @@ impl TxnEmitter {
             &req.transaction_mix_per_phase,
             num_workers,
             &mut all_accounts,
-            root_account,
             &txn_executor,
             &txn_factory,
             &init_txn_factory,
-            stats.clone(),
+            stats.get_cur_phase_obj(),
         )
         .await;
 
-        if !req.delay_after_minting.is_zero() {
+        if !req.coordination_delay_between_instances.is_zero() {
             info!(
                 "Sleeping after minting/txn generator initialization for {}s",
-                req.delay_after_minting.as_secs()
+                req.coordination_delay_between_instances.as_secs()
             );
-            tokio::time::sleep(req.delay_after_minting).await;
+            tokio::time::sleep(req.coordination_delay_between_instances).await;
         }
 
         let total_workers = req.rest_clients.len() * workers_per_endpoint;
@@ -696,9 +661,9 @@ impl TxnEmitter {
             let stats = self.peek_job_stats(job);
             let delta = &stats[cur_phase]
                 - prev_stats
-                .as_ref()
-                .map(|p| &p[cur_phase])
-                .unwrap_or(&default_stats);
+                    .as_ref()
+                    .map(|p| &p[cur_phase])
+                    .unwrap_or(&default_stats);
             prev_stats = Some(stats);
             info!("phase {}: {}", cur_phase, delta.rate());
         }
@@ -764,7 +729,7 @@ impl TxnEmitter {
             duration,
             Some(interval_secs),
         )
-            .await
+        .await
     }
 
     pub async fn submit_single_transaction(
@@ -938,8 +903,8 @@ pub async fn query_sequence_numbers<'a, I>(
     client: &RestClient,
     addresses: I,
 ) -> Result<(Vec<(AccountAddress, u64)>, u64)>
-    where
-        I: Iterator<Item = &'a AccountAddress>,
+where
+    I: Iterator<Item = &'a AccountAddress>,
 {
     let (addresses, futures): (Vec<_>, Vec<_>) = addresses
         .map(|address| {
