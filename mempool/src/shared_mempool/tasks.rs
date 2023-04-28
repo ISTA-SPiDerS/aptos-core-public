@@ -481,7 +481,7 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 let mut validator = smp.validator.write();
                 let mut block_filler: SimpleFiller = SimpleFiller::new(
                     max_bytes,
-                    max_txns);
+                    2500);
                 mempool.get_batch(exclude_transactions, &mut block_filler);
                 //gas_estimates = block_filler.get_gas_estimates();
                 //dependency_graph = block_filler.get_dependency_graph();
