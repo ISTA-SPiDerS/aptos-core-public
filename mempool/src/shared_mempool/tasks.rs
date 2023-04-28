@@ -476,8 +476,8 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 }
 
                 let max_txns = cmp::max(max_txns, 1);
-                const CORES: u64 = 8;
-                const GAS_PER_CORE: u64 = 1_000_000_000;
+                    const CORES: u64 = 16;
+                const GAS_PER_CORE: u64 = 200000;
                 let mut validator = smp.validator.write();
                 let mut block_filler: SimpleFiller = SimpleFiller::new(
                     max_bytes,
