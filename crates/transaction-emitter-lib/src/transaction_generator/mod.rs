@@ -31,6 +31,8 @@ use crate::{
     transaction_generator::accounts_pool_wrapper::AccountsPoolWrapperCreator, TransactionType,
 };
 pub use publishing::module_simple::EntryPoints;
+pub use publishing::module_simple::LoadType;
+
 use crate::TransactionType::OurBenchmark;
 
 pub const SEND_AMOUNT: u64 = 1;

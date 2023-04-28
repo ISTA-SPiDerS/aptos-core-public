@@ -28,21 +28,13 @@ use aptos_sdk::move_types::identifier::Identifier;
 use aptos_sdk::move_types::language_storage::{ModuleId, StructTag, TypeTag};
 use aptos_sdk::types::account_config;
 use aptos_sdk::types::transaction::{EntryFunction, Module};
+use crate::transaction_generator::publishing::module_simple::LoadType;
 
 pub struct OurBenchmark {
     txn_factory: TransactionFactory,
     load_type: LoadType,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum LoadType
-{
-    DEXAVG,
-    DEXBURSTY,
-    P2PTX,
-    SOLANA,
-    NFT
-}
 
 
 impl OurBenchmark {

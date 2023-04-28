@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    publishing::{module_simple::EntryPoints, publish_util::Package},
+    publishing::{module_simple::EntryPoints, publish_util::Package, module_simple::LoadType},
     TransactionExecutor,
 };
 use crate::transaction_generator::{

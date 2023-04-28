@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use super::module_simple::LoadType;
 use super::module_simple::EntryPoints;
 use crate::transaction_generator::publishing::module_simple;
 use aptos_framework::natives::code::PackageMetadata;

@@ -20,4 +20,6 @@ pub use emitter::{
     EmitJob, EmitJobMode, EmitJobRequest, EmitModeParams, TransactionType, TxnEmitter,
 };
 pub use transaction_generator::EntryPoints;
+pub use transaction_generator::LoadType;
+
 pub use wrappers::{emit_transactions, emit_transactions_with_cluster};

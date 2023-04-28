@@ -35,6 +35,7 @@ use aptos_testcases::{
     validator_join_leave_test::ValidatorJoinLeaveTest,
     validator_reboot_stress_test::ValidatorRebootStressTest,
 };
+
 use std::{
     env,
     num::NonZeroUsize,
@@ -930,6 +931,12 @@ fn individual_workload_tests(test_name: String, config: ForgeConfig) -> ForgeCon
                         num_modules: 1000,
                         use_account_pool: false,
                     },
+                    "nft_benchmark" => TransactionType::OurBenchmark {load_type: LoadType::NFT},
+                    "solana_benchmark" => TransactionType::OurBenchmark {load_type: LoadType::SOLANA},
+                    "dexavg_benchmark" => TransactionType::OurBenchmark {load_type: LoadType::DEXAVG},
+                    "dexbursty_benchmark" => TransactionType::OurBenchmark {load_type: LoadType::DEXBURSTY},
+                    "p2p_benchmark" => TransactionType::OurBenchmark {load_type: LoadType::P2PTX},
+
                     _ => unreachable!("{}", test_name),
                 })
             },
