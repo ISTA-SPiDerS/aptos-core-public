@@ -7,7 +7,7 @@ ADD https://github.com/krallin/tini/releases/download/v0.19.0/tini /tini
 RUN chmod +x /tini
 ENTRYPOINT ["/tini", "--"]
 
-FROM rust:1.64.0-bullseye@sha256:5cf09a76cb9baf4990d121221bbad64927cc5690ee54f246487e302ddc2ba300 AS rust-base
+FROM rust:1.66.1-bullseye@sha256:f72949bcf1daf8954c0e0ed8b7e10ac4c641608f6aa5f0ef7c172c49f35bd9b5 AS rust-base
 WORKDIR /aptos
 RUN apt-get update && apt-get install -y cmake curl clang git pkg-config libssl-dev libpq-dev
 RUN apt-get update && apt-get install binutils lld
@@ -129,10 +129,12 @@ FROM debian-base AS tools
 RUN echo "deb http://deb.debian.org/debian bullseye main" > /etc/apt/sources.list.d/bullseye.list && \
     echo "Package: *\nPin: release n=bullseye\nPin-Priority: 50" > /etc/apt/preferences.d/bullseye
 
-RUN apt-get update && apt-get --no-install-recommends -y \
+RUN apt-get update && apt-get --no-install-recommends --allow-downgrades -y \
     install \
     wget \
     curl \
+    perl-base=5.32.1-4+deb11u1 \
+    git \
     libssl1.1 \
     ca-certificates \
     socat \
@@ -183,7 +185,7 @@ RUN apt-get update && apt-get install -y \
 
 RUN mkdir -p /aptos/client/data/wallet/
 
-COPY --link --from=builder /aptos/dist/aptos-faucet /usr/local/bin/aptos-faucet
+COPY --link --from=builder /aptos/dist/aptos-faucet-service /usr/local/bin/aptos-faucet-service
 
 #install needed tools
 RUN apt-get update && apt-get install -y procps
@@ -229,6 +231,9 @@ ENV PATH "$PATH:/root/bin"
 
 WORKDIR /aptos
 COPY --link --from=builder /aptos/dist/forge /usr/local/bin/forge
+### Get Aptos Framework Release for forge framework upgrade testing
+COPY --link --from=builder /aptos/aptos-move/framework/ /aptos/aptos-move/framework/
+
 ENV RUST_LOG_FORMAT=json
 
 # add build info
@@ -289,6 +294,7 @@ RUN apt-get update && apt-get install -y \
 COPY --link --from=builder /aptos/dist/aptos-indexer-grpc-cache-worker /usr/local/bin/aptos-indexer-grpc-cache-worker
 COPY --link --from=builder /aptos/dist/aptos-indexer-grpc-file-store /usr/local/bin/aptos-indexer-grpc-file-store
 COPY --link --from=builder /aptos/dist/aptos-indexer-grpc-data-service /usr/local/bin/aptos-indexer-grpc-data-service
+COPY --link --from=builder /aptos/dist/aptos-indexer-grpc-parser /usr/local/bin/aptos-indexer-grpc-parser
 
 # The health check port
 EXPOSE 8080
@@ -307,7 +313,7 @@ ENV GIT_SHA ${GIT_SHA}
 
 ### EXPERIMENTAL ###
 
-FROM debian-base as validator-testing-base 
+FROM debian-base as validator-testing-base
 
 RUN apt-get update && apt-get install -y \
     libssl1.1 \
@@ -364,9 +370,9 @@ RUN make install
 WORKDIR ..
 
 ### Validator Image ###
-# We will build a base testing image with the necessary packages and 
-# duplicate steps from validator step. This will, however, reduce 
-# cache invalidation and reduce build times. 
+# We will build a base testing image with the necessary packages and
+# duplicate steps from validator step. This will, however, reduce
+# cache invalidation and reduce build times.
 FROM validator-testing-base  AS validator-testing
 
 RUN addgroup --system --gid 6180 aptos && adduser --system --ingroup aptos --no-create-home --uid 6180 aptos
