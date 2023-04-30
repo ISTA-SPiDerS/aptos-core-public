@@ -281,8 +281,7 @@ impl EmitJobRequest {
                 EmitModeParams {
                     wait_millis: 100,
                     txn_expiration_time_secs: self.txn_expiration_time_secs,
-                    transactions_per_account: transactions_per_account
-                        .min(num_workers_per_endpoint * clients_count),
+                    transactions_per_account,
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
                     accounts_per_worker: transactions_per_account,
