@@ -16,11 +16,13 @@ use aptos_framework::named_addresses;
 use aptos_rest_client::aptos_api_types::AccountData;
 use aptos_sdk::bcs;
 use aptos_sdk::move_types::{ident_str, identifier};
+use aptos_sdk::move_types::account_address::AccountAddress;
 use aptos_sdk::move_types::identifier::Identifier;
 use aptos_sdk::move_types::language_storage::{ModuleId, StructTag, TypeTag};
 use aptos_sdk::transaction_builder::TransactionFactory;
 use aptos_sdk::types::{account_config, LocalAccount};
 use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
+use aptos_sdk::types::transaction::EntryABI::EntryFunction;
 use crate::{TransactionGenerator, TransactionGeneratorCreator};
 use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
@@ -212,7 +214,10 @@ impl TransactionGenerator for OurBenchmark {
 
                 entry_function = EntryFunction::new(
                     ModuleId::new(
-                        account_config::CORE_CODE_ADDRESS,
+                        AccountAddress::new([
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 1,
+                        ]),
                         ident_str!("benchmark").to_owned(),
                     ),
                     ident_str!("loop_exchange").to_owned(),
@@ -220,9 +225,13 @@ impl TransactionGenerator for OurBenchmark {
                     vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
                 );
             } else {
+
                 entry_function = EntryFunction::new(
                     ModuleId::new(
-                        account_config::CORE_CODE_ADDRESS,
+                        AccountAddress::new([
+                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                            0, 0, 0, 1,
+                        ]),
                         ident_str!("benchmark").to_owned(),
                     ),
                     ident_str!("exchange").to_owned(),
