@@ -22,7 +22,6 @@ use aptos_sdk::move_types::language_storage::{ModuleId, StructTag, TypeTag};
 use aptos_sdk::transaction_builder::TransactionFactory;
 use aptos_sdk::types::{account_config, LocalAccount};
 use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
-use aptos_sdk::types::transaction::EntryABI::EntryFunction;
 use crate::{TransactionGenerator, TransactionGeneratorCreator};
 use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
