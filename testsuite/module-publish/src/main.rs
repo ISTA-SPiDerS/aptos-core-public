@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     // However it is a test that is ignored and runs only with the intent of creating files
     // for the modules compiled, so people can change it as they wish and need to.
     let base_path =
-        base_dir.join("../../crates/transaction-emitter-lib/src/transaction_generator/publishing/");
+        base_dir.join("../../crates/transaction-generator-lib/src/publishing/");
     let mut generic_mod = std::fs::File::create(base_path.join("raw_module_data.rs")).unwrap();
 
     //
@@ -90,12 +90,14 @@ use once_cell::sync::Lazy;
     .expect("Use directive failed");
 
     // write out package metadata
-    write_pacakge_simple(&mut generic_mod);
+    write_package_simple(&mut generic_mod);
+    write_package_benchmark(&mut generic_mod);
+
     Ok(())
 }
 
 // Write out package `Simple`
-fn write_pacakge_simple(file: &mut File) {
+fn write_package_simple(file: &mut File) {
     // build GenericModule
     let base_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let path = base_dir.join("src/packages/simple/");
@@ -120,6 +122,33 @@ fn write_pacakge_simple(file: &mut File) {
         write_lazy(file, name.as_str(), module);
     }
 }
+
+fn write_package_benchmark(file: &mut File) {
+    // build GenericModule
+    let base_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let path = base_dir.join("src/packages/benchmark/");
+    let package =
+        BuiltPackage::build(path, BuildOptions::default()).expect("building package must succeed");
+    let code = package.extract_code();
+    let package_metadata = package.extract_metadata().expect("Metadata must exist");
+    let metadata = bcs::to_bytes(&package_metadata).expect("Metadata must serialize");
+
+    // write out package metadata
+    write_lazy(file, "PACKAGE_METADATA_BENCHMARK", &metadata);
+
+    // write out all modules
+    for module in &code {
+        // this is an unfortunate way to find the module name but it is not
+        // clear how to do it otherwise
+        let compiled_module = CompiledModule::deserialize(module).expect("Module must deserialize");
+        let module_name = compiled_module.self_id().name().to_owned().into_string();
+        // start Lazy declaration
+        let name = format!("MODULE_{}", module_name.to_uppercase());
+        writeln!(file).expect("Empty line failed");
+        write_lazy(file, name.as_str(), module);
+    }
+}
+
 
 // Write out a `Lazy` declaration
 fn write_lazy(file: &mut File, data_name: &str, data: &[u8]) {

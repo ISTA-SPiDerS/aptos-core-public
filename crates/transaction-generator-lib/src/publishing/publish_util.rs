@@ -12,6 +12,9 @@ use aptos_sdk::{
 };
 use move_binary_format::{access::ModuleAccess, CompiledModule};
 use rand::{rngs::StdRng, Rng};
+use aptos_sdk::move_types::ident_str;
+use aptos_sdk::move_types::language_storage::TypeTag;
+use aptos_sdk::types::transaction::EntryFunction;
 
 // Information used to track a publisher and what allows to identify and
 // version the package published.
@@ -96,6 +99,13 @@ impl PackageHandler {
         // info!("PACKAGE: {:#?}", package);
         package
     }
+
+    // Return a `Package` to be published. Packages are tracked by publisher so if
+    // the same `LocalAccount` is used, the package will be an upgrade of the existing one
+    // otherwise a "new" package will be generated (new suffix)
+    pub fn pick_benchmark_package(&mut self, publisher: &mut LocalAccount) -> Package {
+        Package::benchmark().update(publisher.address(), 0)
+    }
 }
 
 // Enum to define all packages known to the publisher code.
@@ -107,6 +117,11 @@ pub enum Package {
 impl Package {
     pub fn simple() -> Self {
         let (modules, metadata) = module_simple::load_package();
+        Self::Simple(modules, metadata)
+    }
+
+    pub fn benchmark() -> Self {
+        let (modules, metadata) = module_simple::load_benchmark_package();
         Self::Simple(modules, metadata)
     }
 
@@ -165,6 +180,30 @@ impl Package {
                 // let payload = module_simple::rand_gen_function(rng, module_id);
                 let payload = module_simple::rand_simple_function(rng, module_id);
                 account.sign_with_transaction_builder(txn_factory.payload(payload))
+            },
+        }
+    }
+
+    pub fn our_spec_transaction(
+        &self,
+        account: &mut LocalAccount,
+        txn_factory: &TransactionFactory,
+        fun_id: Identifier,
+        type_args: Vec<TypeTag>,
+        args: Vec<Vec<u8>>
+    ) -> SignedTransaction {
+        match self {
+            Self::Simple(modules, _) => {
+                let module_id = modules[0].self_id();
+
+                let entry_function = EntryFunction::new(
+                    module_id,
+                    fun_id,
+                    type_args,
+                    args,
+                );
+
+                account.sign_with_transaction_builder(txn_factory.entry_function(entry_function))
             },
         }
     }

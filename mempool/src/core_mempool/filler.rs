@@ -332,7 +332,10 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     VMStatus::Executed => {}
                     VMStatus::Error(e) => {println!("blub exec failure1 {:?}", e)}
                     VMStatus::MoveAbort(e1, e2) => {println!("blub exec failure2 {:?}", e1)}
-                    VMStatus::ExecutionFailure { .. } => {println!("blub exec failure3")}
+                    VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
+                        {
+                            println!("blub exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
+                        }
                 }
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();

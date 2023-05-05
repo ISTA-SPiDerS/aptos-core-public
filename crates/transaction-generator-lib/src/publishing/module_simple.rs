@@ -37,6 +37,16 @@ pub fn load_package() -> (Vec<CompiledModule>, PackageMetadata) {
     (modules, metadata)
 }
 
+pub fn load_benchmark_package() -> (Vec<CompiledModule>, PackageMetadata) {
+    let metadata = bcs::from_bytes::<PackageMetadata>(&raw_module_data::PACKAGE_METADATA_BENCHMARK)
+        .expect("PackageMetadata for GenericModule must deserialize");
+    let mut modules = vec![];
+    let module = CompiledModule::deserialize(&raw_module_data::MODULE_BENCHMARK)
+        .expect("Benchmark.move must deserialize");
+    modules.push(module);
+    (modules, metadata)
+}
+
 pub fn version(module: &mut CompiledModule, rng: &mut StdRng) {
     // change `const COUNTER_STEP` in Simple.move
     // That is the only u64 in the constant pool

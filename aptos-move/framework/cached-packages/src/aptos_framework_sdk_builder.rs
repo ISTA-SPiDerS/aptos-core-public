@@ -222,15 +222,6 @@ pub enum EntryFunctionCall {
         should_pass: bool,
     },
 
-    BenchmarkExchange {
-        resource: u64,
-    },
-
-    BenchmarkLoopExchange {
-        loop_count: u64,
-        resources: Vec<u64>,
-    },
-
     /// Same as `publish_package` but as an entry function which can be called as a transaction. Because
     /// of current restrictions for txn parameters, the metadata needs to be passed in serialized form.
     CodePublishPackageTxn {
@@ -705,11 +696,6 @@ impl EntryFunctionCall {
                 proposal_id,
                 should_pass,
             } => aptos_governance_vote(stake_pool, proposal_id, should_pass),
-            BenchmarkExchange { resource } => benchmark_exchange(resource),
-            BenchmarkLoopExchange {
-                loop_count,
-                resources,
-            } => benchmark_loop_exchange(loop_count, resources),
             CodePublishPackageTxn {
                 metadata_serialized,
                 code,
@@ -1428,39 +1414,6 @@ pub fn aptos_governance_vote(
             bcs::to_bytes(&stake_pool).unwrap(),
             bcs::to_bytes(&proposal_id).unwrap(),
             bcs::to_bytes(&should_pass).unwrap(),
-        ],
-    ))
-}
-
-pub fn benchmark_exchange(resource: u64) -> TransactionPayload {
-    TransactionPayload::EntryFunction(EntryFunction::new(
-        ModuleId::new(
-            AccountAddress::new([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ]),
-            ident_str!("benchmark").to_owned(),
-        ),
-        ident_str!("exchange").to_owned(),
-        vec![],
-        vec![bcs::to_bytes(&resource).unwrap()],
-    ))
-}
-
-pub fn benchmark_loop_exchange(loop_count: u64, resources: Vec<u64>) -> TransactionPayload {
-    TransactionPayload::EntryFunction(EntryFunction::new(
-        ModuleId::new(
-            AccountAddress::new([
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 1,
-            ]),
-            ident_str!("benchmark").to_owned(),
-        ),
-        ident_str!("loop_exchange").to_owned(),
-        vec![],
-        vec![
-            bcs::to_bytes(&loop_count).unwrap(),
-            bcs::to_bytes(&resources).unwrap(),
         ],
     ))
 }
@@ -2904,27 +2857,6 @@ mod decoder {
         }
     }
 
-    pub fn benchmark_exchange(payload: &TransactionPayload) -> Option<EntryFunctionCall> {
-        if let TransactionPayload::EntryFunction(script) = payload {
-            Some(EntryFunctionCall::BenchmarkExchange {
-                resource: bcs::from_bytes(script.args().get(0)?).ok()?,
-            })
-        } else {
-            None
-        }
-    }
-
-    pub fn benchmark_loop_exchange(payload: &TransactionPayload) -> Option<EntryFunctionCall> {
-        if let TransactionPayload::EntryFunction(script) = payload {
-            Some(EntryFunctionCall::BenchmarkLoopExchange {
-                loop_count: bcs::from_bytes(script.args().get(0)?).ok()?,
-                resources: bcs::from_bytes(script.args().get(1)?).ok()?,
-            })
-        } else {
-            None
-        }
-    }
-
     pub fn code_publish_package_txn(payload: &TransactionPayload) -> Option<EntryFunctionCall> {
         if let TransactionPayload::EntryFunction(script) = payload {
             Some(EntryFunctionCall::CodePublishPackageTxn {
@@ -3710,14 +3642,6 @@ static SCRIPT_FUNCTION_DECODER_MAP: once_cell::sync::Lazy<EntryFunctionDecoderMa
         map.insert(
             "aptos_governance_vote".to_string(),
             Box::new(decoder::aptos_governance_vote),
-        );
-        map.insert(
-            "benchmark_exchange".to_string(),
-            Box::new(decoder::benchmark_exchange),
-        );
-        map.insert(
-            "benchmark_loop_exchange".to_string(),
-            Box::new(decoder::benchmark_loop_exchange),
         );
         map.insert(
             "code_publish_package_txn".to_string(),
