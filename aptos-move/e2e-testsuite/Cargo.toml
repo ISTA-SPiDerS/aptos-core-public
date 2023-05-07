@@ -37,6 +37,8 @@ serde = { workspace = true }
 aptos-mempool = { workspace = true }
 regex = "1.3.3"
 rand = "*"
+aptos-transaction-generator-lib = { workspace = true }
+dashmap = { workspace = true }
 
 crossbeam-skiplist = "0.1.1"
 [features]
