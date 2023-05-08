@@ -90,8 +90,8 @@ module Owner::benchmark {
             let copy1 = copy dst_token1;
             let copy2 = copy dst_token2;
 
-            table::add(res_table, resource1, copy1 + 1);
-            table::add(res_table, resource2, copy2 + 1);
+            table::add(res_table, resource1, copy2 + 1);
+            table::add(res_table, resource2, copy1 + 1);
         }
     }
 }

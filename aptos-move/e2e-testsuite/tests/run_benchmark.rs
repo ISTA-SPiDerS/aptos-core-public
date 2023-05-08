@@ -243,7 +243,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
     let mut transaction_validation = executor.get_transaction_validation();
     let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
         &mut transaction_validation,
-        100000,
+        1000000000,
         1_000_000_000,
         10_000_000
     );
