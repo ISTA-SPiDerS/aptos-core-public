@@ -108,7 +108,7 @@ impl TransactionGenerator for OurBenchmark {
                                                                 &self.txn_factory,
                                                                 ident_str!("exchangetwo").to_owned(),
                                                                 vec![],
-                                                                vec![bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()]));
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()]));
             }
             return requests;
         }

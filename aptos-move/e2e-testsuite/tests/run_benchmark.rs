@@ -55,7 +55,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 10000;
+    let block_size = 1000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
@@ -68,7 +68,7 @@ fn main() {
     for idx in 0..289023 {
         seq_num.insert(idx, SEQ_NUM);
     }
-    seq_num.insert(usize::MAX, SEQ_NUM + 2); //module owner SEQ_NUM stored in key value usize::MAX
+    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
     println!("STARTING WARMUP");
     for warmup in [1, 2, 3] {
@@ -306,7 +306,7 @@ fn create_block(
                     module_id.clone(),
                     ident_str!("exchangetwo").to_owned(),
                     vec![],
-                    vec![bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
                 );
 
 
