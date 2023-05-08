@@ -19,7 +19,7 @@ use std::{collections::hash_map::HashMap, fmt, format, fs, str::FromStr, time::I
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
@@ -240,11 +240,11 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
     println!("#-------------------------------------------------------------------------");
 }
 
-fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
     let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
         &mut transaction_validation,
-        1_000_000_000,
+        1000000000,
         1_000_000_000,
         10_000_000
     );
@@ -268,9 +268,9 @@ fn create_block(
     module_id: &ModuleId,
     coins: usize,
     load_type: LoadType,
-) -> Vec<SignedTransaction> {
+) -> VecDeque<SignedTransaction> {
 
-    let mut result = vec![];
+    let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
 
     let mut distr:Vec<f64> = vec![];
@@ -435,7 +435,7 @@ fn create_block(
             .sequence_number(seq_num[&idx])
             .sign();
         seq_num.insert(idx, seq_num[&idx] + 1);
-        result.push(txn);
+        result.push_back(txn);
     }
     // println!("{:?}", result);
 

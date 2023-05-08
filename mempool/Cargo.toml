@@ -47,6 +47,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+dashmap = { workspace = true }
 
 [dev-dependencies]
 aptos-compression = { workspace = true }

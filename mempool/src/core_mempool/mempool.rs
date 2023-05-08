@@ -30,6 +30,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use std::collections::VecDeque;
+use dashmap::DashMap;
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
@@ -233,7 +234,7 @@ impl Mempool {
             println!("bla result: {}", result_size);
             println!("bla seen: {}", seen.len());
 
-            let off = block_filler.add_all(result);
+            let off = block_filler.add_all(result, &DashMap::new());
             println!("bla unsee: {}", off.len());
 
             for tx in off
