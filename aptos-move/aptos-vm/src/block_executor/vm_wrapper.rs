@@ -98,8 +98,8 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
 
                 match &vm_status {
                     VMStatus::Executed => {}
-                    VMStatus::Error(e) => {println!("blib exec failure1 {:?}", e)}
-                    VMStatus::MoveAbort(e1, e2) => {println!("blib exec failure2 {:?}", e1)}
+                    VMStatus::Error(e) => {}
+                    VMStatus::MoveAbort(e1, e2) => {}
                     VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
                         {
                             println!("blib exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
