@@ -281,6 +281,8 @@ pub async fn create_txn_generator_creator(
                     OurBenchmarkGeneratorCreator::new(
                         txn_factory.clone(),
                         *load_type,
+                        all_accounts.get_mut(0).unwrap(),
+                        txn_executor
                     ).await,
                 ),
                 TransactionType::CallCustomModules {

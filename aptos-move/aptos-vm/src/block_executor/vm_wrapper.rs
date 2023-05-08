@@ -100,7 +100,10 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
                     VMStatus::Executed => {}
                     VMStatus::Error(e) => {println!("blib exec failure1 {:?}", e)}
                     VMStatus::MoveAbort(e1, e2) => {println!("blib exec failure2 {:?}", e1)}
-                    VMStatus::ExecutionFailure { .. } => {println!("blib exec failure3")}
+                    VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
+                        {
+                            println!("blib exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
+                        }
                 }
                 if output_ext.txn_output().status().is_discarded() {
                     match sender {

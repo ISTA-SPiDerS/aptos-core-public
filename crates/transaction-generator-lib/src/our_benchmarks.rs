@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use std::any::Any;
 use std::borrow::Borrow;
 use super::{
     publishing::{module_simple::EntryPoints, publish_util::Package},
@@ -24,12 +25,15 @@ use aptos_sdk::types::{account_config, LocalAccount};
 use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
 use crate::{TransactionGenerator, TransactionGeneratorCreator};
 use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use crate::publishing::publish_util::PackageHandler;
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
 use crate::uniswap_distribution::{AVG, BURSTY};
 
 pub struct OurBenchmark {
     txn_factory: TransactionFactory,
     load_type: LoadType,
+    package: Package,
+    owner: AccountAddress
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -45,11 +49,14 @@ impl OurBenchmark {
     pub async fn new(
         txn_factory: TransactionFactory,
         load_type: LoadType,
-
+        package: Package,
+        owner: AccountAddress
     ) -> Self {
         Self {
             txn_factory,
-            load_type
+            load_type,
+            package,
+            owner
         }
     }
 }
@@ -177,8 +184,6 @@ impl TransactionGenerator for OurBenchmark {
                 coin_1_num = (rng.gen::<usize>() % coins) as u64;
             }
 
-            let entry_function;
-
             if matches!(load_type, LoadType::SOLANA)
             {
                 let cost = cost_options[tx_cost_distr.sample(&mut rng)];
@@ -223,7 +228,6 @@ impl TransactionGenerator for OurBenchmark {
                                                   vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()]));
             }
 
-            requests.push(accounts[idx].sign_with_transaction_builder(self.txn_factory.entry_function(entry_function)));
         }
 
         requests
@@ -233,16 +237,34 @@ impl TransactionGenerator for OurBenchmark {
 pub struct OurBenchmarkGeneratorCreator {
     txn_factory: TransactionFactory,
     load_type: LoadType,
+    package: Package,
+    owner: AccountAddress
 }
 
 impl OurBenchmarkGeneratorCreator {
     pub async fn new(
         txn_factory: TransactionFactory,
         load_type: LoadType,
+        account: &mut LocalAccount,
+        txn_executor: &dyn TransactionExecutor,
     ) -> Self {
+
+
+        let mut requests = Vec::with_capacity(1);
+        let mut package_handler = PackageHandler::new();
+        let package = package_handler.pick_benchmark_package(account);
+        let txn = package.publish_transaction(account, &txn_factory);
+        requests.push(txn);
+
+        info!("Publishing {} packages", requests.len());
+        txn_executor.execute_transactions(&requests).await.unwrap();
+        info!("Done publishing {} packages", requests.len());
+
         Self {
             txn_factory,
-            load_type
+            load_type,
+            package,
+            owner: account.address()
         }
     }
 }
@@ -254,7 +276,9 @@ impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
         Box::new(
             OurBenchmark::new(
                 self.txn_factory.clone(),
-                self.load_type
+                self.load_type,
+                self.package.clone(),
+                self.owner.clone()
             )
             .await,
         )

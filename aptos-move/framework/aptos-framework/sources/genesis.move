@@ -13,7 +13,6 @@ module aptos_framework::genesis {
     use aptos_framework::chain_id;
     use aptos_framework::chain_status;
     use aptos_framework::coin;
-    use aptos_framework::benchmark;
     use aptos_framework::consensus_config;
     use aptos_framework::create_signer::create_signer;
     use aptos_framework::gas_schedule;
@@ -122,7 +121,6 @@ module aptos_framework::genesis {
         // Ensure we can create aggregators for supply, but not enable it for common use just yet.
         aggregator_factory::initialize_aggregator_factory(&aptos_framework_account);
         coin::initialize_supply_config(&aptos_framework_account);
-        benchmark::init(&aptos_framework_account);
 
         chain_id::initialize(&aptos_framework_account, chain_id);
         reconfiguration::initialize(&aptos_framework_account);
