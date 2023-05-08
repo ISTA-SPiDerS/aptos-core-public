@@ -330,8 +330,8 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
                 match status {
                     VMStatus::Executed => {}
-                    VMStatus::Error(e) => {}
-                    VMStatus::MoveAbort(e1, e2) => {}
+                    VMStatus::Error(e) => {println!("blub exec failure1 {:?}", e)}
+                    VMStatus::MoveAbort(e1, e2) => {println!("blub exec failure2 {:?}", e1)}
                     VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
                         {
                             println!("blub exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
@@ -349,7 +349,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 if write_set.is_empty() && delta_set.is_empty()
                 {
-                   //println!("Empty????");
+                   println!("Empty????");
                 }
 
                 // When transaction can start assuming unlimited resources.
