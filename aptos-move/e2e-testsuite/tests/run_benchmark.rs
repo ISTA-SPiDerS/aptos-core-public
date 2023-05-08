@@ -366,27 +366,8 @@ fn create_block(
     let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
     let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
 
-
     for i in 0..size {
-        // let idx: usize = rng.gen::<usize>() % accounts.len();
         let mut idx: usize = (i as usize) % accounts.len();
-
-        //let coin_1_num = (i as usize) % coins;
-
-        let coin_1_num;
-        if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
-        {
-            coin_1_num = dist.sample(&mut rng) % coins;
-        }
-        else if matches!(load_type, NFT)
-        {
-            idx = from_dist.sample(&mut rng) % accounts.len();
-            coin_1_num = dist.sample(&mut rng) % coins;
-        }
-        else {
-            coin_1_num = rng.gen::<usize>() % coins;
-        }
-
         let entry_function;
 
         if matches!(load_type, SOLANA)
@@ -424,6 +405,20 @@ fn create_block(
         }
         else
         {
+            let coin_1_num;
+            if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
+            {
+                coin_1_num = dist.sample(&mut rng) % coins;
+            }
+            else if matches!(load_type, NFT)
+            {
+                idx = from_dist.sample(&mut rng) % accounts.len();
+                coin_1_num = dist.sample(&mut rng) % coins;
+            }
+            else {
+                coin_1_num = rng.gen::<usize>() % coins;
+            }
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),

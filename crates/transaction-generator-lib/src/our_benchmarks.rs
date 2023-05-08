@@ -74,45 +74,24 @@ impl TransactionGenerator for OurBenchmark {
         let mut rng: ThreadRng = thread_rng();
         println!("Generating {} transactions", needed);
 
-        if matches!(load_type, LoadType::P2PTX)
-        {
-            let mut fromVec:Vec<f64> = vec![];
-            let mut toVec:Vec<f64> = vec![];
+        let mut fromVecP2P:Vec<f64> = vec![];
+        let mut toVecP2P:Vec<f64> = vec![];
 
-            for (key, value) in TX_TO {
-                for i in 0..value {
-                    toVec.push(key);
-                }
+        for (key, value) in TX_TO {
+            for i in 0..value {
+                toVecP2P.push(key);
             }
-
-            for (key, value) in TX_FROM {
-                for i in 0..value {
-                    fromVec.push(key);
-                }
-            }
-
-            let to_dist:WeightedIndex<f64> = WeightedIndex::new(&toVec).unwrap();
-            let from_dist:WeightedIndex<f64> = WeightedIndex::new(&fromVec).unwrap();
-
-            for i in 0..needed {
-                // get account with likelyhood of similar distribution
-                let mut idx_from: usize = from_dist.sample(&mut rng) % accounts.len();
-                // get account with likelyhood of similar distribution
-                let mut idx_to: usize = to_dist.sample(&mut rng) % accounts.len();
-
-                while idx_from == idx_to {
-                    idx_to = to_dist.sample(&mut rng) % accounts.len();
-                }
-
-                requests.push(self.package.our_spec_transaction(accounts[idx_from],
-                                                                &self.txn_factory,
-                                                                ident_str!("exchangetwo").to_owned(),
-                                                                vec![],
-                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()]));
-            }
-            return requests;
         }
 
+        for (key, value) in TX_FROM {
+            for i in 0..value {
+                fromVecP2P.push(key);
+            }
+        }
+
+        let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
+        let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
+        
         let mut distr:Vec<f64> = vec![];
         if matches!(load_type, LoadType::DEXAVG)
         {
@@ -225,7 +204,23 @@ impl TransactionGenerator for OurBenchmark {
                                                                 vec![],
                                                                 vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()]));
 
-            } else {
+            }
+            else if matches!(load_type, LoadType::P2PTX) {
+                let mut idx_from: usize = from_dist_p2p.sample(&mut rng) % accounts.len();
+                // get account with likelyhood of similar distribution
+                let mut idx_to: usize = to_dist_p2p.sample(&mut rng) % accounts.len();
+
+                while idx_from == idx_to {
+                    idx_to = to_dist_p2p.sample(&mut rng) % accounts.len();
+                }
+
+                requests.push(self.package.our_spec_transaction(accounts[idx],
+                                                                &self.txn_factory,
+                                                                ident_str!("exchangetwo").to_owned(),
+                                                                vec![],
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()]));
+            }
+            else {
                 requests.push(self.package.our_spec_transaction(accounts[idx],
                                                   &self.txn_factory,
                                                   ident_str!("exchange").to_owned(),
