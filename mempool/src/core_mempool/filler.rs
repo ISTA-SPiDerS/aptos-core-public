@@ -294,12 +294,21 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             }
 
             if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
+                match status {
+                    VMStatus::Executed => {}
+                    VMStatus::Error(e) => {println!("blub exec failure1 {:?} {} {}", e, tx.sender(), tx.sequence_number())}
+                    VMStatus::MoveAbort(e1, e2) => {println!("blub exec failure2 {:?}", e1)}
+                    VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
+                        {
+                            println!("blub exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
+                        }
+                }
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();
                 let delta_set = speculation.output.delta_change_set();
                 let gas_used = speculation.output.txn_output().gas_used();
 
-                if gas_used > 10000
+                if gas_used > 100000
                 {
                     println!("bla Wat a big tx: {}", gas_used);
                 }
@@ -314,7 +323,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
-                if finish_time > 100000
+                if finish_time > 1000000
                 {
                     println!("bla Wat a long chain: {}", finish_time);
                 }

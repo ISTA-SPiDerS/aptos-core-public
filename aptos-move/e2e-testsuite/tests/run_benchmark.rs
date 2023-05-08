@@ -8,11 +8,10 @@ extern crate core;
 use aptos_types::{
     account_address::AccountAddress,
     transaction::{
-        EntryFunction, ExecutionStatus, Module, SignedTransaction, Transaction, TransactionStatus, TransactionRegister, ExecutionMode
+        ExecutionStatus, Module, SignedTransaction, Transaction, TransactionStatus, TransactionRegister, ExecutionMode
     },
 };
 use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
-
 
 use rand::prelude::*;
 use regex::Regex;
@@ -41,9 +40,11 @@ use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
 use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
+use aptos_transaction_generator_lib::LoadType;
+use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
+use aptos_types::transaction::{EntryFunction, Profiler, TransactionOutput};
+use dashmap::{DashMap, DashSet};
 use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM, BlockSTM_Sig};
-use aptos_types::transaction::{Profiler, TransactionOutput};
-use crate::transaction_generator::publishing::module_simple::LoadType::{COINS, DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -67,43 +68,17 @@ fn main() {
     for idx in 0..289023 {
         seq_num.insert(idx, SEQ_NUM);
     }
-    seq_num.insert(usize::MAX, SEQ_NUM + 2); //module owner SEQ_NUM stored in key value usize::MAX
-    let register_block = register_coins(&mut executor, &module_id, &module_owner, &mut seq_num);
-    println!("CALLING REGISTER");
-
-    let block = get_transaction_register(register_block, &executor).map_par_txns(Transaction::UserTransaction);
-    let register_block_result = executor.execute_transaction_block_parallel(
-        block, CORES as usize, ExecutionMode::Hints, &mut Profiler::new()
-    ).unwrap();
-    for result in register_block_result.clone() {
-        match result.status() {
-            TransactionStatus::Keep(status) => {
-                executor.apply_write_set(result.write_set());
-                assert_eq!(
-                    status,
-                    &ExecutionStatus::Success,
-                    "transaction failed with {:?}",
-                    status
-                );
-            }
-            TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-            TransactionStatus::Retry => panic!("transaction status is retry"),
-        };
-    }
-
-    println!("REGISTER SUCCESS");
+    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
     println!("STARTING WARMUP");
     for warmup in [1, 2, 3] {
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, COINS);
-        let block = get_transaction_register(block.clone(), &executor)
+        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, LoadType::P2PTX);
+        let block = get_transaction_register(txn.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
-        let mut prex_block_result = register_block_result.clone();
-
-        prex_block_result = executor.execute_transaction_block_parallel(
+        let mut prex_block_result = executor.execute_transaction_block_parallel(
             block.clone(),
-            CORES as usize,
+            6 as usize,
             BlockSTM, &mut Profiler::new(),
         )
             .unwrap();
@@ -197,7 +172,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
         let block = get_transaction_register(block.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
-        println!("block size: {}, accounts: {}, cores: {}, coins: {}, mode: {}, load: {}", block_size, num_accounts, c, coins, mode, load_type);
+        println!("block size: {}, accounts: {}, cores: {}, coins: {}, mode: {}, load: {:?}", block_size, num_accounts, c, coins, mode, load_type);
         let start = Instant::now();
         block_result = executor
             .execute_transaction_block_parallel(
@@ -252,7 +227,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
     all_stats.insert("final_time".to_string(), times);
 
 
-    println!("###,{},{},{},{}", mode, coins, c, load_type);
+    println!("###,{},{},{},{:?}", mode, coins, c, load_type);
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
@@ -275,7 +250,7 @@ fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecuto
     );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
 
-    filler.add_all(txns);
+    filler.add_all(txns, &DashMap::new());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
@@ -284,49 +259,6 @@ fn get_transaction_register(txns: Vec<SignedTransaction>, executor: &FakeExecuto
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
 
-fn register_coins(
-    executor: &mut FakeExecutor,
-    module_id: &ModuleId,
-    module_owner: &AccountData,
-    seq_num: &mut HashMap<usize, u64>,
-) -> Vec<SignedTransaction> {
-    let mut result = vec![];
-    for coin_number in 0_usize..MAX_COIN_NUM {
-        let mut coin: String = "CoinC".to_string();
-        let coin_number_string = coin_number.to_string();
-        coin.push_str(&coin_number_string);
-        // println!("{}", coin);
-
-        let coin_clone = coin.clone();
-        //let coin_clone: &str = &coin.clone();
-        let coinId: identifier::Identifier = identifier::Identifier::new(coin).unwrap();
-        // coinId.from_str(&coin);
-        let coin_c = TypeTag::Struct(Box::new(StructTag {
-            address: module_owner.address().clone(),
-            module: ident_str!("Exchange").to_owned(),
-            name: coinId,
-            type_params: vec![],
-        }));
-
-        let register_coin_function = EntryFunction::new(
-            module_id.clone(),
-            ident_str!("register_coin").to_owned(),
-            vec![coin_c.clone()],
-            vec![bcs::to_bytes(&coin_clone).unwrap()],
-        );
-        let register_txn = module_owner
-            .account()
-            .transaction()
-            .entry_function(register_coin_function)
-            .sequence_number(seq_num[&usize::MAX])
-            .sign();
-
-        result.push(register_txn);
-        // let _result = executor.execute_and_apply(register_txn);
-        seq_num.insert(usize::MAX, seq_num[&usize::MAX] + 1);
-    }
-    result
-}
 //Create block with coin exchange transactions
 fn create_block(
     size: u64,
@@ -341,54 +273,8 @@ fn create_block(
     let mut result = vec![];
     let mut rng: ThreadRng = thread_rng();
 
-    if matches!(load_type, P2PTX)
-    {
-        let mut fromVec:Vec<f64> = vec![];
-        let mut toVec:Vec<f64> = vec![];
-
-        for (key, value) in TX_TO {
-            for i in 0..value {
-                toVec.push(key);
-            }
-        }
-
-        for (key, value) in TX_FROM {
-            for i in 0..value {
-                fromVec.push(key);
-            }
-        }
-
-        let to_dist:WeightedIndex<f64> = WeightedIndex::new(&toVec).unwrap();
-        let from_dist:WeightedIndex<f64> = WeightedIndex::new(&fromVec).unwrap();
-
-        for i in 0..size {
-            // get account with likelyhood of similar distribution
-            let mut idx_from: usize = from_dist.sample(&mut rng) % accounts.len();
-            // get account with likelyhood of similar distribution
-            let mut idx_to: usize = to_dist.sample(&mut rng) % accounts.len();
-
-            while idx_from == idx_to {
-                idx_to = to_dist.sample(&mut rng) % accounts.len();
-            }
-
-            let txn = accounts[idx_from]
-                .transaction()
-                .payload(
-                    coin_transfer(
-                        aptos_types::utility_coin::APTOS_COIN_TYPE.clone(),
-                        *accounts[idx_to].address(),
-                        1,
-                    ))
-                .sequence_number(seq_num[&idx_from])
-                .sign();
-            seq_num.insert(idx_from, seq_num[&idx_from] + 1);
-            result.push(txn);
-        }
-        return result;
-    }
-
     let mut distr:Vec<f64> = vec![];
-    if matches!(load_type, DEXAVG)
+    if matches!(load_type, LoadType::DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
@@ -405,7 +291,7 @@ fn create_block(
             }
         }
     }
-    else if matches!(load_type, NFT)
+    else if matches!(load_type, LoadType::NFT)
     {
         for (key, value) in TX_NFT_TO {
             for i in 0..value {
@@ -413,7 +299,7 @@ fn create_block(
             }
         }
     }
-    else if matches!(load_type, SOLANA)
+    else if matches!(load_type, LoadType::SOLANA)
     {
         for (key, value) in RES_DISTR {
             for i in 0..value {
@@ -462,61 +348,27 @@ fn create_block(
         None      => println!("vec empty, wat!")
     }
 
+
+    let mut fromVecP2P:Vec<f64> = vec![];
+    let mut toVecP2P:Vec<f64> = vec![];
+
+    for (key, value) in TX_TO {
+        for i in 0..value {
+            toVecP2P.push(key);
+        }
+    }
+
+    for (key, value) in TX_FROM {
+        for i in 0..value {
+            fromVecP2P.push(key);
+        }
+    }
+
+    let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
+    let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
+
     for i in 0..size {
-        // let idx: usize = rng.gen::<usize>() % accounts.len();
         let mut idx: usize = (i as usize) % accounts.len();
-
-        //let coin_1_num = (i as usize) % coins;
-
-        let coin_1_num;
-        if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
-        {
-            coin_1_num = dist.sample(&mut rng) % coins;
-        }
-        else if matches!(load_type, NFT)
-        {
-            idx = from_dist.sample(&mut rng) % accounts.len();
-            coin_1_num = dist.sample(&mut rng) % coins;
-        }
-        else {
-            coin_1_num = rng.gen::<usize>() % coins;
-        }
-
-
-
-        let coin_2_num: usize = coin_1_num;
-
-        // let coin_2_num = rng.gen::<usize>() % MAX_COIN_NUM;
-        // let coin_1_num = idx;
-        // let coin_2_num = idx;
-
-        let mut coin: String = "CoinC".to_string();
-        let mut coin_clone = coin.clone();
-        let coin_number1_string = coin_1_num.to_string();
-        let coin_number2_string = coin_2_num.to_string();
-        coin.push_str(&coin_number1_string);
-        coin_clone.push_str(&coin_number2_string);
-        // println!("Coin1:{}", coin);
-        // println!("Coin2:{}", coin_clone);
-
-        //let coin_clone: &str = &coin.clone();
-        let coin_id1: identifier::Identifier = identifier::Identifier::new(coin).unwrap();
-        let coin_id2: identifier::Identifier = identifier::Identifier::new(coin_clone).unwrap();
-
-        let coin_1 = TypeTag::Struct(Box::new(StructTag {
-            address: owner.address().clone(),
-            module: ident_str!("Exchange").to_owned(),
-            name: coin_id1,
-            type_params: vec![],
-        }));
-
-        let coin_2 = TypeTag::Struct(Box::new(StructTag {
-            address: owner.address().clone(),
-            module: ident_str!("Exchange").to_owned(),
-            name: coin_id2,
-            type_params: vec![],
-        }));
-
         let entry_function;
 
         if matches!(load_type, SOLANA)
@@ -537,18 +389,45 @@ fn create_block(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+            );
+        }
+        else if matches!(load_type, P2PTX)
+        {
+            let idx_to = to_dist_p2p.sample(&mut rng) % accounts.len();
+            let idx_from = from_dist_p2p.sample(&mut rng) % accounts.len();
+
+            entry_function = EntryFunction::new(
+                module_id.clone(),
+                ident_str!("exchangetwo").to_owned(),
+                vec![],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
             );
         }
         else
         {
+            let coin_1_num;
+            if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
+            {
+                coin_1_num = dist.sample(&mut rng) % coins;
+            }
+            else if matches!(load_type, NFT)
+            {
+                idx = from_dist.sample(&mut rng) % accounts.len();
+                coin_1_num = dist.sample(&mut rng) % coins;
+            }
+            else {
+                coin_1_num = rng.gen::<usize>() % coins;
+            }
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),
-                vec![coin_1.clone(), coin_2.clone()],
                 vec![],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()],
             );
         }
+
 
         let txn = accounts[idx]
             .transaction()
@@ -578,23 +457,6 @@ fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountDa
         .sequence_number(SEQ_NUM)
         .sign();
     let _result = executor.execute_and_apply(publish_txn);
-
-    let seed: Vec<u8> = vec![0];
-    let entry_function = EntryFunction::new(
-        mid.clone(),
-        ident_str!("init").to_owned(),
-        vec![],
-        vec![bcs::to_bytes(&seed).unwrap()],
-    );
-    let init_txn = owner_account
-        .account()
-        .transaction()
-        .entry_function(entry_function)
-        .sequence_number(SEQ_NUM + 1)
-        .sign();
-    println!("CALLING INIT!");
-    let result = executor.execute_and_apply(init_txn);
-
     println!("PASSED!");
 
     (owner_account, mid)
