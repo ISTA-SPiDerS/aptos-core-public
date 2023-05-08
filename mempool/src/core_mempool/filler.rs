@@ -342,7 +342,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 let delta_set = speculation.output.delta_change_set();
                 let gas_used = speculation.output.txn_output().gas_used();
 
-                if gas_used > 10000
+                if gas_used > 100000
                 {
                     println!("bla Wat a big tx: {}", gas_used);
                 }
@@ -362,7 +362,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
                 // Check if there is room for the new block.
                 let finish_time = arrival_time + gas_used;
-                if finish_time > 50000
+                if finish_time > 1000000
                 {
                     println!("bla Wat a long chain: {}", finish_time);
                 }

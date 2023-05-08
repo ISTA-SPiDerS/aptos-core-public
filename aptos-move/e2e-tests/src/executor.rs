@@ -534,7 +534,7 @@ impl FakeExecutor {
     }
 
     pub fn get_transaction_validation(&self) -> FakeValidation {
-        FakeValidation {vm: AptosVM::new(self.get_state_view()), state_view: self.data_store.clone()}
+        FakeValidation {vm: AptosVM::new_for_validation(self.get_state_view()), state_view: self.data_store.clone()}
     }
 
     pub fn new_block(&mut self) {
