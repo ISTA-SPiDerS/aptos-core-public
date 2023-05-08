@@ -76,12 +76,12 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        txn: VecDeque<SignedTransaction>,
+        mut txn: VecDeque<SignedTransaction>,
         past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>
     ) -> Vec<SignedTransaction> {
         let mut rejected = vec![];
 
-        for tx in txn
+        while let Some(tx) = txn.pop_front()
         {
             /*if self.full {
                 rejected.push(tx);

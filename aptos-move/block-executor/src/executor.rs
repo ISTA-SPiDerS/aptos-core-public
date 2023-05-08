@@ -332,7 +332,7 @@ where
         let profiler = Arc::new(Mutex::new(input_profiler));
         (*profiler.lock()).start_timing(&"total time".to_string());
 
-        println!("bla runblock");
+        println!("bla runblock {}", signature_verified_block.txns().len());
 
         let versioned_data_cache = MVHashMap::new();
 
