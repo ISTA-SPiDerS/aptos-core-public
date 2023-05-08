@@ -80,18 +80,17 @@ module Owner::benchmark {
             let res_table = &mut borrow_global_mut<TestTables>(location).resource_table;
             if (!table::contains(res_table, resource1)) {
                 table::add(res_table, resource1, 0);
+            } else {
+                let dst_token = table::borrow_mut(res_table, resource1);
+                *dst_token = *dst_token + 1;
             };
+
             if (!table::contains(res_table, resource2)) {
                 table::add(res_table, resource2, 0);
+            } else {
+                let dst_token = table::borrow_mut(res_table, resource2);
+                *dst_token = *dst_token + 1;
             };
-
-            let dst_token1 = *table::borrow(res_table, resource1);
-            let dst_token2 = *table::borrow(res_table, resource2);
-            let copy1 = copy dst_token1;
-            let copy2 = copy dst_token2;
-
-            table::add(res_table, resource1, copy2 + 1);
-            table::add(res_table, resource2, copy1 + 1);
         }
     }
 }

@@ -55,7 +55,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 1000;
+    let block_size = 10000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
@@ -72,14 +72,14 @@ fn main() {
 
     println!("STARTING WARMUP");
     for warmup in [1, 2, 3] {
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, P2PTX);
-        let block = get_transaction_register(block.clone(), &executor)
+        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, LoadType::P2PTX);
+        let block = get_transaction_register(txn.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
             block.clone(),
-            CORES as usize,
-            Standard, &mut Profiler::new(),
+            6 as usize,
+            Pythia, &mut Profiler::new(),
         )
             .unwrap();
 
@@ -272,56 +272,6 @@ fn create_block(
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
 
-    if matches!(load_type, LoadType::P2PTX)
-    {
-        let mut fromVec:Vec<f64> = vec![];
-        let mut toVec:Vec<f64> = vec![];
-
-        for (key, value) in TX_TO {
-            for i in 0..value {
-                toVec.push(key);
-            }
-        }
-
-        for (key, value) in TX_FROM {
-            for i in 0..value {
-                fromVec.push(key);
-            }
-        }
-
-        let to_dist:WeightedIndex<f64> = WeightedIndex::new(&toVec).unwrap();
-        let from_dist:WeightedIndex<f64> = WeightedIndex::new(&fromVec).unwrap();
-
-        for i in 0..size {
-            // get account with likelyhood of similar distribution
-            let mut idx_from: usize = from_dist.sample(&mut rng) % accounts.len();
-            // get account with likelyhood of similar distribution
-            let mut idx_to: usize = to_dist.sample(&mut rng) % accounts.len();
-
-            while idx_from == idx_to {
-                idx_to = to_dist.sample(&mut rng) % accounts.len();
-            }
-
-            let entry_function = EntryFunction::new(
-                    module_id.clone(),
-                    ident_str!("exchangetwo").to_owned(),
-                    vec![],
-                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
-                );
-
-
-            let txn = accounts[idx_from]
-                .transaction()
-                .entry_function(entry_function.clone())
-                .sequence_number(seq_num[&idx_from])
-                .sign();
-
-            seq_num.insert(idx_from, seq_num[&idx_from] + 1);
-            result.push_back(txn);
-        }
-        return result;
-    }
-
     let mut distr:Vec<f64> = vec![];
     if matches!(load_type, LoadType::DEXAVG)
     {
@@ -397,6 +347,26 @@ fn create_block(
         None      => println!("vec empty, wat!")
     }
 
+
+    let mut fromVecP2P:Vec<f64> = vec![];
+    let mut toVecP2P:Vec<f64> = vec![];
+
+    for (key, value) in TX_TO {
+        for i in 0..value {
+            toVecP2P.push(key);
+        }
+    }
+
+    for (key, value) in TX_FROM {
+        for i in 0..value {
+            fromVecP2P.push(key);
+        }
+    }
+
+    let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
+    let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
+
+
     for i in 0..size {
         // let idx: usize = rng.gen::<usize>() % accounts.len();
         let mut idx: usize = (i as usize) % accounts.len();
@@ -438,6 +408,18 @@ fn create_block(
                 ident_str!("loop_exchange").to_owned(),
                 vec![],
                 vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+            );
+        }
+        else if matches!(load_type, P2PTX)
+        {
+            let idx_to = to_dist_p2p.sample(&mut rng) % accounts.len();
+            let idx_from = from_dist_p2p.sample(&mut rng) % accounts.len();
+
+            entry_function = EntryFunction::new(
+                module_id.clone(),
+                ident_str!("exchangetwo").to_owned(),
+                vec![],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
             );
         }
         else
