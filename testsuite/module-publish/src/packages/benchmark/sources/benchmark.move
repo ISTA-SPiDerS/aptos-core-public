@@ -1,6 +1,7 @@
-module Owner::benchmark {
+module 0xABCD::benchmark {
     use std::vector;
     use std::table::{Self, Table};
+
 
 
     /// Account has no perms for this.
