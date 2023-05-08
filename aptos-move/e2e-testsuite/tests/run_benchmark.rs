@@ -241,22 +241,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
 }
 
 fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
-    let mut transaction_validation = executor.get_transaction_validation();
-    let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
-        &mut transaction_validation,
-        1000000000,
-        1_000_000_000,
-        10_000_000
-    );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
 
-    filler.add_all(txns, &DashMap::new());
-
-    let gas_estimates = filler.get_gas_estimates();
-    let dependencies = filler.get_dependency_graph();
-    let txns = filler.get_block();
-
-    TransactionRegister::new(txns, gas_estimates, dependencies)
+    _simple_filler.add_all(txns, &DashMap::new());
+    TransactionRegister::new(_simple_filler.get_block(), vec![], vec![])
 }
 
 //Create block with coin exchange transactions
