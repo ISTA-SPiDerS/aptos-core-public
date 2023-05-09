@@ -30,6 +30,10 @@ pub trait BlockFiller {
     fn get_max_bytes(&self) -> u64;
 
     fn get_max_txn(&self) -> u64;
+
+    fn get_current_gas(&self) -> u64;
+
+    fn set_gas_per_core(&mut self, last_max: u64);
 }
 
 pub struct SimpleFiller {
@@ -49,7 +53,7 @@ impl SimpleFiller {
 
             current_bytes: 0,
             full: false,
-            block: vec![],
+            block: vec![]
         }
     }
 }
@@ -121,15 +125,24 @@ impl BlockFiller for SimpleFiller {
     fn get_max_txn(&self) -> u64 {
         self.max_txns
     }
+
+    fn get_current_gas(&self) -> u64 {
+        0
+    }
+
+    fn set_gas_per_core(&mut self, last_max: u64) {
+        // Do nothing
+    }
 }
 
 type TransactionIdx = u64;
 
-pub struct DependencyFiller<'a, V: TransactionValidation, const C: u64> {
+pub struct DependencyFiller<'a, V: TransactionValidation> {
     transaction_validation: &'a mut V,
     gas_per_core: u64,
     max_bytes: u64,
     max_txns: u64,
+    cores: u64,
 
     total_bytes: u64,
     total_estimated_gas: u64,
@@ -143,18 +156,20 @@ pub struct DependencyFiller<'a, V: TransactionValidation, const C: u64> {
     estimated_gas: Vec<u64>,
 }
 
-impl<'a, V: TransactionValidation, const C: u64> DependencyFiller<'a, V, C> {
+impl<'a, V: TransactionValidation> DependencyFiller<'a, V> {
     pub fn new(
         transaction_validation: &'a mut V,
         gas_per_core: u64,
         max_bytes: u64,
-        max_txns: u64)
-        -> DependencyFiller<V, C> {
+        max_txns: u64,
+        cores: u64)
+        -> DependencyFiller<V> {
         Self {
             transaction_validation,
             gas_per_core,
             max_bytes,
             max_txns,
+            cores,
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
@@ -184,7 +199,7 @@ impl<'a, V: TransactionValidation, const C: u64> DependencyFiller<'a, V, C> {
     }
 }
 
-impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFiller<'a, V, C> {
+impl<'a, V: TransactionValidation> BlockFiller for DependencyFiller<'a, V> {
     fn add(&mut self, txn: SignedTransaction) -> bool {
         if self.full {
             return false;
@@ -217,7 +232,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                 self.full = true;
                 return false;
             }
-            if self.total_estimated_gas + gas_used > self.gas_per_core * C {
+            if self.total_estimated_gas + gas_used > self.gas_per_core * self.cores {
                 self.full = true;
                 return false;
             }
@@ -372,7 +387,7 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
                     continue;
                 }
 
-                if self.total_estimated_gas + gas_used > self.gas_per_core * C {
+                if self.total_estimated_gas + gas_used > self.gas_per_core * self.cores {
                     self.full = true;
                     rejected.push(tx);
                     rejected.extend(txn);
@@ -457,5 +472,13 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
     fn get_max_txn(&self) -> u64 {
         self.max_txns
+    }
+
+    fn get_current_gas(&self) -> u64 {
+        self.total_estimated_gas
+    }
+
+    fn set_gas_per_core(&mut self, last_max: u64) {
+        self.gas_per_core = last_max / self.cores as u64;
     }
 }

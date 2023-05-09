@@ -41,6 +41,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::runtime::Handle;
+use num_cpus;
 
 // ============================== //
 //  broadcast_coordinator tasks  //
@@ -474,15 +475,13 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                     mempool.gc_by_expiration_time(curr_time);
                 }
 
-                let max_txns = cmp::max(max_txns, 1);
-                    const CORES: u64 = 16;
-                const GAS_PER_CORE: u64 = 200000;
+                const GAS_PER_CORE: u64 = 200_000_000;
                 let mut validator = smp.validator.write();
-                let mut block_filler: DependencyFiller<TransactionValidator, CORES> = DependencyFiller::new(
+                let mut block_filler: DependencyFiller<TransactionValidator> = DependencyFiller::new(
                     &mut validator,
                     GAS_PER_CORE,
                     max_bytes,
-                    2500);
+                    2500, num_cpus::get() as u64);
                 mempool.get_batch(exclude_transactions, &mut block_filler);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();

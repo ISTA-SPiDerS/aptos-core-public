@@ -41,6 +41,7 @@ pub struct Mempool {
 
     pub system_transaction_timeout: Duration,
     pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    last_max_gas: u64
 }
 
 impl Mempool {
@@ -51,6 +52,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             pre_execution_storage: DashMap::new(),
+            last_max_gas: 100_000_000_000
         }
     }
 
@@ -172,7 +174,7 @@ impl Mempool {
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
     pub(crate) fn get_batch<F: BlockFiller>(
-        &self,
+        &mut self,
         mut seen: HashSet<TxnPointer>,
         block_filler: &mut F,
     ) {
@@ -239,7 +241,14 @@ impl Mempool {
             println!("bla result: {}", result_size);
             println!("bla seen: {}", seen.len());
 
+            block_filler.set_gas_per_core(self.last_max_gas);
             let off = block_filler.add_all(result, &self.pre_execution_storage);
+
+            if result_size > 2000 {
+                let dif = (off.len() / 2500) + 1;
+                self.last_max_gas = block_filler.get_current_gas() * dif as u64;
+            }
+
             println!("bla unsee: {}", off.len());
 
             for tx in off

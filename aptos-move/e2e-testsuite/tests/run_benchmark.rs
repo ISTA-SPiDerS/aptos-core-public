@@ -241,11 +241,12 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
 
 fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
-    let mut filler: DependencyFiller<FakeValidation, CORES> = DependencyFiller::new(
+    let mut filler: DependencyFiller<FakeValidation> = DependencyFiller::new(
         &mut transaction_validation,
         1000000000,
         1_000_000_000,
-        10_000_000
+        10_000_000,
+        16
     );
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
 
