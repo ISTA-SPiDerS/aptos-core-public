@@ -121,7 +121,7 @@ impl TransactionGenerator for OurBenchmark {
         else if matches!(load_type, LoadType::SOLANA)
         {
             for (key, value) in RES_DISTR {
-                for i in 0..value {
+                for i in 0..value*20 {
                     distr.push(key)
                 }
             }
