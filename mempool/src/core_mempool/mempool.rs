@@ -31,6 +31,7 @@ use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
 };
+use std::cmp::max;
 use std::collections::VecDeque;
 use anyhow;
 use dashmap::{DashMap, DashSet};
@@ -245,7 +246,7 @@ impl Mempool {
             let off = block_filler.add_all(result, &self.pre_execution_storage);
 
             if result_size > 2000 {
-                let dif = (off.len() / 2500) + 1;
+                let dif = max(2500 / block_filler.get_blockx().len(), 1);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
