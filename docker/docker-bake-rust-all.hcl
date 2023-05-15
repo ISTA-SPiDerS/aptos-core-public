@@ -53,13 +53,8 @@ variable "FEATURES" {
 
 group "all" {
   targets = flatten([
-    "validator",
-    "node-checker",
+ //   "validator",
     "tools",
-    "faucet",
-    "forge",
-    "telemetry-service",
-    "indexer-grpc",
     BUILD_ADDL_TESTING_IMAGES == "true" ? [
       "validator-testing"
     ] : []
