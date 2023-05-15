@@ -182,7 +182,7 @@ impl MockSharedMempool {
     }
 
     pub fn get_txns(&self, size: u64) -> Vec<SignedTransaction> {
-        let pool = self.mempool.lock();
+        let mut pool = self.mempool.lock();
         let mut block_filler: SimpleFiller = SimpleFiller::new(
             100000000000,
             2500);

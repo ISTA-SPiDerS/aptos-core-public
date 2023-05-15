@@ -19,6 +19,7 @@ use std::{collections::hash_map::HashMap, fmt, format, fs, str::FromStr, time::I
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
+use std::cmp::max;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
@@ -302,7 +303,7 @@ fn create_block(
     else if matches!(load_type, LoadType::SOLANA)
     {
         for (key, value) in RES_DISTR {
-            for i in 0..value {
+            for i in 0..value*20 {
                 distr.push(key)
             }
         }
@@ -383,7 +384,7 @@ fn create_block(
                 writes.push(dist.sample(&mut rng) as u64);
             }
 
-            let length = cost.round() as usize;
+            let length = max(1, cost.round() as usize);
 
             entry_function = EntryFunction::new(
                 module_id.clone(),

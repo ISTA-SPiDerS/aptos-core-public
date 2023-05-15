@@ -379,7 +379,7 @@ impl<'a, V: TransactionValidation> BlockFiller for DependencyFiller<'a, V> {
                 let finish_time = arrival_time + gas_used;
                 if finish_time > 1000000
                 {
-                    println!("bla Wat a long chain: {}", finish_time);
+                    //println!("bla Wat a long chain: {}", finish_time);
                 }
                 if finish_time > self.gas_per_core {
                     //self.full = true;
