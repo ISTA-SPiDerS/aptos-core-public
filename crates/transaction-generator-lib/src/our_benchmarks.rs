@@ -3,6 +3,7 @@
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::cmp::max;
 use super::{
     publishing::{module_simple::EntryPoints, publish_util::Package},
     TransactionExecutor,
@@ -196,7 +197,7 @@ impl TransactionGenerator for OurBenchmark {
                     writes.push(dist.sample(&mut rng) as u64);
                 }
 
-                let length = cost.round() as usize;
+                let length = max(1, cost.round() as usize);
 
                 requests.push(self.package.our_spec_transaction(accounts[idx],
                                                                 &self.txn_factory,
