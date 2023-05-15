@@ -333,6 +333,7 @@ where
         (*profiler.lock()).start_timing(&"total time".to_string());
 
         println!("bla runblock {}", signature_verified_block.txns().len());
+        println!("bla runwith {}", self.concurrency_level);
 
         let versioned_data_cache = MVHashMap::new();
 
