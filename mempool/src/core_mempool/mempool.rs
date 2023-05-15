@@ -207,7 +207,7 @@ impl Mempool {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
 
-                if (result.len() as u64) == block_filler.get_max_txn() {
+                if (result.len() as u64) >= block_filler.get_max_txn() {
                     break;
                 }
 
@@ -223,11 +223,11 @@ impl Mempool {
                 // that were skipped before for given account
                 let mut skipped_txn = (txn.address, tx_seq + 1);
                 while skipped.contains(&skipped_txn) {
-                    seen.insert(skipped_txn);
-                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
-                    if (result.len() as u64) == block_filler.get_max_txn() {
+                    if (result.len() as u64) >= block_filler.get_max_txn() {
                         break 'main;
                     }
+                    seen.insert(skipped_txn);
+                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
             } else {
