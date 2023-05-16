@@ -481,7 +481,7 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                     &mut validator,
                     GAS_PER_CORE,
                     max_bytes,
-                    5000, num_cpus::get() as u64);
+                    2500, num_cpus::get() as u64);
                 mempool.get_batch(exclude_transactions, &mut block_filler);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();
