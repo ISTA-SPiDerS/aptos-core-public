@@ -42,6 +42,7 @@ pub struct Mempool {
 
     pub system_transaction_timeout: Duration,
     pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    pub alreadyprex: VecDeque<SignedTransaction>,
     last_max_gas: u64
 }
 
@@ -53,6 +54,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             pre_execution_storage: DashMap::new(),
+            alreadyprex: VecDeque::new(),
             last_max_gas: 100_000_000_000
         }
     }
@@ -192,6 +194,9 @@ impl Mempool {
         let mut total_bytes = 0;
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
+
+        result.append(&mut self.alreadyprex.drain(..).collect());
+
         // iterate over the queue of transactions based on gas price
         'main: for txn in self.transactions.iter_queue() {
             txn_walked += 1;
@@ -244,18 +249,20 @@ impl Mempool {
 
             block_filler.set_gas_per_core(self.last_max_gas);
             let off = block_filler.add_all(result, &self.pre_execution_storage);
+            println!("bla forlater: {}", off.len());
+            &self.alreadyprex.extend(off);
 
             if result_size > 2000 {
                 let dif = max(10000 / block_filler.get_blockx().len(), 1);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
-            println!("bla unsee: {}", off.len());
 
-            for tx in off
-            {
-                seen.remove(&(tx.sender(), tx.sequence_number()));
-            }
+
+            //for tx in off
+            //{
+            //    seen.remove(&(tx.sender(), tx.sequence_number()));
+            //}
 
             println!("bla blocklen: {}", block_filler.get_blockx().len());
             println!("bla seen now: {}", seen.len());
