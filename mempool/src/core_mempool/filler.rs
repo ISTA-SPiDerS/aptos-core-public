@@ -265,6 +265,20 @@ impl<'a, V: TransactionValidation> BlockFiller for DependencyFiller<'a, V> {
 
             // Update last touched time for used resources.
             const ZERO: u64 = 0u64;
+            for (delta, _op) in delta_set {
+                let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&ZERO));
+                self.last_touched.insert(delta.clone(), mx.into());
+
+                if !self.writes.contains_key(delta) {
+                    self.writes.insert(delta.clone(), vec![]);
+                }
+
+                if read_set.contains(delta) {
+                    self.writes.remove(delta);
+                    self.writes.insert(delta.clone(), vec![]);
+                }
+                self.writes.get_mut(delta).unwrap().push(current_idx);
+            }
             for (write, _op) in write_set {
                 let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&ZERO));
                 self.last_touched.insert(write.clone(), mx.into());
@@ -364,7 +378,8 @@ impl<'a, V: TransactionValidation> BlockFiller for DependencyFiller<'a, V> {
 
                 if write_set.is_empty() && delta_set.is_empty()
                 {
-                   println!("Empty????");
+                    println!("Empty????");
+                    continue;
                 }
 
                 // When transaction can start assuming unlimited resources.

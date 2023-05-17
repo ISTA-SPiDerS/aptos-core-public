@@ -42,7 +42,7 @@ pub struct Mempool {
 
     pub system_transaction_timeout: Duration,
     pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
-    pub alreadyprex: VecDeque<SignedTransaction>,
+    pub alreadyprex: Vec<SignedTransaction>,
     last_max_gas: u64
 }
 
@@ -54,7 +54,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             pre_execution_storage: DashMap::new(),
-            alreadyprex: VecDeque::new(),
+            alreadyprex: vec![],
             last_max_gas: 100_000_000_000
         }
     }
@@ -250,14 +250,12 @@ impl Mempool {
             block_filler.set_gas_per_core(self.last_max_gas);
             let off = block_filler.add_all(result, &self.pre_execution_storage);
             println!("bla forlater: {}", off.len());
-            &self.alreadyprex.extend(off);
+            self.alreadyprex = off;
 
             if result_size > 2000 {
                 let dif = max(10000 / block_filler.get_blockx().len(), 1);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
-
-
 
             //for tx in off
             //{
