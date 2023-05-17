@@ -32,7 +32,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use std::cmp::max;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use anyhow;
 use dashmap::{DashMap, DashSet};
 
@@ -41,8 +41,8 @@ pub struct Mempool {
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
-    pre_execution_storage: DashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
-    pub alreadyprex: Vec<SignedTransaction>,
+    pre_execution_storage: HashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
+    pub alreadyprex: VecDeque<SignedTransaction>,
     last_max_gas: u64
 }
 
@@ -53,8 +53,8 @@ impl Mempool {
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
-            pre_execution_storage: DashMap::new(),
-            alreadyprex: vec![],
+            pre_execution_storage: HashMap::new(),
+            alreadyprex: VecDeque::new(),
             last_max_gas: 100_000_000_000
         }
     }
@@ -195,7 +195,7 @@ impl Mempool {
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
 
-        result.append(&mut self.alreadyprex.drain(..).collect());
+        let currentcount = self.alreadyprex.len();
 
         // iterate over the queue of transactions based on gas price
         'main: for txn in self.transactions.iter_queue() {
@@ -213,7 +213,7 @@ impl Mempool {
                 let ptr = TxnPointer::from(txn);
                 seen.insert(ptr);
 
-                if (result.len() as u64) >= block_filler.get_max_txn() {
+                if ((result.len() + currentcount) as u64) >= block_filler.get_max_txn() {
                     break;
                 }
 
@@ -229,7 +229,7 @@ impl Mempool {
                 // that were skipped before for given account
                 let mut skipped_txn = (txn.address, tx_seq + 1);
                 while skipped.contains(&skipped_txn) {
-                    if (result.len() as u64) >= block_filler.get_max_txn() {
+                    if ((result.len() + currentcount) as u64) >= block_filler.get_max_txn() {
                         break 'main;
                     }
                     seen.insert(skipped_txn);
@@ -241,6 +241,9 @@ impl Mempool {
             }
         }
 
+        //result.append(&mut self.alreadyprex.drain(..).collect());
+
+
         let result_size = result.len();
         if result_size > 0
         {
@@ -248,9 +251,9 @@ impl Mempool {
             println!("bla seen: {}", seen.len());
 
             block_filler.set_gas_per_core(self.last_max_gas);
-            let off = block_filler.add_all(result, &self.pre_execution_storage);
+            let off = block_filler.add_all(result, &mut self.alreadyprex, &mut self.pre_execution_storage);
             println!("bla forlater: {}", off.len());
-            self.alreadyprex = off;
+            self.alreadyprex.extend(off);
 
             if result_size > 2000 {
                 let dif = max(10000 / block_filler.get_blockx().len(), 1);
