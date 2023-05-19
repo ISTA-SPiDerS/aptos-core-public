@@ -198,7 +198,6 @@ impl Mempool {
             // we've already sent its ancestor to Consensus.
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
-                seen.insert(ptr);
 
                 if (result.len() as u64) >= block_filler.get_max_txn() {
                     break;
@@ -208,6 +207,7 @@ impl Mempool {
                 if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
                     break;
                 }
+                seen.insert(ptr);
                 total_bytes+= full_tx.raw_txn_bytes_len() as u64;
                 result.push_back(full_tx);
 
