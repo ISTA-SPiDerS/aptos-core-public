@@ -385,9 +385,6 @@ where
         let profiler = Arc::new(Mutex::new(input_profiler));
         (*profiler.lock()).start_timing(&"total time".to_string());
 
-        println!("bla runblock {}", signature_verified_block.txns().len());
-        println!("bla runwith {}", self.concurrency_level);
-
         let versioned_data_cache = MVHashMap::new();
 
         if signature_verified_block.is_empty() {
@@ -395,6 +392,13 @@ where
         }
 
         let num_txns = signature_verified_block.len();
+
+        if num_txns > 2 {
+            println!("bla runblock {}", signature_verified_block.txns().len());
+            println!("bla runwith {}", self.concurrency_level);
+        }
+
+
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
@@ -428,7 +432,7 @@ where
         (*profiler.lock()).end_timing(&"total time".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
-        {
+        if num_txns > 2 {
             println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
             println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
         }
