@@ -428,8 +428,10 @@ where
         (*profiler.lock()).end_timing(&"total time".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
-
-        println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
+        {
+            println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
+            println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
+        }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);

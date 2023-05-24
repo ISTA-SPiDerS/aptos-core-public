@@ -35,15 +35,21 @@ use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use anyhow;
 use dashmap::{DashMap, DashSet};
+use futures::pending;
+use aptos_crypto::hash::TestOnlyHash;
+use crate::shared_mempool::types::CACHE;
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
-    pre_execution_storage: HashMap<TransactionAuthenticator, anyhow::Result<(VMSpeculationResult, VMStatus)>>,
-    pub alreadyprex: VecDeque<SignedTransaction>,
-    last_max_gas: u64
+    last_max_gas: u64,
+    cached_ex: Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+    total: u64,
+    current: u64,
+    pending: HashSet<TxnPointer>
+
 }
 
 impl Mempool {
@@ -53,9 +59,11 @@ impl Mempool {
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
-            pre_execution_storage: HashMap::new(),
-            alreadyprex: VecDeque::new(),
-            last_max_gas: 100_000_000_000
+            last_max_gas: 100_000_000_000,
+            cached_ex: vec![],
+            total: 0,
+            current: 0,
+            pending: HashSet::new()
         }
     }
 
@@ -176,13 +184,25 @@ impl Mempool {
     /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
-    pub(crate) fn get_batch<F: BlockFiller>(
+    pub(crate) fn get_batch<F: BlockFiller>( &mut self,
+                                             mut seen: HashSet<TxnPointer>,
+                                             block_filler: &mut F)
+    {
+        self.get_full_batch(seen, block_filler, 1, 0)
+    }
+
+    /// Fetches next block of transactions for consensus.
+    /// `batch_size` - size of requested block.
+    /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
+    ///  mempool should filter out such transactions.
+    #[allow(clippy::explicit_counter_loop)]
+    pub(crate) fn get_full_batch<F: BlockFiller>(
         &mut self,
         mut seen: HashSet<TxnPointer>,
         block_filler: &mut F,
+        peer_count: u8,
+        peer_id: u8
     ) {
-        println!("fetch batch");
-        
         let mut result = VecDeque::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
@@ -193,77 +213,88 @@ impl Mempool {
         let mut skipped = HashSet::new();
         let mut total_bytes = 0;
         let seen_size = seen.len();
+
+        seen.extend(&self.pending);
+
         let mut txn_walked = 0usize;
+        let currentTotal = CACHE.len() + self.cached_ex.len();
 
-        let currentcount = self.alreadyprex.len();
+        let dif = u8::MAX / peer_count;
+        let mut my_space_start= 0;
+        let mut my_space_end = u8::MAX;
 
-        // iterate over the queue of transactions based on gas price
-        'main: for txn in self.transactions.iter_queue() {
-            txn_walked += 1;
-            if seen.contains(&TxnPointer::from(txn)) {
-                continue;
-            }
+        if peer_count > 1
+        {
+            my_space_start = peer_id * dif;
+            my_space_end = my_space_start + dif;
+        }
 
-            let tx_seq = txn.sequence_number.transaction_sequence_number;
-            let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
-            let seen_previous = tx_seq > 0 && seen.contains(&(txn.address, tx_seq - 1));
-            // include transaction if it's "next" for given account or
-            // we've already sent its ancestor to Consensus.
-            if seen_previous || account_sequence_number == Some(&tx_seq) {
-                let ptr = TxnPointer::from(txn);
-                seen.insert(ptr);
-
-                if ((result.len() + currentcount) as u64) >= block_filler.get_max_txn() {
-                    break;
+        if currentTotal < block_filler.get_max_txn() as usize * 5
+        {
+            // iterate over the queue of transactions based on gas price
+            'main: for txn in self.transactions.iter_queue() {
+                txn_walked += 1;
+                if seen.contains(&TxnPointer::from(txn)) {
+                    continue;
                 }
 
-                let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
-                if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
-                    break;
+                let shard = txn.address[txn.address.len()-1];
+                if shard < my_space_start || shard >= my_space_end {
+                     continue
                 }
-                total_bytes+= full_tx.raw_txn_bytes_len() as u64;
-                result.push_back(full_tx);
 
+                let tx_seq = txn.sequence_number.transaction_sequence_number;
+                let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
+                let seen_previous = tx_seq > 0 && seen.contains(&(txn.address, tx_seq - 1));
+                // include transaction if it's "next" for given account or
+                // we've already sent its ancestor to Consensus.
+                if seen_previous || account_sequence_number == Some(&tx_seq) {
+                    let ptr = TxnPointer::from(txn);
 
-                // check if we can now include some transactions
-                // that were skipped before for given account
-                let mut skipped_txn = (txn.address, tx_seq + 1);
-                while skipped.contains(&skipped_txn) {
-                    if ((result.len() + currentcount) as u64) >= block_filler.get_max_txn() {
-                        break 'main;
+                    if (result.len() as u64) >= block_filler.get_max_txn() {
+                        break;
                     }
-                    seen.insert(skipped_txn);
-                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
-                    skipped_txn = (txn.address, skipped_txn.1 + 1);
+
+                    let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
+                    if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
+                        break;
+                    }
+                    seen.insert(ptr);
+                    total_bytes+= full_tx.raw_txn_bytes_len() as u64;
+
+                    result.push_back(full_tx);
+
+                    // check if we can now include some transactions
+                    // that were skipped before for given account
+                    let mut skipped_txn = (txn.address, tx_seq + 1);
+                    while skipped.contains(&skipped_txn) {
+                        if (result.len() as u64) >= block_filler.get_max_txn() {
+                            break 'main;
+                        }
+                        seen.insert(skipped_txn);
+                        result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                        skipped_txn = (txn.address, skipped_txn.1 + 1);
+                    }
+                } else {
+                    skipped.insert(TxnPointer::from(txn));
                 }
-            } else {
-                skipped.insert(TxnPointer::from(txn));
             }
         }
 
         //result.append(&mut self.alreadyprex.drain(..).collect());
 
-
         let result_size = result.len();
-        if result_size > 0
+        if result_size > 0 || !CACHE.is_empty() || !self.cached_ex.is_empty()
         {
             println!("bla result: {}", result_size);
             println!("bla seen: {}", seen.len());
 
             block_filler.set_gas_per_core(self.last_max_gas);
-            let off = block_filler.add_all(result, &mut self.alreadyprex, &mut self.pre_execution_storage);
-            println!("bla forlater: {}", off.len());
-            self.alreadyprex.extend(off);
-
-            if result_size > 2000 {
-                let dif = max(10000 / block_filler.get_blockx().len(), 1);
+            block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
+            if result_size > 50000 {
+                let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
-
-            //for tx in off
-            //{
-            //    seen.remove(&(tx.sender(), tx.sequence_number()));
-            //}
 
             println!("bla blocklen: {}", block_filler.get_blockx().len());
             println!("bla seen now: {}", seen.len());

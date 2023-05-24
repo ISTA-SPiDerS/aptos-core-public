@@ -476,19 +476,17 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 }
 
                 const GAS_PER_CORE: u64 = 200_000_000;
-                let mut validator = smp.validator.write();
-                let mut block_filler: DependencyFiller<TransactionValidator> = DependencyFiller::new(
-                    &mut validator,
+                let mut block_filler: DependencyFiller = DependencyFiller::new(
                     GAS_PER_CORE,
                     max_bytes,
-                    10000, num_cpus::get() as u64);
-                mempool.get_batch(exclude_transactions, &mut block_filler);
+                    10000, num_cpus::get() as u64, smp.channel.clone());
+                mempool.get_full_batch(exclude_transactions, &mut block_filler, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();
                 txns = block_filler.get_block();
             }
 
-            // mempool_service_transactions is logged inside get_batch
+            // mempool_service_transactions is logged inside get_full_batch
 
             (
                 QuorumStoreResponse::GetBatchResponse(txns, gas_estimates, dependency_graph),

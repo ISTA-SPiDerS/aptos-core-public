@@ -298,6 +298,7 @@ impl Client {
             block_height: r.block_height.into(),
             cursor: None,
         });
+
         assert_eq!(response.inner().chain_id, response.state().chain_id);
         assert_eq!(response.inner().epoch, response.state().epoch);
         assert_eq!(response.inner().version, response.state().version);

@@ -68,9 +68,9 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-        let needed = accounts.len() * transactions_per_account;
+        let needed = accounts.len() * 10;
         let mut requests = Vec::with_capacity(needed);
-        let load_type = self.load_type;
+        let load_type = LoadType::NFT;
         let coins = COIN_DISTR.len();
         let mut rng: ThreadRng = thread_rng();
         println!("Generating {} transactions", needed);
@@ -255,9 +255,10 @@ impl OurBenchmarkGeneratorCreator {
         let mut package_handler = PackageHandler::new();
         let package = package_handler.pick_benchmark_package(account);
         let txn = package.publish_transaction(account, &txn_factory);
+        info!("Publishing {} packages {}", requests.len(), txn.authenticator());
+
         requests.push(txn);
 
-        info!("Publishing {} packages", requests.len());
         txn_executor.execute_transactions(&requests).await.unwrap();
         info!("Done publishing {} packages", requests.len());
 
