@@ -158,7 +158,7 @@ impl Default for EmitJobRequest {
             txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
             init_retry_interval: Duration::from_secs(270),
-            max_transactions_per_account: 1000,
+            max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
