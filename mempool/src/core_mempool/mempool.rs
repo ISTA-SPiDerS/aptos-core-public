@@ -223,6 +223,8 @@ impl Mempool {
         let mut my_space_start= 0;
         let mut my_space_end = u8::MAX;
 
+
+        println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
         {
             my_space_start = peer_id * dif;
