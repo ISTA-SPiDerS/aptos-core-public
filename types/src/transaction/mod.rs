@@ -28,12 +28,7 @@ use move_core_types::transaction_argument::convert_txn_args;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    convert::TryFrom,
-    fmt,
-    fmt::{Debug, Display, Formatter},
-};
+use std::{cmp, collections::HashMap, convert::TryFrom, fmt, fmt::{Debug, Display, Formatter}};
 
 pub mod authenticator;
 mod change_set;
@@ -61,6 +56,7 @@ use itertools::Itertools;
 use rayon::iter::plumbing::UnindexedConsumer;
 use rayon::vec::IntoIter;
 use core_affinity;
+use proptest::num::usize;
 pub use transaction_argument::{parse_transaction_argument, TransactionArgument};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
@@ -1692,7 +1688,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
+        .num_threads(cmp::min(8, num_cpus::get()))
         .thread_name(|index| format!("par_exec_{}", index))
         .spawn_handler(|thread| {
             std::thread::spawn(|| {
