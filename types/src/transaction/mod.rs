@@ -56,7 +56,6 @@ use itertools::Itertools;
 use rayon::iter::plumbing::UnindexedConsumer;
 use rayon::vec::IntoIter;
 use core_affinity;
-use proptest::num::usize;
 pub use transaction_argument::{parse_transaction_argument, TransactionArgument};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
