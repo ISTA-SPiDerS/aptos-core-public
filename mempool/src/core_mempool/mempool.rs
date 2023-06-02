@@ -224,12 +224,14 @@ impl Mempool {
         let mut my_space_end = u8::MAX;
 
 
-        println!("bla peers: {} {}", peer_id, peer_count);
+        //println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
         {
             my_space_start = peer_id * dif;
             my_space_end = my_space_start + dif;
         }
+
+        let mut shardedOutCounter = 0;
 
         if currentTotal < block_filler.get_max_txn() as usize * 5
         {
@@ -242,7 +244,9 @@ impl Mempool {
 
                 let shard = txn.address[txn.address.len()-1];
                 if shard < my_space_start || shard >= my_space_end {
-                     //continue
+                    shardedOutCounter+=1;
+                    println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard)
+                    continue
                 }
 
                 let tx_seq = txn.sequence_number.transaction_sequence_number;
@@ -288,8 +292,7 @@ impl Mempool {
         let result_size = result.len();
         if result_size > 0 || !CACHE.is_empty() || !self.cached_ex.is_empty()
         {
-            println!("bla result: {}", result_size);
-            println!("bla seen: {}", seen.len());
+            println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
@@ -299,7 +302,6 @@ impl Mempool {
             }
 
             println!("bla blocklen: {}", block_filler.get_blockx().len());
-            println!("bla seen now: {}", seen.len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
