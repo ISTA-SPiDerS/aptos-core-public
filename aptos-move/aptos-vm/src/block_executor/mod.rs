@@ -145,7 +145,7 @@ impl BlockAptosVM {
                 }
 
 
-                return Ok(ot);
+                Ok(ot)
             },
             Err(Error::ModulePathReadWrite) => {
                 unreachable!("[Execution]: Must be handled by sequential fallback")
