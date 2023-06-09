@@ -219,15 +219,15 @@ impl Mempool {
         let mut txn_walked = 0usize;
         let currentTotal = CACHE.len() + self.cached_ex.len();
 
-        let dif = u8::MAX / peer_count;
-        let mut my_space_start= 0;
-        let mut my_space_end = u8::MAX;
+        let dif:u32 = 256 as u32 / peer_count as u32;
+        let mut my_space_start= 0 as u32;
+        let mut my_space_end = u8::MAX as u32;
 
 
         //println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
         {
-            my_space_start = peer_id * dif;
+            my_space_start = peer_id as u32 * dif;
             my_space_end = my_space_start + dif;
         }
 
@@ -242,8 +242,8 @@ impl Mempool {
                     continue;
                 }
 
-                let shard = txn.address[txn.address.len()-1];
-                if shard < my_space_start || shard > my_space_end {
+                let shard = txn.address[txn.address.len()-1] as u32;
+                if shard < my_space_start || shard >= my_space_end {
                     shardedOutCounter+=1;
                     println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                     continue
