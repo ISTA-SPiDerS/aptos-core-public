@@ -68,7 +68,7 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-        let needed = accounts.len() * transactions_per_account;
+        let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
         let load_type = self.load_type;
         let coins = COIN_DISTR.len();
