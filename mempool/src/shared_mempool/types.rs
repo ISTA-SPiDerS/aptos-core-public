@@ -39,7 +39,7 @@ use std::time::Duration;
 use dashmap::DashMap;
 use tokio::runtime::Handle;
 use aptos_types::transaction::authenticator::TransactionAuthenticator;
-use aptos_types::transaction::RAYON_EXEC_POOL;
+use aptos_types::transaction::RAYON_PRE_EXEC_POOL;
 use aptos_types::vm_status::{StatusCode, VMStatus};
 use once_cell::sync::{Lazy, OnceCell};
 use rayon::iter::ParallelIterator;
@@ -105,7 +105,7 @@ impl<
 
                 {
                     let val = locked_val.write();
-                    RAYON_EXEC_POOL.install(|| {
+                    RAYON_PRE_EXEC_POOL.install(|| {
                         input.par_drain(..)
                             .for_each(|(index, tx)| {
                                 let result = val.speculate_transaction(&tx);
