@@ -90,7 +90,7 @@ impl<
             {
                 loop
                 {
-                    if input.len() >= 100 {
+                    if input.len() >= 64 {
                         break;
                     }
                     if let Ok((index, tx)) = rx.try_recv() {
