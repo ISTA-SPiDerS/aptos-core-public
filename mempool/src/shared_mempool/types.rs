@@ -90,7 +90,7 @@ impl<
             {
                 loop
                 {
-                    if input.len() >= 256 {
+                    if input.len() >= 32 {
                         break;
                     }
                     if let Ok((index, tx)) = rx.try_recv() {
