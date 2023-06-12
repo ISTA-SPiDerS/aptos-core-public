@@ -233,7 +233,7 @@ impl Mempool {
 
         let mut shardedOutCounter = 0;
 
-        if currentTotal < block_filler.get_max_txn() as usize * 5
+        if currentTotal < block_filler.get_max_txn() as usize * 2
         {
             // iterate over the queue of transactions based on gas price
             'main: for txn in self.transactions.iter_queue() {
@@ -290,7 +290,7 @@ impl Mempool {
         //result.append(&mut self.alreadyprex.drain(..).collect());
 
         let result_size = result.len();
-        if result_size > 0 || !CACHE.is_empty() || !self.cached_ex.is_empty()
+        if result_size > 0 || currentTotal > 0
         {
             println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
