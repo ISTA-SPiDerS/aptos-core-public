@@ -229,8 +229,6 @@ impl Mempool {
         let mut my_space_end = u8::MAX as u32;
 
         let mut forLater:Vec<OrderedQueueKey> = vec![];
-
-
         //println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
         {
@@ -252,7 +250,7 @@ impl Mempool {
                 let shard = txn.address[txn.address.len()-1] as u32;
                 if shard < my_space_start || shard >= my_space_end {
                     shardedOutCounter+=1;
-                    forLater.push(txn.clone());
+                    //forLater.push(txn.clone());
                     //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                     continue
                 }
@@ -318,8 +316,7 @@ impl Mempool {
             seen_after = seen.len(),
             result_size = result_size,
             block_size = block_filler.get_blockx().len(),
-            byte_size = total_bytes,
-        );
+            byte_size = total_bytes,);
 
             println!("{}", block_filler.get_blockx().len());
 
