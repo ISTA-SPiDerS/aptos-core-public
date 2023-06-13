@@ -240,7 +240,7 @@ impl Mempool {
         if currentTotal < block_filler.get_max_txn() as usize * 2
         {
             // iterate over the queue of transactions based on gas price
-            'main: for txn in &self.transactions.iter_queue() {
+            'main: for txn in self.transactions.iter_queue() {
                 txn_walked += 1;
                 if seen.contains(&TxnPointer::from(txn)) {
                     continue;
@@ -290,10 +290,6 @@ impl Mempool {
                     skipped.insert(TxnPointer::from(txn));
                 }
             }
-
-            for later in forLater {
-                self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number).unwrap().committed_hash());
-            }
         }
 
         //result.append(&mut self.alreadyprex.drain(..).collect());
@@ -337,6 +333,10 @@ impl Mempool {
             block_size = 0,
             byte_size = 0,
         );
+        }
+
+        for later in forLater {
+            self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number).unwrap().committed_hash());
         }
     }
 
