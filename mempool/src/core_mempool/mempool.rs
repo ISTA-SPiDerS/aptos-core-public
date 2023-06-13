@@ -220,8 +220,6 @@ impl Mempool {
 
             let shard = txn.address[txn.address.len()-1] as u32;
             if shard < my_space_start || shard >= my_space_end {
-                shardedOutCounter+=1;
-                forLater.push(txn.clone());
                 //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                 continue
             }
