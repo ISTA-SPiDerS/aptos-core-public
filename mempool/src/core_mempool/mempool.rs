@@ -38,6 +38,7 @@ use anyhow;
 use dashmap::{DashMap, DashSet};
 use futures::pending;
 use aptos_crypto::hash::TestOnlyHash;
+use crate::core_mempool::index::OrderedQueueKey;
 use crate::shared_mempool::types::CACHE;
 
 pub struct Mempool {
@@ -224,6 +225,8 @@ impl Mempool {
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
 
+        let mut forLater:Vec<&OrderedQueueKey> = vec![];
+
 
         //println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
@@ -246,7 +249,7 @@ impl Mempool {
                 let shard = txn.address[txn.address.len()-1] as u32;
                 if shard < my_space_start || shard >= my_space_end {
                     shardedOutCounter+=1;
-                    self.transactions.reject_transaction(&txn.address, txn.sequence_number.transaction_sequence_number, &self.transactions.get(&txn.address, txn.sequence_number.transaction_sequence_number).unwrap().committed_hash());
+                    forLater.push(txn);
                     //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                     continue
                 }
@@ -286,6 +289,10 @@ impl Mempool {
                 } else {
                     skipped.insert(TxnPointer::from(txn));
                 }
+            }
+
+            for later in forLater {
+                self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number).unwrap().committed_hash());
             }
         }
 
