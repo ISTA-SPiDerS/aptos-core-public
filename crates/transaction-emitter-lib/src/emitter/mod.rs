@@ -155,7 +155,7 @@ impl Default for EmitJobRequest {
             init_gas_price_multiplier: 1,
             reuse_accounts: false,
             mint_to_root: false,
-            txn_expiration_time_secs: 120,
+            txn_expiration_time_secs: 270,
             init_expiration_multiplier: 1.0,
             init_retry_interval: Duration::from_secs(30),
             max_transactions_per_account: 10,
