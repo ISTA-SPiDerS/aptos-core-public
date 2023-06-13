@@ -156,7 +156,7 @@ impl Default for EmitJobRequest {
             reuse_accounts: false,
             mint_to_root: false,
             txn_expiration_time_secs: 120,
-            init_expiration_multiplier: 3.0,
+            init_expiration_multiplier: 1.0,
             init_retry_interval: Duration::from_secs(30),
             max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
