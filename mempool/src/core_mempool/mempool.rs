@@ -336,7 +336,8 @@ impl Mempool {
         }
 
         for later in forLater {
-            self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number).unwrap().committed_hash());
+            let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
+            self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, ^&tx.unwrap().committed_hash());
         }
     }
 
