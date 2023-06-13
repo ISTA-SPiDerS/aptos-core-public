@@ -240,7 +240,7 @@ impl Mempool {
         if currentTotal < block_filler.get_max_txn() as usize * 2
         {
             // iterate over the queue of transactions based on gas price
-            'main: for txn in self.transactions.iter_queue() {
+            'main: for txn in &self.transactions.iter_queue() {
                 txn_walked += 1;
                 if seen.contains(&TxnPointer::from(txn)) {
                     continue;
