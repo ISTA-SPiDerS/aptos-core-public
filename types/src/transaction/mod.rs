@@ -1686,7 +1686,6 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 }
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
-// let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
     rayon::ThreadPoolBuilder::new()
         .num_threads(cmp::min(16, num_cpus::get()/2))
         .thread_name(|index| format!("par_exec_{}", index))

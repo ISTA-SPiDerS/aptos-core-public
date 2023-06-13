@@ -23,8 +23,10 @@ use aptos_types::{
     account_address::AccountAddress,
     account_config::AccountSequenceInfo,
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    transaction::SignedTransaction,
+    transaction::{SignedTransaction, authenticator::TransactionAuthenticator},
 };
+use aptos_types::vm_status::VMStatus;
+use aptos_vm_validator::vm_validator::{VMSpeculationResult};
 use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
@@ -166,13 +168,25 @@ impl Mempool {
     /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
-    pub(crate) fn get_batch<F: BlockFiller>(
-        &self,
+    pub(crate) fn get_batch<F: BlockFiller>( &mut self,
+                                             mut seen: HashSet<TxnPointer>,
+                                             block_filler: &mut F)
+    {
+        self.get_full_batch(seen, block_filler, 1, 0)
+    }
+
+    /// Fetches next block of transactions for consensus.
+    /// `batch_size` - size of requested block.
+    /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
+    ///  mempool should filter out such transactions.
+    #[allow(clippy::explicit_counter_loop)]
+    pub(crate) fn get_full_batch<F: BlockFiller>(
+        &mut self,
         mut seen: HashSet<TxnPointer>,
         block_filler: &mut F,
+        peer_count: u8,
+        peer_id: u8
     ) {
-        println!("fetch batch");
-        
         let mut result = VecDeque::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
@@ -183,12 +197,41 @@ impl Mempool {
         let mut skipped = HashSet::new();
         let mut total_bytes = 0;
         let seen_size = seen.len();
+
+        seen.extend(&self.pending);
+
         let mut txn_walked = 0usize;
+        let currentTotal = CACHE.len() + self.cached_ex.len();
+
+        let dif:u32 = 256 as u32 / peer_count as u32;
+        let mut my_space_start= 0 as u32;
+        let mut my_space_end = u8::MAX as u32;
+
+        let mut forLater:Vec<OrderedQueueKey> = vec![];
+
+
+        //println!("bla peers: {} {}", peer_id, peer_count);
+        if peer_count > 1
+        {
+            my_space_start = peer_id as u32 * dif;
+            my_space_end = my_space_start + dif;
+        }
+
+        let mut shardedOutCounter = 0;
+
         // iterate over the queue of transactions based on gas price
         'main: for txn in self.transactions.iter_queue() {
             txn_walked += 1;
             if seen.contains(&TxnPointer::from(txn)) {
                 continue;
+            }
+
+            let shard = txn.address[txn.address.len()-1] as u32;
+            if shard < my_space_start || shard >= my_space_end {
+                shardedOutCounter+=1;
+                forLater.push(txn.clone());
+                //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
+                continue
             }
 
             let tx_seq = txn.sequence_number.transaction_sequence_number;

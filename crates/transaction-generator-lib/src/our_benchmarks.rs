@@ -75,23 +75,23 @@ impl TransactionGenerator for OurBenchmark {
         let mut rng: ThreadRng = thread_rng();
         println!("Generating {} transactions", needed);
 
-        let mut fromVecP2P:Vec<f64> = vec![];
-        let mut toVecP2P:Vec<f64> = vec![];
+        let mut from_vec_p2p:Vec<f64> = vec![];
+        let mut to_vec_p2p:Vec<f64> = vec![];
 
         for (key, value) in TX_TO {
             for i in 0..value {
-                toVecP2P.push(key);
+                to_vec_p2p.push(key);
             }
         }
 
         for (key, value) in TX_FROM {
             for i in 0..value {
-                fromVecP2P.push(key);
+                from_vec_p2p.push(key);
             }
         }
 
-        let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
-        let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
+        let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&to_vec_p2p).unwrap();
+        let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&from_vec_p2p).unwrap();
         
         let mut distr:Vec<f64> = vec![];
         if matches!(load_type, LoadType::DEXAVG)
@@ -153,13 +153,13 @@ impl TransactionGenerator for OurBenchmark {
 
         let dist : WeightedIndex<f64> = WeightedIndex::new(&distr).unwrap();
 
-        let mut fromVec: Vec<usize> = vec![];
+        let mut from_vec: Vec<usize> = vec![];
         for (key, value) in TX_NFT_FROM {
             for i in 0..(value as usize) {
-                fromVec.push(key as usize)
+                from_vec.push(key as usize)
             }
         }
-        let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
+        let from_dist: WeightedIndex<usize> = WeightedIndex::new(&from_vec).unwrap();
 
         let mut max_count:usize = 1;
         let max_value_opt = len_options.iter().max();
@@ -255,9 +255,10 @@ impl OurBenchmarkGeneratorCreator {
         let mut package_handler = PackageHandler::new();
         let package = package_handler.pick_benchmark_package(account);
         let txn = package.publish_transaction(account, &txn_factory);
+        info!("Publishing {} packages {}", requests.len(), txn.authenticator());
+
         requests.push(txn);
 
-        info!("Publishing {} packages", requests.len());
         txn_executor.execute_transactions(&requests).await.unwrap();
         info!("Done publishing {} packages", requests.len());
 

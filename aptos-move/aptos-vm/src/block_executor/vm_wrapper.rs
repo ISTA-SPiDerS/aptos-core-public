@@ -125,7 +125,9 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
                     ExecutionStatus::Success(AptosTransactionOutput::new(output_ext))
                 }
             },
-            Err(err) => ExecutionStatus::Abort(err),
+            Err(err) => {
+                ExecutionStatus::Abort(err)
+            },
         }
     }
 }
