@@ -198,17 +198,12 @@ impl Mempool {
         let mut total_bytes = 0;
         let seen_size = seen.len();
 
-        seen.extend(&self.pending);
-
         let mut txn_walked = 0usize;
         let currentTotal = CACHE.len() + self.cached_ex.len();
 
         let dif:u32 = 256 as u32 / peer_count as u32;
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
-
-        let mut forLater:Vec<OrderedQueueKey> = vec![];
-
 
         //println!("bla peers: {} {}", peer_id, peer_count);
         if peer_count > 1
