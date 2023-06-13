@@ -225,7 +225,7 @@ impl Mempool {
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
 
-        let mut forLater:Vec<&OrderedQueueKey> = vec![];
+        let mut forLater:Vec<OrderedQueueKey> = vec![];
 
 
         //println!("bla peers: {} {}", peer_id, peer_count);
@@ -249,7 +249,7 @@ impl Mempool {
                 let shard = txn.address[txn.address.len()-1] as u32;
                 if shard < my_space_start || shard >= my_space_end {
                     shardedOutCounter+=1;
-                    forLater.push(txn);
+                    forLater.push(txn.clone());
                     //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                     continue
                 }
@@ -337,7 +337,7 @@ impl Mempool {
 
         for later in forLater {
             let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
-            self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &&tx.unwrap().committed_hash());
+            self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &tx.unwrap().committed_hash());
         }
     }
 
