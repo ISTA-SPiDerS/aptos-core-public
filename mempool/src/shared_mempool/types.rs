@@ -19,9 +19,7 @@ use aptos_network::{
     application::interface::NetworkClientInterface, transport::ConnectionMetadata,
 };
 use aptos_storage_interface::DbReader;
-use aptos_types::{
-    mempool_status::MempoolStatus, transaction::SignedTransaction, vm_status::DiscardedVMStatus,
-};
+use aptos_types::{mempool_status::MempoolStatus, PeerId, transaction::SignedTransaction, vm_status::DiscardedVMStatus};
 use aptos_vm_validator::vm_validator::TransactionValidation;
 use futures::{
     channel::{mpsc, mpsc::UnboundedSender, oneshot},
@@ -65,8 +63,9 @@ impl<
         validator: Arc<RwLock<TransactionValidator>>,
         subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
         role: RoleType,
+        peer_id: PeerId
     ) -> Self {
-        let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone());
+        let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone(), peer_id);
         SharedMempool {
             mempool,
             config,
