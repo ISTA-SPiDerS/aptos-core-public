@@ -34,6 +34,7 @@ use std::{
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
+use std::time::Instant;
 use anyhow;
 use dashmap::{DashMap, DashSet};
 use futures::pending;
@@ -205,6 +206,8 @@ impl Mempool {
         peer_count: u8,
         peer_id: u8
     ) {
+
+        let mut time = Instant::now();
         let mut result = VecDeque::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
@@ -339,6 +342,8 @@ impl Mempool {
             let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
             self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &tx.unwrap().committed_hash());
         }
+
+        println!("bla total: {}", time.elapsed().as_millis());
     }
 
     /// Periodic core mempool garbage collection.
