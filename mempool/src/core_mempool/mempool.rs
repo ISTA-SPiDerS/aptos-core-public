@@ -33,6 +33,7 @@ use std::{
 };
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
+use std::hash::Hash;
 use anyhow;
 use dashmap::{DashMap, DashSet};
 use futures::pending;
@@ -245,6 +246,7 @@ impl Mempool {
                 let shard = txn.address[txn.address.len()-1] as u32;
                 if shard < my_space_start || shard >= my_space_end {
                     shardedOutCounter+=1;
+                    self.transactions.reject_transaction(&txn.address, txn.sequence_number.transaction_sequence_number, &self.transactions.get(&txn.address, txn.sequence_number.transaction_sequence_number).unwrap().committed_hash());
                     //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
                     continue
                 }
