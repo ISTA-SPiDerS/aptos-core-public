@@ -199,7 +199,6 @@ impl Mempool {
         let seen_size = seen.len();
 
         let mut txn_walked = 0usize;
-        let currentTotal = CACHE.len() + self.cached_ex.len();
 
         let dif:u32 = 256 as u32 / peer_count as u32;
         let mut my_space_start= 0 as u32;
@@ -211,8 +210,6 @@ impl Mempool {
             my_space_start = peer_id as u32 * dif;
             my_space_end = my_space_start + dif;
         }
-
-        let mut shardedOutCounter = 0;
 
         // iterate over the queue of transactions based on gas price
         'main: for txn in self.transactions.iter_queue() {
