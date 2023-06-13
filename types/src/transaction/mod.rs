@@ -1687,7 +1687,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 
 pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(cmp::min(8, num_cpus::get()/2))
+        .num_threads(cmp::min(4, num_cpus::get()/2))
         .thread_name(|index| format!("par_exec_{}", index))
         .spawn_handler(|thread| {
             std::thread::spawn(|| {
@@ -1703,7 +1703,7 @@ pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
 
 pub static RAYON_PRE_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(cmp::min(8, num_cpus::get()/2))
+        .num_threads(cmp::min(4, num_cpus::get()/2))
         .thread_name(|index| format!("pre_par_exec_{}", index))
         .spawn_handler(|thread| {
             std::thread::spawn(|| {
