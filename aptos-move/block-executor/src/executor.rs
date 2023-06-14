@@ -409,7 +409,7 @@ where
         INIT.call_once(|| {Self::setup();
              ()});
 
-        RAYON_EXEC_POOL.scope(|s| {
+        RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
             for i in 0..self.concurrency_level {
                 struct NotCopy<T>(T);
                 let i = NotCopy(i);
@@ -493,7 +493,7 @@ where
             }
         }
 
-        RAYON_EXEC_POOL.spawn(move || {
+        RAYON_EXEC_POOL.lock().unwrap().spawn(move || {
             // Explicit async drops.
             drop(last_input_output);
             drop(scheduler);
@@ -610,7 +610,7 @@ where
             )
         }
 
-        RAYON_EXEC_POOL.spawn(move || {
+        RAYON_EXEC_POOL.lock().unwrap().spawn(move || {
             // Explicit async drops.
             drop(signature_verified_block);
         });
