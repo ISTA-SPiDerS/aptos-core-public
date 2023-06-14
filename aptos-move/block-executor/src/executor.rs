@@ -313,6 +313,7 @@ where
                 },
                 SchedulerTask::SigTask(index) => {
                     profiler.start_timing(&"sig".to_string());
+                    profiler.count_one("sigc".to_string());
                     for n in 0..24 {
                         if index + n < block.len() {
                             executor.verify_transaction(block[index + n].borrow());
