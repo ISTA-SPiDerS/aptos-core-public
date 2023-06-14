@@ -105,21 +105,23 @@ impl<
 
                 {
                     let val = locked_val.write();
-                    input.par_drain(..)
-                        .for_each(|(index, tx)| {
-                            let result = val.speculate_transaction(&tx);
-                            let (a, b) = result.unwrap();
+                    RAYON_EXEC_POOL.install(|| {
+                        input.par_drain(..)
+                            .for_each(|(index, tx)| {
+                                let result = val.speculate_transaction(&tx);
+                                let (a, b) = result.unwrap();
 
-                            match b {
-                                VMStatus::Executed => {
-                                    CACHE.insert(index, (a, b, tx));
+                                match b {
+                                    VMStatus::Executed => {
+                                        CACHE.insert(index, (a, b, tx));
+                                    }
+                                    _ => {
+                                        println!("blub pre-exec failure");
+                                        failures.insert(index, tx);
+                                    }
                                 }
-                                _ => {
-                                    println!("blub pre-exec failure");
-                                    failures.insert(index, tx);
-                                }
-                            }
-                        });
+                            });
+                    });
                 }
 
                 for value in failures {
