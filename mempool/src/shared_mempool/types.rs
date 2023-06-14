@@ -105,8 +105,8 @@ impl<
 
                 {
                     let val = locked_val.write();
-                    RAYON_EXEC_POOL.install(|| {
-                        input.par_drain(..)
+                    //RAYON_EXEC_POOL.install(|| {
+                        input.drain(..)
                             .for_each(|(index, tx)| {
                                 let result = val.speculate_transaction(&tx);
                                 let (a, b) = result.unwrap();
@@ -121,7 +121,7 @@ impl<
                                     }
                                 }
                             });
-                    });
+                    //});
                 }
 
                 for value in failures {
