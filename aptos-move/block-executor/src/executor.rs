@@ -456,7 +456,7 @@ where
 
         let chunk_size =
             (num_txns + 4 * self.concurrency_level - 1) / (4 * self.concurrency_level);
-        let interm_result: Vec<ExtrResult<E>> = RAYON_EXEC_POOL.install(|| {
+        let interm_result: Vec<ExtrResult<E>> = RAYON_EXEC_POOL.lock().unwrap().install(|| {
             (0..num_txns)
                 .collect::<Vec<TxnIndex>>()
                 .par_chunks(chunk_size)

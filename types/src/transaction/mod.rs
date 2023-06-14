@@ -51,6 +51,7 @@ use num_cpus;
 use rayon::prelude::*;
 use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64};
 use std::ops::{Add, AddAssign};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use itertools::Itertools;
 use rayon::iter::plumbing::UnindexedConsumer;
@@ -1685,7 +1686,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
     }
 }
 
-pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
+pub static RAYON_EXEC_POOL: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex::new({
     rayon::ThreadPoolBuilder::new()
         .num_threads(cmp::min(16, num_cpus::get()/2))
         /*.thread_name(|index| format!("par_exec_{}", index))
@@ -1699,7 +1700,7 @@ pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
         })*/
         .build()
         .unwrap()
-});
+}));
 
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]
