@@ -273,7 +273,7 @@ where
                             executor.verify_transaction(block[index + n].borrow());
                         }
                     }
-                    profiler.end_timing(&sig.to_string());
+                    profiler.end_timing(&"sig".to_string());
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
