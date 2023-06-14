@@ -267,11 +267,13 @@ where
                     ret
                 },
                 SchedulerTask::SigTask(index) => {
+                    profiler.start_timing(&"sig".to_string());
                     for n in 0..24 {
                         if  index + n < block.len() {
                             executor.verify_transaction(block[index + n].borrow());
                         }
                     }
+                    profiler.end_timing(&sig.to_string());
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
@@ -370,6 +372,8 @@ where
         if num_txns > 2 {
             println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
             println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
+            println!("bla sigtime: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
+            println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
         }
         
         // TODO: for large block sizes and many cores, extract outputs in parallel.
