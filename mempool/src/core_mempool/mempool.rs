@@ -238,7 +238,7 @@ impl Mempool {
 
         let mut shardedOutCounter = 0;
 
-        if currentTotal < block_filler.get_max_txn() as usize * 2
+        if currentTotal < block_filler.get_max_txn() as usize
         {
             // iterate over the queue of transactions based on gas price
             'main: for txn in self.transactions.iter_queue() {
@@ -302,7 +302,7 @@ impl Mempool {
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
-            if result_size > 2000 {
+            if result_size > 500 {
                 let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
