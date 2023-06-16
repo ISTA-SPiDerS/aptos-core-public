@@ -1686,7 +1686,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
     }
 }
 
-pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| Mutex::new({
+pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
     rayon::ThreadPoolBuilder::new()
         .num_threads(cmp::min(8, num_cpus::get()/2))
         /*.thread_name(|index| format!("par_exec_{}", index))
@@ -1700,7 +1700,7 @@ pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| Mutex::new({
         })*/
         .build()
         .unwrap()
-}));
+});
 
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]
