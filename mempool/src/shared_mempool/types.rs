@@ -105,7 +105,7 @@ impl<
 
                 {
                     let val = locked_val.write();
-                    RAYON_EXEC_POOL.lock().unwrap().install(|| {
+                    RAYON_EXEC_POOL.install(|| {
                         input.par_drain(..)
                             .for_each(|(index, tx)| {
                                 let result = val.speculate_transaction(&tx);

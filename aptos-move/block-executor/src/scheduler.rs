@@ -815,7 +815,7 @@ impl Scheduler {
 
         // Create a condition variable associated with the dependency.
         panic!("This should not be called");
-        let thread_id = RAYON_EXEC_POOL.lock().unwrap().current_thread_index().unwrap();
+        let thread_id = RAYON_EXEC_POOL.current_thread_index().unwrap();
         let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();

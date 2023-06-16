@@ -62,7 +62,7 @@ impl<T: Transaction> OutputDeltaResolver<T> {
             }
         }
 
-        RAYON_EXEC_POOL.lock().unwrap().spawn(move || drop(self));
+        RAYON_EXEC_POOL.spawn(move || drop(self));
 
         ret
     }

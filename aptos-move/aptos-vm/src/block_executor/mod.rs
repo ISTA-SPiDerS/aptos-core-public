@@ -97,7 +97,7 @@ impl BlockAptosVM {
         let signature_verification_timer =
             BLOCK_EXECUTOR_SIGNATURE_VERIFICATION_SECONDS.start_timer();
         let signature_verified_block: Vec<PreprocessedTransaction> =
-            RAYON_EXEC_POOL.lock().unwrap().install(|| {
+            RAYON_EXEC_POOL.install(|| {
                 transactions.txns().to_vec()
                     .into_par_iter()
                     .with_min_len(25)
@@ -118,7 +118,7 @@ impl BlockAptosVM {
             .execute_block(state_view, register, state_view, mode, profiler)
             .map(|results| {
                 // Process the outputs in parallel, combining delta writes with other writes.
-                RAYON_EXEC_POOL.lock().unwrap().install(|| {
+                RAYON_EXEC_POOL.install(|| {
                     results
                         .into_par_iter()
                         .map(|(output, delta_writes)| {
