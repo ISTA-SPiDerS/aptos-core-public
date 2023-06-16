@@ -339,8 +339,10 @@ impl Mempool {
         //    let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
         //    self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &tx.unwrap().committed_hash());
         //}
-
-        println!("bla total: {}", time.elapsed().as_millis());
+        let elapsed = time.elapsed().as_millis();
+        if elapsed > 0 {
+            println!("bla total: {}", elapsed);
+        }
     }
 
     /// Periodic core mempool garbage collection.
