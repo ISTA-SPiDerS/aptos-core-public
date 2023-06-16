@@ -479,7 +479,7 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                 let mut block_filler: DependencyFiller = DependencyFiller::new(
                     GAS_PER_CORE,
                     max_bytes,
-                    1000, num_cpus::get() as u64, smp.channel.clone());
+                    1000, 8, smp.channel.clone());
                 mempool.get_full_batch(exclude_transactions, &mut block_filler, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();
