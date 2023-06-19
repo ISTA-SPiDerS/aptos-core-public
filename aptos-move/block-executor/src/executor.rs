@@ -447,7 +447,7 @@ where
             println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
             println!("bla totaltime1: {}", (*profiler.lock()).collective_times.get("total time1").unwrap().as_millis());
             println!("bla totaltime2: {}", (*profiler.lock()).collective_times.get("total time2").unwrap().as_millis());
-            println!("bla comtime: {}", (*profiler.lock()).collective_times.get("committing").unwrap().as_millis());
+            println!("bla comtime: {}", (*profiler.lock()).collective_times.get("try_exec").unwrap().as_millis());
             println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
             println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
             println!("bla schedtime: {}", (*profiler.lock()).collective_times.get("scheduling").unwrap().as_millis());
