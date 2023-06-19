@@ -282,12 +282,14 @@ where
         loop {
             // Only one thread try_commit to avoid contention.
             if committing {
+                profiler.start_timing(&"committing".to_string());
                 // Keep committing txns until there is no more that can be committed now.
                 loop {
                     if scheduler.try_commit().is_none() {
                         break;
                     }
                 }
+                profiler.end_timing(&"committing".to_string());
             }
 
             scheduler_task = match scheduler_task {
@@ -400,7 +402,6 @@ where
             println!("bla runwith {}", self.concurrency_level);
         }
 
-
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
@@ -446,7 +447,7 @@ where
             println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
             println!("bla totaltime1: {}", (*profiler.lock()).collective_times.get("total time1").unwrap().as_millis());
             println!("bla totaltime2: {}", (*profiler.lock()).collective_times.get("total time2").unwrap().as_millis());
-            println!("bla sigtime: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
+            println!("bla comtime: {}", (*profiler.lock()).collective_times.get("committing").unwrap().as_millis());
             println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
             println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
             println!("bla schedtime: {}", (*profiler.lock()).collective_times.get("scheduling").unwrap().as_millis());
