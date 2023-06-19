@@ -319,7 +319,7 @@ impl BlockFiller for DependencyFiller {
             {
                 //println!("bla Wat a long chain: {}", finish_time);
             }
-            if finish_time > (self.gas_per_core as f64 * 1.2) as u64 {
+            if finish_time > self.gas_per_core as u64 {
                 //self.full = true;
                 println!("bla skip");
                 ind+=1;
