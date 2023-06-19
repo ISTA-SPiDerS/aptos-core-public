@@ -386,7 +386,6 @@ where
         assert!(self.concurrency_level > 1, "Must use sequential execution");
 
         let profiler = Arc::new(Mutex::new(input_profiler));
-        (*profiler.lock()).start_timing(&"total time".to_string());
 
         let versioned_data_cache = MVHashMap::new();
 
@@ -409,35 +408,44 @@ where
         INIT.call_once(|| {Self::setup();
              ()});
 
-        RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
-            for i in 0..self.concurrency_level {
-                struct NotCopy<T>(T);
-                let i = NotCopy(i);
-                s.spawn(|_|  {
-                    let i = i;
-                    self.work_task_with_scope(
-                        &executor_initial_arguments,
-                        signature_verified_block.txns(),
-                        &last_input_output,
-                        &versioned_data_cache,
-                        &scheduler,
-                        base_view,
-                        committing.swap(false, Ordering::SeqCst),
-                        profiler.clone(),
-                        barrier.clone(),
-                        i.0,
-                        mode
-                    );
-                });
-            }
-        });
+        {
+            (*profiler.lock()).start_timing(&"total time1".to_string());
 
-        (*profiler.lock()).end_timing(&"total time".to_string());
+            let pool = RAYON_EXEC_POOL.lock().unwrap();
+            (*profiler.lock()).start_timing(&"total time2".to_string());
+
+            pool.scope(|s| {
+                for i in 0..self.concurrency_level {
+                    struct NotCopy<T>(T);
+                    let i = NotCopy(i);
+                    s.spawn(|_| {
+                        let i = i;
+                        self.work_task_with_scope(
+                            &executor_initial_arguments,
+                            signature_verified_block.txns(),
+                            &last_input_output,
+                            &versioned_data_cache,
+                            &scheduler,
+                            base_view,
+                            committing.swap(false, Ordering::SeqCst),
+                            profiler.clone(),
+                            barrier.clone(),
+                            i.0,
+                            mode
+                        );
+                    });
+                }
+            });
+        }
+
+        (*profiler.lock()).end_timing(&"total time1".to_string());
+        (*profiler.lock()).end_timing(&"total time2".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
         if num_txns > 2 {
             println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
-            println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
+            println!("bla totaltime1: {}", (*profiler.lock()).collective_times.get("total time1").unwrap().as_millis());
+            println!("bla totaltime2: {}", (*profiler.lock()).collective_times.get("total time2").unwrap().as_millis());
             println!("bla sigtime: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
             println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
             println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
