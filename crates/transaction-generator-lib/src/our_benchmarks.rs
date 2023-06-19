@@ -73,7 +73,7 @@ impl TransactionGenerator for OurBenchmark {
         let load_type = self.load_type;
         let coins = COIN_DISTR.len();
         let mut rng: ThreadRng = thread_rng();
-        println!("Generating {} transactions", needed);
+        println!("Generating {:?} {} transactions", self.load_type, needed);
 
         let mut from_vec_p2p:Vec<f64> = vec![];
         let mut to_vec_p2p:Vec<f64> = vec![];
