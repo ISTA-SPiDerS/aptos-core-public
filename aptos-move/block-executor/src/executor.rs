@@ -447,22 +447,27 @@ where
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
         if num_txns > 2 {
-            println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
-            println!("bla totaltime1: {}", (*profiler.lock()).collective_times.get("total time1").unwrap().as_millis());
-            println!("bla totaltime2: {}", (*profiler.lock()).collective_times.get("total time2").unwrap().as_millis());
-            println!("bla comtime: {}", (*profiler.lock()).collective_times.get("committing").unwrap().as_millis());
-            println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
-            println!("bla schedtime: {}", (*profiler.lock()).collective_times.get("scheduling").unwrap().as_millis());
-            println!("bla try_exec: {}", (*profiler.lock()).collective_times.get("try_exec").unwrap().as_millis());
-            println!("bla exec_crit: {}", (*profiler.lock()).collective_times.get("exec_crit").unwrap().as_millis());
-            println!("bla schedsched: {}", (*profiler.lock()).collective_times.get("SCHEDULING").unwrap().as_millis());
-            println!("bla try_val: {}", (*profiler.lock()).collective_times.get("try_val").unwrap().as_millis());
-            println!("bla sigc: {}", (*profiler.lock()).counters.get("sigc").unwrap());
-            println!("bla sig: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
+            let mut prof = &(*profiler.lock());
+            println!("bla excount: {}", prof.counters.get("exec").unwrap());
+            println!("bla totaltime1: {}", prof.collective_times.get("total time1").unwrap().as_millis());
+            println!("bla totaltime2: {}", prof.collective_times.get("total time2").unwrap().as_millis());
+            println!("bla comtime: {}", prof.collective_times.get("committing").unwrap().as_millis());
+            println!("bla newsched: {}", prof.collective_times.get("newScheduler").unwrap().as_millis());
+            println!("bla schedtime: {}", prof.collective_times.get("scheduling").unwrap().as_millis());
+            println!("bla try_exec: {}", prof.collective_times.get("try_exec").unwrap().as_millis());
+            println!("bla exec_crit: {}", prof.collective_times.get("exec_crit").unwrap().as_millis());
+            println!("bla schedsched: {}", prof.collective_times.get("SCHEDULING").unwrap().as_millis());
+            println!("bla try_val: {}", prof.collective_times.get("try_val").unwrap().as_millis());
+            println!("bla sigc: {}", prof.counters.get("sigc").unwrap());
+            println!("bla sig: {}", prof.collective_times.get("sig").unwrap().as_millis());
 
             for i in 0..self.concurrency_level {
-                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(&format!("execution {}", i)).unwrap().as_millis());
-                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(&format!("thread time {}", i)).unwrap().as_millis());
+                let key = &format!("execution {}", i);
+                if prof.collective_times.contains_key(key)
+                {
+                    println!("bla exextime{}: {}", i, prof.collective_times.get(key).unwrap().as_millis());
+                    println!("bla thread time{}: {}", i, prof.collective_times.get(&format!("thread time {}", i)).unwrap().as_millis());
+                }
             }
 
         }
