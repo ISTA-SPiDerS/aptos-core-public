@@ -361,7 +361,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&format!("execution {}", idx).to_string());
+                    profiler.end_timing(&format!("execution {}", idx.to_string()));
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
