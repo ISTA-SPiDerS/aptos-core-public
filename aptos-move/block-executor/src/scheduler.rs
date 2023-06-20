@@ -460,6 +460,9 @@ impl Scheduler {
 
     /// Return the next task for the thread.
     pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
+        profiler.start_timing(&"try_exec".to_string());
+        profiler.start_timing(&"exec_crit".to_string());
+        
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
@@ -717,9 +720,6 @@ impl Scheduler {
 
 
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
-
-        profiler.start_timing(&"try_exec".to_string());
-        profiler.start_timing(&"exec_crit".to_string());
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
