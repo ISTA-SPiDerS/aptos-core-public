@@ -14,7 +14,7 @@ use crate::{
 
 use tracing::info;
 use color_eyre::Report;
-use itertools::{concat, Itertools};
+use itertools::{Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
 use std::{
     collections::HashMap,
@@ -268,7 +268,7 @@ where
         let executor = E::init(*executor_arguments);
 
 
-        profiler.start_timing(&"thread time".to_string() + idx.to_string());
+        profiler.start_timing(&format!("thread time {}", idx).to_string());
         let mut extimer: u128 = 0;
         let mut valtimer: u128 = 0;
         let mut resttimer: u128 = 0;
@@ -335,7 +335,7 @@ where
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
-                    profiler.end_timing(&"thread time".to_string() + idx.to_string());
+                    profiler.end_timing(&format!("thread time {}", idx.to_string()));
                     (*total_profiler.lock()).add_from(&profiler);
 
                     break;
@@ -347,7 +347,7 @@ where
                     //     thread_id,
                     //     version_to_execute.0
                     // );
-                    profiler.start_timing(&"execution".to_string() + idx.to_string());
+                    profiler.start_timing(&format!("execution {}", idx).to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -361,7 +361,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&"execution".to_string() + idx.to_string());
+                    profiler.end_timing(&format!("execution {}", idx).to_string());
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
@@ -463,8 +463,8 @@ where
             let mut i = 0;
             while i < 10 {
 
-                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(concat!("execution", i.to_string())).unwrap().as_millis());
-                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(concat!("thread time", i.to_string())).unwrap().as_millis());
+                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(&format!("execution {}", i)).unwrap().as_millis());
+                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(&format!("thread time {}", i)).unwrap().as_millis());
                 i+=1;
             }
 
