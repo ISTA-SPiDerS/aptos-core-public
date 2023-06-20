@@ -719,6 +719,7 @@ impl Scheduler {
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
 
         profiler.start_timing(&"try_exec".to_string());
+        profiler.start_timing(&"exec_crit".to_string());
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
@@ -733,6 +734,7 @@ impl Scheduler {
             {
 
                 profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
         }
@@ -754,6 +756,8 @@ impl Scheduler {
                 // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
                 // drop(my_global_idx_mutex);
                 profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
+
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
 
@@ -763,8 +767,10 @@ impl Scheduler {
         }
         else {
             if self.done() {
+                profiler.end_timing(&"try_exec".to_string());
                 return SchedulerTask::Done
             }
+            profiler.end_timing(&"try_exec".to_string());
             // //info!("Channel empty");
             return SchedulerTask::NoTask;
         }

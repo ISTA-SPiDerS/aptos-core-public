@@ -327,9 +327,6 @@ where
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
-                    if matches!(ret, SchedulerTask::NoTask) {
-                        thread::sleep(Duration::from_millis(1));
-                    }
                     profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
@@ -454,6 +451,8 @@ where
             println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
             println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
             println!("bla schedtime: {}", (*profiler.lock()).collective_times.get("scheduling").unwrap().as_millis());
+            println!("bla try_exec: {}", (*profiler.lock()).collective_times.get("try_exec").unwrap().as_millis());
+            println!("bla exec_crit: {}", (*profiler.lock()).collective_times.get("exec_crit").unwrap().as_millis());
         }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
