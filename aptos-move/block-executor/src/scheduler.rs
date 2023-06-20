@@ -462,7 +462,8 @@ impl Scheduler {
     pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
         profiler.start_timing(&"try_exec".to_string());
         profiler.start_timing(&"exec_crit".to_string());
-        
+        profiler.start_timing(&"try_val".to_string());
+
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
@@ -512,6 +513,7 @@ impl Scheduler {
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                         // //println!("validate: {:?}", version_to_validate);
                         let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                        profiler.end_timing(&"try_val".to_string());
                         profiler.end_timing(&"SCHEDULING".to_string());
                         return val;
                     }
@@ -564,6 +566,7 @@ impl Scheduler {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
                     profiler.end_timing(&"SCHEDULING".to_string());
+                    profiler.end_timing(&"try_val".to_string());
                     return val;
                 }
 
