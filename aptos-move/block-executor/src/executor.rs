@@ -268,7 +268,7 @@ where
         let executor = E::init(*executor_arguments);
 
 
-        profiler.start_timing(&"thread time".to_string());
+        profiler.start_timing(&"thread time".to_string() + idx.to_string());
         let mut extimer: u128 = 0;
         let mut valtimer: u128 = 0;
         let mut resttimer: u128 = 0;
@@ -335,7 +335,7 @@ where
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
-                    profiler.end_timing(&"thread time".to_string());
+                    profiler.end_timing(&"thread time".to_string() + idx.to_string());
                     (*total_profiler.lock()).add_from(&profiler);
 
                     break;
@@ -347,7 +347,7 @@ where
                     //     thread_id,
                     //     version_to_execute.0
                     // );
-                    profiler.start_timing(&"execution".to_string());
+                    profiler.start_timing(&"execution".to_string() + idx.to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -361,7 +361,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&"execution".to_string());
+                    profiler.end_timing(&"execution".to_string() + idx.to_string());
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
@@ -451,7 +451,6 @@ where
             println!("bla totaltime1: {}", (*profiler.lock()).collective_times.get("total time1").unwrap().as_millis());
             println!("bla totaltime2: {}", (*profiler.lock()).collective_times.get("total time2").unwrap().as_millis());
             println!("bla comtime: {}", (*profiler.lock()).collective_times.get("committing").unwrap().as_millis());
-            println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
             println!("bla newsched: {}", (*profiler.lock()).collective_times.get("newScheduler").unwrap().as_millis());
             println!("bla schedtime: {}", (*profiler.lock()).collective_times.get("scheduling").unwrap().as_millis());
             println!("bla try_exec: {}", (*profiler.lock()).collective_times.get("try_exec").unwrap().as_millis());
@@ -460,7 +459,13 @@ where
             println!("bla try_val: {}", (*profiler.lock()).collective_times.get("try_val").unwrap().as_millis());
             println!("bla sigc: {}", (*profiler.lock()).counters.get("sigc").unwrap());
             println!("bla sig: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
-            println!("bla thread time: {}", (*profiler.lock()).collective_times.get("thread time").unwrap().as_millis());
+
+            let mut i = 0;
+            while i < 10 {
+                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get("execution" + i.to_string()).unwrap().as_millis());
+                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get("thread time" + i.to_string()).unwrap().as_millis());
+                i+=1;
+            }
 
         }
 
