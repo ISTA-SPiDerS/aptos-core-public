@@ -462,8 +462,8 @@ where
 
             let mut i = 0;
             while i < 10 {
-                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(&"execution".to_string() + i.to_string()).unwrap().as_millis());
-                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(&"thread time".to_string() + i.to_string()).unwrap().as_millis());
+                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get("execution".push_str(i.to_string().as_str())).unwrap().as_millis());
+                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get("thread time".push_str(i.to_string().as_str())).unwrap().as_millis());
                 i+=1;
             }
 
