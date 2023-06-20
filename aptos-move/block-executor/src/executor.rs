@@ -460,12 +460,9 @@ where
             println!("bla sigc: {}", (*profiler.lock()).counters.get("sigc").unwrap());
             println!("bla sig: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
 
-            let mut i = 0;
-            while i < 10 {
-
+            for i in 0..self.concurrency_level {
                 println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(&format!("execution {}", i)).unwrap().as_millis());
                 println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(&format!("thread time {}", i)).unwrap().as_millis());
-                i+=1;
             }
 
         }
