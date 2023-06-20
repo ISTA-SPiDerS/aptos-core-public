@@ -327,6 +327,9 @@ where
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
+                    if ret == SchedulerTask::NoTask {
+                        thread::sleep(Duration::from_millis(10));
+                    }
                     profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
