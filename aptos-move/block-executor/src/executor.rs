@@ -14,7 +14,7 @@ use crate::{
 
 use tracing::info;
 use color_eyre::Report;
-use itertools::Itertools;
+use itertools::{concat, Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
 use std::{
     collections::HashMap,
@@ -462,8 +462,9 @@ where
 
             let mut i = 0;
             while i < 10 {
-                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get("execution".push_str(i.to_string().as_str())).unwrap().as_millis());
-                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get("thread time".push_str(i.to_string().as_str())).unwrap().as_millis());
+
+                println!("bla exextime{}: {}", i, (*profiler.lock()).collective_times.get(concat!("execution", i.to_string())).unwrap().as_millis());
+                println!("bla thread time{}: {}", i, (*profiler.lock()).collective_times.get(concat!("thread time", i.to_string())).unwrap().as_millis());
                 i+=1;
             }
 
