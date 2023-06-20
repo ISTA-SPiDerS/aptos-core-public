@@ -375,6 +375,10 @@ where
             println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
             println!("bla sigtime: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
             println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
+            println!("bla sigc: {}", (*profiler.lock()).counters.get("sigc").unwrap());
+            println!("bla sig: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
+            println!("bla thread time: {}", (*profiler.lock()).collective_times.get("thread time").unwrap().as_millis());
+
         }
         
         // TODO: for large block sizes and many cores, extract outputs in parallel.
