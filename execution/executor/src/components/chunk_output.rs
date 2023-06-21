@@ -102,7 +102,7 @@ impl ChunkOutput {
     /// a vector of [TransactionOutput]s.
     #[cfg(not(feature = "consensus-only-perf-test"))]
     fn execute_block<V: VMExecutor>(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: &CachedStateView,
     ) -> Result<Vec<TransactionOutput>> {
         Ok(V::execute_block(transactions.into(), &state_view)?)
