@@ -322,7 +322,7 @@ impl FakeExecutor {
 
 impl TransactionBlockExecutor<BenchmarkTransaction> for FakeExecutor {
     fn execute_transaction_block(
-        transactions: TransactionRegister<T>,
+        transactions: TransactionRegister<BenchmarkTransaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         let transaction_outputs = FAKE_EXECUTOR_POOL.install(|| {

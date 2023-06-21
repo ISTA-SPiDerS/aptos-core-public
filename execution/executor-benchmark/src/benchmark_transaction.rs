@@ -72,7 +72,7 @@ impl From<Transaction> for BenchmarkTransaction {
 
 impl TransactionBlockExecutor<BenchmarkTransaction> for AptosVM {
     fn execute_transaction_block(
-        transactions: TransactionRegister<T>,
+        transactions: TransactionRegister<BenchmarkTransaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         AptosVM::execute_transaction_block(
