@@ -638,7 +638,7 @@ impl Scheduler {
         let mut incoming_lock = self.incoming.lock();
         let mut children_lock = self.children.lock();
         let bottomlock = self.bottomlevels.lock();
-        
+
         while self.heap.len() > 0 {
             let mut begin_time: usize;
             let mut best_begin_time: usize;
@@ -670,6 +670,7 @@ impl Scheduler {
 
             /* find the best proc for task */
             best_begin_time = usize::MAX;
+            println!("bla conc: {}", self.concurrency_level);
             for proc in 0..self.concurrency_level {
                 begin_time = end_comp_lock[proc];
                 // //println!("begin_time = {}", begin_time);
