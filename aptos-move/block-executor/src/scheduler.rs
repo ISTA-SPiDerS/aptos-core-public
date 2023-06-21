@@ -614,7 +614,7 @@ impl Scheduler {
                     bottomlevels[*node] = bottomlevels[i] + 1;
                 }
             }
-            if true || self.hint_graph[i].is_empty() {
+            if true self.hint_graph[i].is_empty() {
                 self.heap.insert(Task {bottomlevel: bottomlevels[i], index: i});
             }
         }
@@ -690,13 +690,13 @@ impl Scheduler {
                     best_begin_time = begin_time;
                     best_proc = proc;
                 }
-                break;
             }
             mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
             {
                 let (tx, rx) = &self.channels[best_proc];
 
+                println!("bla goto {} {:?}", best_proc, ui.index);
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
 
