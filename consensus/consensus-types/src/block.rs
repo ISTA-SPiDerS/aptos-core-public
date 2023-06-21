@@ -375,7 +375,7 @@ impl Block {
             .chain(once(100))
             .collect();
         let dependency_graph = once(vec![])
-            .chain(txn_register.dependency_graph().clone().into_iter().map(|f| f.into_iter().map(|k| k + 1).collect()).collect::<Vec<Vec<u64>>>())
+            .chain(txn_register.dependency_graph().clone().into_iter().map(|f| f.into_iter().map(|k| k + 1).chain(0).collect()).collect::<Vec<Vec<u64>>>())
             .chain(once(vec![]))
             .collect();
 
