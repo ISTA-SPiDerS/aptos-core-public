@@ -493,8 +493,7 @@ impl Scheduler {
                 else {
                     profiler.start_timing(&"SCHEDULING".to_string());
 
-                    let (idx_to_validate, _) =
-                        Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                    let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                     // if my_len == 0 && idx_to_validate >= self.num_txns {
                     //     return if self.done() {
                     //         SchedulerTask::Done
@@ -678,12 +677,12 @@ impl Scheduler {
                         ready = finish_time_lock[dad.idx];
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = finish_time_lock[dad.idx];
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
                 }
-                if best_begin_time > begin_time {
+                if begin_time < best_begin_time {
                     best_begin_time = begin_time;
                     best_proc = proc;
                 }
@@ -735,7 +734,6 @@ impl Scheduler {
             if let Some((version_to_execute, maybe_condvar)) =
             self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
-
                 profiler.end_timing(&"try_exec".to_string());
                 profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
@@ -743,7 +741,6 @@ impl Scheduler {
         }
 
         let rx = &mut self.channels[thread_id].1.lock();
-
         if let Ok(txn_to_exec) = rx.try_recv() {
 
             drop(rx);
