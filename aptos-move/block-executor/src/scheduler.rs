@@ -670,7 +670,6 @@ impl Scheduler {
 
             /* find the best proc for task */
             best_begin_time = usize::MAX;
-            println!("bla conc: {}", self.concurrency_level);
             for proc in 0..self.concurrency_level {
                 begin_time = end_comp_lock[proc];
                 // //println!("begin_time = {}", begin_time);
@@ -691,6 +690,11 @@ impl Scheduler {
                     best_proc = proc;
                 }
             }
+
+            if best_proc != 0 {
+                println!("0 not best proc");
+            }
+
             mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
             {
