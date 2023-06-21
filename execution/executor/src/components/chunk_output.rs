@@ -36,16 +36,15 @@ impl ChunkOutput {
         transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<Self> {
-        let txs = transactions.into_txns().clone();
         let transaction_outputs = Self::execute_block::<V>(transactions, &state_view)?;
 
         // to print txn output for debugging, uncomment:
         // println!("{:?}", transaction_outputs.iter().map(|t| t.status() ).collect::<Vec<_>>());
 
-        update_counters_for_processed_chunk(&txs, &transaction_outputs, "executed");
+        update_counters_for_processed_chunk(&transactions.into_txns().clone(), &transaction_outputs, "executed");
 
         Ok(Self {
-            transactions: transactions.txns().clone(),
+            transactions: transactions.into_txns().clone(),
             transaction_outputs,
             state_cache: state_view.into_state_cache(),
         })
