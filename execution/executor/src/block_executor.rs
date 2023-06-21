@@ -41,7 +41,7 @@ pub trait TransactionBlockExecutor<T>: Send + Sync {
 
 impl TransactionBlockExecutor<Transaction> for AptosVM {
     fn execute_transaction_block(
-        transactions: TransactionRegister<T>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         ChunkOutput::by_transaction_execution::<AptosVM>(transactions, state_view)
