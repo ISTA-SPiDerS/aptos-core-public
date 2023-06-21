@@ -671,7 +671,6 @@ impl Scheduler {
             best_begin_time = usize::MAX;
             for proc in 0..self.concurrency_level {
                 begin_time = end_comp_lock[proc];
-                println!("bla begin: {} {}", begin_time, proc);
                 // //println!("begin_time = {}", begin_time);
 
                 for dad in &parents {
@@ -710,7 +709,10 @@ impl Scheduler {
             cvar.notify_one();
 
             /* run time estimation*/
-            end_comp_lock[best_proc] = best_begin_time + (self.gas_estimates[ui.index] as usize);
+            let result = best_begin_time + (self.gas_estimates[ui.index] as usize);
+            println!("bla begin: {} {}", result, best_proc);
+
+            end_comp_lock[best_proc] = result;
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
             finish_time_lock[ui.index] = end_comp_lock[best_proc];
             // let bottomlock = &*self.bottomlevels.lock();
