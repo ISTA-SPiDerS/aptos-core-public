@@ -327,9 +327,6 @@ pub struct Scheduler {
 /// Public Interfaces for the Scheduler
 impl Scheduler {
     pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize) -> Self {
-
-        println!("bla estimates {:?}", gas_estimates);
-        println!("bla deps {:?}", dependencies);
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
@@ -365,8 +362,8 @@ impl Scheduler {
             gas_estimates: CachePadded::new(gas_estimates.clone()),
             sched_lock: AtomicUsize::new(usize::MAX),
             condvars: (0..(*concurrency_level))
-            .map(|_| (Mutex::new(false),Condvar::new()))
-            .collect(),
+                .map(|_| (Mutex::new(false),Condvar::new()))
+                .collect(),
             heap: SkipSet::new(),
             finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
             mapping: Mutex::new((0..num_txns +1).map(|_| usize::MAX).collect()),
@@ -496,7 +493,8 @@ impl Scheduler {
                 else {
                     profiler.start_timing(&"SCHEDULING".to_string());
 
-                    let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                    let (idx_to_validate, _) =
+                        Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                     // if my_len == 0 && idx_to_validate >= self.num_txns {
                     //     return if self.done() {
                     //         SchedulerTask::Done
@@ -633,7 +631,10 @@ impl Scheduler {
         }
         // let mut end_comp: Vec<usize> = vec![0; self.concurrency_level];
         let mut ui: Task;
-
+        let mut begin_time: usize;
+        let mut best_begin_time: usize;
+        let mut ready: usize;
+        let mut best_proc: usize = usize::MAX;
         let mut counter: usize = 0;
         let mut finish_time_lock  = self.finish_time.lock();
         let mut mapping_lock = self.mapping.lock();
@@ -642,11 +643,6 @@ impl Scheduler {
         let mut children_lock = self.children.lock();
         let bottomlock = self.bottomlevels.lock();
         while self.heap.len() > 0 {
-            let mut begin_time: usize;
-            let mut best_begin_time: usize;
-            let mut ready: usize;
-            let mut best_proc: usize = usize::MAX;
-
 
             if counter > usize::MAX {
                 break
@@ -654,11 +650,11 @@ impl Scheduler {
             ui = *self.heap.pop_front().unwrap();
             // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
 
-        /* Sort Pred[ui] in a non-decreasing order of finish times */
+            /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
-            .clone().iter()
-            .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
-            .collect::<Vec<Parent>>();
+                .clone().iter()
+                .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
+                .collect::<Vec<Parent>>();
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
             //         cmpOrdering::Less
@@ -682,21 +678,16 @@ impl Scheduler {
                         ready = finish_time_lock[dad.idx];
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = finish_time_lock[dad.idx] + (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
                 }
-                if begin_time < best_begin_time {
+                if best_begin_time > begin_time {
                     best_begin_time = begin_time;
                     best_proc = proc;
                 }
             }
-
-            if best_proc != 0 {
-                println!("0 not best proc");
-            }
-
             mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
             {
@@ -712,10 +703,7 @@ impl Scheduler {
             cvar.notify_one();
 
             /* run time estimation*/
-            let result = best_begin_time + (self.gas_estimates[ui.index] as usize);
-            println!("bla begin: {} {}", result, best_proc);
-
-            end_comp_lock[best_proc] = result;
+            end_comp_lock[best_proc] = best_begin_time + (self.gas_estimates[ui.index] as usize);
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
             finish_time_lock[ui.index] = end_comp_lock[best_proc];
             // let bottomlock = &*self.bottomlevels.lock();
@@ -745,8 +733,9 @@ impl Scheduler {
             //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
             if let Some((version_to_execute, maybe_condvar)) =
-            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
+
                 profiler.end_timing(&"try_exec".to_string());
                 profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
@@ -754,13 +743,14 @@ impl Scheduler {
         }
 
         let rx = &mut self.channels[thread_id].1.lock();
+
         if let Ok(txn_to_exec) = rx.try_recv() {
 
             drop(rx);
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =
-            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
                 // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
                 // if localidx < *my_global_idx_mutex {
@@ -923,7 +913,7 @@ impl Scheduler {
             //info!("after acquiring prio channel lock in finish execution of {}", txn_idx);
 
             // //info!("PRIO Sent {}", *txn);
-                   //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
+            //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
 
         }
         stored_deps.clear();
