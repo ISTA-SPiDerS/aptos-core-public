@@ -321,7 +321,7 @@ impl BlockFiller for DependencyFiller {
             }
             if finish_time > (self.gas_per_core as f64 * 1.2) as u64 {
                 //self.full = true;
-                println!("bla skip");
+                println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 ind+=1;
                 continue;
             }
