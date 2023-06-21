@@ -598,9 +598,9 @@ where
         profiler: &mut Profiler
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
 
-        println!("bla estimates {:?}", signature_verified_block.gas_estimates());
-        println!("bla deps {:?}", signature_verified_block.dependency_graph());
-        
+        //println!("bla estimates {:?}", signature_verified_block.gas_estimates());
+        //println!("bla deps {:?}", signature_verified_block.dependency_graph());
+
         let mut ret = if self.concurrency_level > 1 {
             self.execute_transactions_parallel(
                 executor_arguments,

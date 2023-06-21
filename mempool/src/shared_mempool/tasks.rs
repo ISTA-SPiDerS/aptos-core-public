@@ -488,7 +488,8 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
             }
 
             // mempool_service_transactions is logged inside get_full_batch
-
+            println!("bla estimates {:?}", gas_estimates);
+            println!("bla deps {:?}", dependency_graph);
             (
                 QuorumStoreResponse::GetBatchResponse(txns, gas_estimates, dependency_graph),
                 callback,
