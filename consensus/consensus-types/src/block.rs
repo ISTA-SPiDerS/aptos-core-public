@@ -360,10 +360,6 @@ impl Block {
             }
         }
 
-
-        println!("bla estimates1 {} {:?}", self.payload().is_some(), txn_register.gas_estimates());
-        println!("bla deps1 {:?}", txn_register.dependency_graph());
-
         let txn = once(Transaction::BlockMetadata(
             self.new_block_metadata(validators),
         ))
@@ -380,10 +376,6 @@ impl Block {
         let dependency_graph = once(vec![])
             .chain(txn_register.dependency_graph().clone().into_iter())
             .collect();
-
-        println!("bla estimates2 {:?}", txn_register.gas_estimates());
-        println!("bla deps2 {:?}", txn_register.dependency_graph());
-
 
         TransactionRegister::new(txn, gas_estimates, dependency_graph)
     }
