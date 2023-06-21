@@ -406,6 +406,8 @@ impl BlockFiller for DependencyFiller {
 
         println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
 
+        println!("bla estimates1 {:?}", self.estimated_gas);
+        println!("bla deps1 {:?}", self.get_dependency_graph());
         return vec![];
     }
 
