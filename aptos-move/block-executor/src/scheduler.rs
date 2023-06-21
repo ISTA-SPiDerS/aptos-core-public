@@ -614,7 +614,7 @@ impl Scheduler {
                     bottomlevels[*node] = bottomlevels[i] + 1;
                 }
             }
-            if true self.hint_graph[i].is_empty() {
+            if self.hint_graph[i].is_empty() {
                 self.heap.insert(Task {bottomlevel: bottomlevels[i], index: i});
             }
         }
