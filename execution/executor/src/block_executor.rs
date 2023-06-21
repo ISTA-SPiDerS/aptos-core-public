@@ -32,7 +32,7 @@ use fail::fail_point;
 use std::{marker::PhantomData, sync::Arc};
 use aptos_types::transaction::TransactionRegister;
 
-pub trait TransactionBlockExecutor<T: Sync + Clone>: Send + Sync {
+pub trait TransactionBlockExecutor<T: Sync + Clone + Send>: Send + Sync + Clone {
     fn execute_transaction_block(
         transactions: TransactionRegister<T>,
         state_view: CachedStateView,
