@@ -36,7 +36,7 @@ impl ChunkOutput {
         transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<Self> {
-        let txs = transactions.txns().clone();
+        let txs = transactions.into_txns().clone();
         let transaction_outputs = Self::execute_block::<V>(transactions, &state_view)?;
 
         // to print txn output for debugging, uncomment:
