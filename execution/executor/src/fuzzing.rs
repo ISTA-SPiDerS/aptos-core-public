@@ -50,7 +50,7 @@ pub struct FakeVM;
 
 impl TransactionBlockExecutor<Transaction> for FakeVM {
     fn execute_transaction_block(
-        transactions: TransactionRegister<T>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         ChunkOutput::by_transaction_execution::<FakeVM>(transactions, state_view)

@@ -60,7 +60,7 @@ pub struct MockVM;
 
 impl TransactionBlockExecutor<Transaction> for MockVM {
     fn execute_transaction_block(
-        transactions: TransactionRegister<T>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         ChunkOutput::by_transaction_execution::<MockVM>(transactions, state_view)
