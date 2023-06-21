@@ -141,7 +141,7 @@ struct BlockExecutorInner<V, T> {
 impl<V, T> BlockExecutorInner<V, T>
 where
     V: TransactionBlockExecutor<T>,
-    T: Send + Sync,
+    T: Send + Sync + Clone,
 {
     pub fn new(db: DbReaderWriter) -> Result<Self> {
         let block_tree = BlockTree::new(&db.reader)?;
