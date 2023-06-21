@@ -18,6 +18,7 @@ use aptos_types::{
     transaction::{Transaction, TransactionOutput, TransactionToCommit, Version},
     vm_status::VMStatus,
 };
+use aptos_types::transaction::TransactionRegister;
 use aptos_vm::VMExecutor;
 
 fn create_test_executor() -> BlockExecutor<FakeVM, Transaction> {
@@ -49,7 +50,7 @@ pub struct FakeVM;
 
 impl TransactionBlockExecutor<Transaction> for FakeVM {
     fn execute_transaction_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<T>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         ChunkOutput::by_transaction_execution::<FakeVM>(transactions, state_view)

@@ -112,9 +112,6 @@ impl StateComputer for ExecutionProxy {
         let transactions_to_execute =
             block.transactions_to_execute(&self.validators.lock(), txns.clone());
 
-        println!("bla estimates {:?}", transactions_to_execute.gas_estimates());
-        println!("bla deps {:?}", transactions_to_execute.dependency_graph());
-
         let compute_result = monitor!(
             "execute_block",
             tokio::task::spawn_blocking(move || {

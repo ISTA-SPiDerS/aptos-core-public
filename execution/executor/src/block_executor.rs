@@ -34,17 +34,17 @@ use aptos_types::transaction::TransactionRegister;
 
 pub trait TransactionBlockExecutor<T>: Send + Sync {
     fn execute_transaction_block(
-        transactions: Vec<T>,
+        transactions: TransactionRegister<T>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput>;
 }
 
 impl TransactionBlockExecutor<Transaction> for AptosVM {
     fn execute_transaction_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<T>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
-        ChunkOutput::by_transaction_execution::<AptosVM>(transactions.into(), state_view)
+        ChunkOutput::by_transaction_execution::<AptosVM>(transactions, state_view)
     }
 }
 
@@ -227,7 +227,7 @@ where
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_transaction_block(transactions.into_txns(), state_view)?
+                V::execute_transaction_block(transactions, state_view)?
             };
             chunk_output.trace_log_transaction_status();
 

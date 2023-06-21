@@ -36,7 +36,7 @@ impl ChunkOutput {
         transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<Self> {
-        let transaction_outputs = Self::execute_block::<V>(transactions.clone().into_txns(), &state_view)?;
+        let transaction_outputs = Self::execute_block::<V>(transactions, &state_view)?;
 
         // to print txn output for debugging, uncomment:
         // println!("{:?}", transaction_outputs.iter().map(|t| t.status() ).collect::<Vec<_>>());
@@ -114,7 +114,7 @@ impl ChunkOutput {
     /// gas and a [ExecutionStatus::Success] for each of the [Transaction]s.
     #[cfg(feature = "consensus-only-perf-test")]
     fn execute_block<V: VMExecutor>(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: &CachedStateView,
     ) -> Result<Vec<TransactionOutput>> {
         use aptos_state_view::{StateViewId, TStateView};

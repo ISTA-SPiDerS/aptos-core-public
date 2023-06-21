@@ -7,6 +7,7 @@ use aptos_executor::{
 };
 use aptos_storage_interface::cached_state_view::CachedStateView;
 use aptos_types::{account_address::AccountAddress, transaction::Transaction};
+use aptos_types::transaction::TransactionRegister;
 use aptos_vm::AptosVM;
 
 pub struct TransferInfo {
@@ -71,7 +72,7 @@ impl From<Transaction> for BenchmarkTransaction {
 
 impl TransactionBlockExecutor<BenchmarkTransaction> for AptosVM {
     fn execute_transaction_block(
-        transactions: Vec<BenchmarkTransaction>,
+        transactions: TransactionRegister<T>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         AptosVM::execute_transaction_block(
