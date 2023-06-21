@@ -625,9 +625,6 @@ impl Scheduler {
 
 
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
-        println!("bla estimates {:?}", self.gas_estimates);
-        println!("bla deps {:?}", self.hint_graph);
-
         if self.done() {
             // No more tasks.
             return Some(SchedulerTask::Done);
@@ -695,11 +692,8 @@ impl Scheduler {
             // self.thread_buffer[best_proc].insert(ui.index);
             {
                 let (tx, rx) = &self.channels[best_proc];
-
-                println!("bla goto {} {:?}", best_proc, ui.index);
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
-
             }
             self.nscheduled.fetch_add(1, Ordering::SeqCst);
             let (lock,cvar) = &self.condvars[best_proc];
