@@ -257,6 +257,7 @@ impl BlockFiller for DependencyFiller {
 
         println!("bla prev len: {}", previous.len());
 
+        let mut longestChain = 0;
         let mut ind = 0;
         while ind < previous.len()
         {
@@ -319,6 +320,10 @@ impl BlockFiller for DependencyFiller {
             {
                 //println!("bla Wat a long chain: {}", finish_time);
             }
+            if finish_time > longestChain {
+                longestChain = finish_time;
+            }
+
             if finish_time > (self.gas_per_core as f64 * 1.2) as u64 {
                 //self.full = true;
                 println!("bla skip {} {}", self.total_estimated_gas, finish_time);
@@ -399,7 +404,7 @@ impl BlockFiller for DependencyFiller {
             pending.remove(&(tx.sender(), tx.sequence_number()));
         }
 
-        println!("bla final gas7: {}", self.total_estimated_gas);
+        println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
 
         return vec![];
     }
