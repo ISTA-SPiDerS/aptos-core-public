@@ -359,6 +359,11 @@ impl Block {
                 txn_register = &empty_register;
             }
         }
+
+
+        println!("bla estimates {} {:?}", self.payload().is_some(), txn_register.gas_estimates());
+        println!("bla deps {:?}", txn_register.dependency_graph());
+
         let txn = once(Transaction::BlockMetadata(
             self.new_block_metadata(validators),
         ))

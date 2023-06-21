@@ -90,10 +90,6 @@ impl BlockAptosVM {
         mode: ExecutionMode,
         profiler: &mut Profiler,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
-
-        println!("bla estimates {:?}", transactions.gas_estimates());
-        println!("bla deps {:?}", transactions.dependency_graph());
-
         let timer = BLOCK_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
         // Verify the signatures of all the transactions in parallel.
         // This is time consuming so don't wait and do the checking
