@@ -638,7 +638,6 @@ impl Scheduler {
         let mut incoming_lock = self.incoming.lock();
         let mut children_lock = self.children.lock();
         let bottomlock = self.bottomlevels.lock();
-
         while self.heap.len() > 0 {
             let mut begin_time: usize;
             let mut best_begin_time: usize;
@@ -672,6 +671,7 @@ impl Scheduler {
             best_begin_time = usize::MAX;
             for proc in 0..self.concurrency_level {
                 begin_time = end_comp_lock[proc];
+                println!("bla begin: {} {}", begin_time, proc);
                 // //println!("begin_time = {}", begin_time);
 
                 for dad in &parents {
@@ -680,7 +680,7 @@ impl Scheduler {
                         ready = finish_time_lock[dad.idx];
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = finish_time_lock[dad.idx] + (self.gas_estimates[dad.idx] as usize / 3);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
