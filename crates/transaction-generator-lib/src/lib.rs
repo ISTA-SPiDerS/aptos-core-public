@@ -115,7 +115,7 @@ impl TransactionType {
 
 impl Default for TransactionType {
     fn default() -> Self {
-        Self::default_script(LoadType::DEXBURSTY)
+        Self::default_script(LoadType::DEXAVG)
     }
 }
 
