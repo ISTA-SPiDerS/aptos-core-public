@@ -264,7 +264,7 @@ impl SubmissionWorker {
     }
 
     fn gen_requests(&mut self) -> Vec<SignedTransaction> {
-        let batch_size = 3000;
+        let batch_size = 4000;
         let accounts = self
             .accounts
             .iter_mut()
