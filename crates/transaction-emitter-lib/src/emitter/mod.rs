@@ -147,7 +147,7 @@ impl Default for EmitJobRequest {
         Self {
             rest_clients: Vec::new(),
             mode: EmitJobMode::MaxLoad {
-                mempool_backlog: 5000,
+                mempool_backlog: 50000,
             },
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
             max_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
@@ -155,9 +155,9 @@ impl Default for EmitJobRequest {
             init_gas_price_multiplier: 1,
             reuse_accounts: false,
             mint_to_root: false,
-            txn_expiration_time_secs: 270,
+            txn_expiration_time_secs: 540,
             init_expiration_multiplier: 3.0,
-            init_retry_interval: Duration::from_secs(60),
+            init_retry_interval: Duration::from_secs(120),
             max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
