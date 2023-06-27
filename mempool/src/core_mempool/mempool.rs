@@ -238,7 +238,7 @@ impl Mempool {
 
         let mut shardedOutCounter = 0;
 
-        if currentTotal < block_filler.get_max_txn() as usize * 2
+        if currentTotal < block_filler.get_max_txn() as usize
         {
             // iterate over the queue of transactions based on gas price
             'main: for txn in self.transactions.iter_queue() {
@@ -263,7 +263,7 @@ impl Mempool {
                 if seen_previous || account_sequence_number == Some(&tx_seq) {
                     let ptr = TxnPointer::from(txn);
 
-                    if (result.len() as u64) >= block_filler.get_max_txn() {
+                    if (result.len() as u64 + currentTotal as u64) >= block_filler.get_max_txn() {
                         break;
                     }
 
