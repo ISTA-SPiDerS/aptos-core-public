@@ -263,7 +263,7 @@ impl Mempool {
                 if seen_previous || account_sequence_number == Some(&tx_seq) {
                     let ptr = TxnPointer::from(txn);
 
-                    if (result.len() as u64 + (currentTotal/2) as u64) >= block_filler.get_max_txn() {
+                    if (result.len() as u64) >= block_filler.get_max_txn() {
                         break;
                     }
 
