@@ -297,7 +297,7 @@ impl Mempool {
         //result.append(&mut self.alreadyprex.drain(..).collect());
 
         let result_size = result.len();
-        if result_size > 0 || currentTotal > 0
+        if result_size > 0 || CACHE.len() > 0 || self.cached_ex.len() > 0
         {
             println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
