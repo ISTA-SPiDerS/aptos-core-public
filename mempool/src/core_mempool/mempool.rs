@@ -280,7 +280,7 @@ impl Mempool {
                     // that were skipped before for given account
                     let mut skipped_txn = (txn.address, tx_seq + 1);
                     while skipped.contains(&skipped_txn) {
-                        if (result.len() as u64) >= block_filler.get_max_txn() {
+                        if (result.len() as u64 + (currentTotal/4) as u64) >= block_filler.get_max_txn() {
                             break 'main;
                         }
                         seen.insert(skipped_txn);
