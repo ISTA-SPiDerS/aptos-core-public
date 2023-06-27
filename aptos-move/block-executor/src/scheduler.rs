@@ -695,7 +695,7 @@ impl Scheduler {
             // self.thread_buffer[best_proc].insert(ui.index);
             {
                 let (tx, rx) = &self.channels[best_proc];
-                (*profiler.lock()).count(&format!("go-to {}", best_proc.to_string()), 1);
+                profiler.count(format!("go-to {}", best_proc.to_string()), 1);
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
 
