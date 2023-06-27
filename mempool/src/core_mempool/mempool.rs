@@ -33,6 +33,7 @@ use std::{
 };
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
+use std::future::pending;
 use std::hash::Hash;
 use std::time::Instant;
 use anyhow;
@@ -219,10 +220,10 @@ impl Mempool {
         let mut total_bytes = 0;
         let seen_size = seen.len();
 
-        seen.extend(&self.pending);
 
         let mut txn_walked = 0usize;
-        let currentTotal = CACHE.len() + self.cached_ex.len();
+        let currentTotal = self.pending.len();
+        seen.extend(&self.pending);
 
         let dif:u32 = 256 as u32 / peer_count as u32;
         let mut my_space_start= 0 as u32;
@@ -263,7 +264,7 @@ impl Mempool {
                 if seen_previous || account_sequence_number == Some(&tx_seq) {
                     let ptr = TxnPointer::from(txn);
 
-                    if (result.len() as u64 + (currentTotal/4) as u64) >= block_filler.get_max_txn() {
+                    if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
                         break;
                     }
 
@@ -280,7 +281,7 @@ impl Mempool {
                     // that were skipped before for given account
                     let mut skipped_txn = (txn.address, tx_seq + 1);
                     while skipped.contains(&skipped_txn) {
-                        if (result.len() as u64 + (currentTotal/4) as u64) >= block_filler.get_max_txn() {
+                        if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
                             break 'main;
                         }
                         seen.insert(skipped_txn);
