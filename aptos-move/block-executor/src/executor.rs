@@ -448,10 +448,8 @@ where
 
         if num_txns > 2 {
             let mut prof = &(*profiler.lock());
-            println!("bla excount: {}", prof.counters.get("exec").unwrap());
-            println!("bla sigc: {}", prof.counters.get("sigc").unwrap());
-
             prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
+            prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
         }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
