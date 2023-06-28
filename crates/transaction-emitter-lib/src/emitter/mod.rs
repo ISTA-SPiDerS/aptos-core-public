@@ -266,7 +266,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 12;
+                let num_workers_per_endpoint = 16;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -284,7 +284,7 @@ impl EmitJobRequest {
                     transactions_per_account,
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 1000,
+                    accounts_per_worker: 500,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
