@@ -222,7 +222,7 @@ impl Mempool {
 
 
         let mut txn_walked = 0usize;
-        let currentTotal = self.pending.len();
+        let currentTotal = self.pending.len()/2;
         seen.extend(&self.pending);
 
         let dif:u32 = 256 as u32 / peer_count as u32;
@@ -264,7 +264,7 @@ impl Mempool {
                 if seen_previous || account_sequence_number == Some(&tx_seq) {
                     let ptr = TxnPointer::from(txn);
 
-                    if (result.len() as u64 + (currentTotal/2) as u64) >= block_filler.get_max_txn() {
+                    if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
                         break;
                     }
 
@@ -281,7 +281,7 @@ impl Mempool {
                     // that were skipped before for given account
                     let mut skipped_txn = (txn.address, tx_seq + 1);
                     while skipped.contains(&skipped_txn) {
-                        if (result.len() as u64 + (currentTotal/2) as u64) >= block_filler.get_max_txn() {
+                        if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
                             break 'main;
                         }
                         seen.insert(skipped_txn);
