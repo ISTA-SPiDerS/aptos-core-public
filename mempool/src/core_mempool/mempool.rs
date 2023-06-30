@@ -222,7 +222,7 @@ impl Mempool {
 
 
         let mut txn_walked = 0usize;
-        let currentTotal = self.pending.len()/2 + self.pending.len()/4;
+        let currentTotal = self.pending.len();
         seen.extend(&self.pending);
 
         let dif:u32 = 256 as u32 / peer_count as u32;
