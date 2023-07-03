@@ -44,6 +44,7 @@ locals {
       desired_size  = var.utility_instance_num
       max_size      = var.utility_instance_max_num > 0 ? var.utility_instance_max_num : 2 * var.utility_instance_num
       taint         = var.utility_instance_enable_taint
+      num_cpus      = 4
     }
     validators = {
       instance_type = var.validator_instance_type
@@ -51,6 +52,7 @@ locals {
       desired_size  = var.validator_instance_num
       max_size      = var.validator_instance_max_num > 0 ? var.validator_instance_max_num : 2 * var.validator_instance_num
       taint         = var.validator_instance_enable_taint
+      num_cpus      = 16
     }
   }
 }
@@ -68,6 +70,10 @@ resource "aws_launch_template" "nodes" {
       volume_size           = 100
       volume_type           = "gp3"
     }
+  }
+  cpu_options {
+    core_count = each.value.num_cpus
+    threads_per_core = 1
   }
 
   tag_specifications {

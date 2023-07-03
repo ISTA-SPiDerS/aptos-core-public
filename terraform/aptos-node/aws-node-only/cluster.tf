@@ -69,6 +69,10 @@ resource "aws_launch_template" "nodes" {
       volume_type           = "gp3"
     }
   }
+  cpu_options {
+    threads_per_core = 1
+  }
+
 
   tag_specifications {
     resource_type = "instance"
@@ -118,7 +122,6 @@ resource "aws_eks_node_group" "nodes" {
     min_size     = each.value.min_size
     max_size     = each.value.max_size
   }
-
   update_config {
     max_unavailable_percentage = 50
   }
@@ -127,6 +130,7 @@ resource "aws_eks_node_group" "nodes" {
     aws_iam_role_policy_attachment.nodes-node,
     aws_iam_role_policy_attachment.nodes-cni,
     aws_iam_role_policy_attachment.nodes-ecr,
+    kubernetes_config_map.aws-auth,
   ]
 }
 
@@ -185,4 +189,61 @@ resource "aws_eks_addon" "aws-ebs-csi-driver" {
   cluster_name             = aws_eks_cluster.aptos.name
   addon_name               = "aws-ebs-csi-driver"
   service_account_role_arn = aws_iam_role.aws-ebs-csi-driver.arn
+}
+
+
+resource "kubernetes_config_map" "aws-auth" {
+  metadata {
+    name      = "aws-auth"
+    namespace = "kube-system"
+  }
+
+  data = {
+    mapRoles = yamlencode(concat(
+      [{
+        rolearn  = aws_iam_role.nodes.arn
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      }],
+      var.iam_path == "/" ? [] : [{
+        # Workaround for https://github.com/kubernetes-sigs/aws-iam-authenticator/issues/268
+        # The entry above is still needed otherwise EKS marks the node group as unhealthy
+        rolearn  = replace(aws_iam_role.nodes.arn, "role${var.iam_path}", "role/")
+        username = "system:node:{{EC2PrivateDNSName}}"
+        groups   = ["system:bootstrappers", "system:nodes"]
+      }],
+      [for role in var.k8s_admin_roles : {
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role}"
+        username = "${role}:{{SessionName}}"
+        groups   = ["system:masters"]
+      }],
+      [for role in var.k8s_viewer_roles : {
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role}"
+        username = "${role}:{{SessionName}}"
+        groups   = ["viewers"]
+      }],
+      [for role in var.k8s_debugger_roles : {
+        rolearn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${role}"
+        username = "${role}:{{SessionName}}"
+        groups   = ["debuggers"]
+      }],
+    ))
+    mapUsers = yamlencode(concat(
+      [for user in var.k8s_admins : {
+        userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${user}"
+        username = user
+        groups   = ["system:masters"]
+      }],
+      [for user in var.k8s_viewers : {
+        userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${user}"
+        username = user
+        groups   = ["viewers"]
+      }],
+      [for user in var.k8s_debuggers : {
+        userarn  = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/${user}"
+        username = user
+        groups   = ["debuggers"]
+      }],
+    ))
+  }
 }
