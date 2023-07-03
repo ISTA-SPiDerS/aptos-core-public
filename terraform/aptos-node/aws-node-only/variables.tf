@@ -250,7 +250,7 @@ variable "helm_release_name_override" {
 
 variable "validator_storage_class" {
   description = "Which storage class to use for the validator and fullnode"
-  default     = "io1"
+  default     = "gp3"
   validation {
     condition     = contains(["gp3", "io1", "io2"], var.validator_storage_class)
     error_message = "Supported storage classes are gp3, io1, io2"
@@ -259,7 +259,7 @@ variable "validator_storage_class" {
 
 variable "fullnode_storage_class" {
   description = "Which storage class to use for the validator and fullnode"
-  default     = "io1"
+  default     = "gp3"
   validation {
     condition     = contains(["gp3", "io1", "io2"], var.fullnode_storage_class)
     error_message = "Supported storage classes are gp3, io1, io2"
