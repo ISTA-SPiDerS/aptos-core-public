@@ -116,7 +116,6 @@ impl<
                                         CACHE.insert(index, (a, b, tx));
                                     }
                                     _ => {
-                                        println!("blub pre-exec failure");
                                         failures.insert(index, tx);
                                     }
                                 }

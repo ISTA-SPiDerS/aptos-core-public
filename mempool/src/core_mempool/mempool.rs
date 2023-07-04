@@ -299,17 +299,17 @@ impl Mempool {
         let result_size = result.len();
         if result_size > 0 || CACHE.len() > 0 || self.cached_ex.len() > 0
         {
-            println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
+            //println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
             if block_filler.get_blockx().len() > 250 {
                 let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
-                println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
+                //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
-            println!("bla blocklen: {}", block_filler.get_blockx().len());
+            //println!("bla blocklen: {}", block_filler.get_blockx().len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
@@ -343,7 +343,7 @@ impl Mempool {
         //}
         let elapsed = time.elapsed().as_millis();
         if elapsed > 0 {
-            println!("bla total: {}", elapsed);
+            //println!("bla total: {}", elapsed);
         }
     }
 

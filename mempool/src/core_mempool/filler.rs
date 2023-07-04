@@ -244,7 +244,7 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
-        println!("bla cache len other side {}", CACHE.len());
+        //println!("bla cache len other side {}", CACHE.len());
         {
             while CACHE.contains_key(current)
             {
@@ -255,7 +255,7 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
-        println!("bla prev len: {}", previous.len());
+        //println!("bla prev len: {}", previous.len());
 
         let mut longestChain = 0;
         let mut ind = 0;
@@ -271,7 +271,7 @@ impl BlockFiller for DependencyFiller {
             let txn_len = tx.raw_txn_bytes_len() as u64;
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
-                println!("bla final gas2: {}", self.total_estimated_gas);
+                //println!("bla final gas2: {}", self.total_estimated_gas);
                 ind+=1;
                 break;
             }
@@ -285,7 +285,7 @@ impl BlockFiller for DependencyFiller {
             let gas_used = speculation.output.txn_output().gas_used();
             if gas_used > 100000
             {
-                println!("bla Wat a big tx: {}", gas_used);
+                //println!("bla Wat a big tx: {}", gas_used);
             }
 
             for write in write_set {
@@ -326,14 +326,14 @@ impl BlockFiller for DependencyFiller {
 
             if finish_time > (self.gas_per_core as f64 * 3.0) as u64 {
                 //self.full = true;
-                println!("bla skip {} {}", self.total_estimated_gas, finish_time);
+                //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 ind+=1;
                 continue;
             }
 
             if self.total_estimated_gas + gas_used > self.gas_per_core * self.cores {
                 self.full = true;
-                println!("bla final gas4: {}", self.total_estimated_gas);
+                //println!("bla final gas4: {}", self.total_estimated_gas);
                 ind+=1;
                 break;
             }
@@ -349,7 +349,7 @@ impl BlockFiller for DependencyFiller {
 
             if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                 self.full = true;
-                println!("bla final gas5: {}", self.total_estimated_gas);
+                //println!("bla final gas5: {}", self.total_estimated_gas);
                 ind+=1;
                 break;
             }
@@ -396,7 +396,7 @@ impl BlockFiller for DependencyFiller {
 
             if self.block.len() as u64 == self.max_txns {
                 self.full = true;
-                println!("bla final gas6: {}", self.total_estimated_gas);
+                //println!("bla final gas6: {}", self.total_estimated_gas);
             }
         }
 
@@ -404,7 +404,7 @@ impl BlockFiller for DependencyFiller {
             pending.remove(&(tx.sender(), tx.sequence_number()));
         }
 
-        println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
+        //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];
     }
 
