@@ -571,7 +571,7 @@ impl Builder {
         // Use a file based storage backend for safety rules
         let mut storage = OnDiskStorageConfig::default();
         storage.set_data_dir(validator.dir.clone());
-        config.consensus.safety_rules.backend = SecureBackend::OnDiskStorage(storage);
+        config.consensus.safety_rules.backend = SecureBackend::InMemoryStorage;
 
         if index > 0 || self.randomize_first_validator_ports {
             config.randomize_ports();
