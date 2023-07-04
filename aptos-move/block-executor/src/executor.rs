@@ -335,8 +335,8 @@ where
         let profiler = Arc::new(Mutex::new(input_profiler));
         (*profiler.lock()).start_timing(&"total time".to_string());
 
-        println!("bla runblock {}", signature_verified_block.txns().len());
-        println!("bla runwith {}", self.concurrency_level);
+        //println!("bla runblock {}", signature_verified_block.txns().len());
+        //println!("bla runwith {}", self.concurrency_level);
 
         let versioned_data_cache = MVHashMap::new();
 
@@ -369,17 +369,6 @@ where
 
         (*profiler.lock()).end_timing(&"total time".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
-
-        if num_txns > 2 {
-            println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
-            println!("bla extime: {}", (*profiler.lock()).collective_times.get("total time").unwrap().as_millis());
-            println!("bla sigtime: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
-            println!("bla exextime: {}", (*profiler.lock()).collective_times.get("execution").unwrap().as_millis());
-            println!("bla sigc: {}", (*profiler.lock()).counters.get("sigc").unwrap());
-            println!("bla sig: {}", (*profiler.lock()).collective_times.get("sig").unwrap().as_millis());
-            println!("bla thread time: {}", (*profiler.lock()).collective_times.get("thread time").unwrap().as_millis());
-
-        }
         
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);

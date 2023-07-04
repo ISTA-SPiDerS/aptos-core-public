@@ -264,19 +264,19 @@ impl Mempool {
         let result_size = result.len();
         if result_size > 0
         {
-            println!("bla result: {}", result_size);
-            println!("bla seen: {}", seen.len());
+            //println!("bla result: {}", result_size);
+            //println!("bla seen: {}", seen.len());
 
             let off = block_filler.add_all(result, &DashMap::new());
-            println!("bla unsee: {}", off.len());
+            //println!("bla unsee: {}", off.len());
 
             for tx in off
             {
                 seen.remove(&(tx.sender(), tx.sequence_number()));
             }
 
-            println!("bla blocklen: {}", block_filler.get_blockx().len());
-            println!("bla seen now: {}", seen.len());
+            //println!("bla blocklen: {}", block_filler.get_blockx().len());
+            //println!("bla seen now: {}", seen.len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),

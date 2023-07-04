@@ -328,15 +328,6 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             }
 
             if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
-                match status {
-                    VMStatus::Executed => {}
-                    VMStatus::Error(e) => {println!("blub exec failure1 {:?} {} {}", e, tx.sender(), tx.sequence_number())}
-                    VMStatus::MoveAbort(e1, e2) => {println!("blub exec failure2 {:?}", e1)}
-                    VMStatus::ExecutionFailure { location, function, code_offset, status_code } =>
-                        {
-                            println!("blub exec failure3 {} {} {} {:?}", location, function, code_offset, status_code);
-                        }
-                }
                 let read_set = &speculation.input;
                 let write_set = speculation.output.txn_output().write_set();
                 let delta_set = speculation.output.delta_change_set();
