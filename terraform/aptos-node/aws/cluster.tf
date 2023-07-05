@@ -49,8 +49,8 @@ locals {
     validators = {
       instance_type = var.validator_instance_type
       min_size      = var.validator_instance_min_num
-      desired_size  = var.validator_instance_num
-      max_size      = var.validator_instance_max_num > 0 ? var.validator_instance_max_num : 2 * var.validator_instance_num
+      desired_size  = 8
+      max_size      = 10
       taint         = var.validator_instance_enable_taint
       num_cpus      = 16
     }
@@ -67,7 +67,7 @@ resource "aws_launch_template" "nodes" {
 
     ebs {
       delete_on_termination = true
-      volume_size           = 10
+      volume_size           = 100
       volume_type           = "gp3"
     }
   }
