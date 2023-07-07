@@ -401,8 +401,8 @@ where
         let num_txns = signature_verified_block.len();
 
         if num_txns > 2 {
-            //println!("bla runblock {}", signature_verified_block.txns().len());
-            //println!("bla runwith {}", self.concurrency_level);
+            println!("bla runblock {}", signature_verified_block.txns().len());
+            println!("bla runwith {} {}", self.concurrency_level, num_cpus::get());
         }
 
         let last_input_output = TxnLastInputOutput::new(num_txns);
