@@ -359,6 +359,7 @@ impl Block {
                 txn_register = &empty_register;
             }
         }
+
         let txn = once(Transaction::BlockMetadata(
             self.new_block_metadata(validators),
         ))
@@ -369,12 +370,12 @@ impl Block {
         )
         .chain(once(Transaction::StateCheckpoint(self.id)))
         .collect();
-        let gas_estimates = once(0)
+        let gas_estimates = once(100)
             .chain(txn_register.gas_estimates().clone().into_iter())
-            .chain(once(0))
+            .chain(once(100))
             .collect();
         let dependency_graph = once(vec![])
-            .chain(txn_register.dependency_graph().clone().into_iter())
+            .chain(txn_register.dependency_graph().clone().into_iter().map(|f| f.into_iter().map(|k| k + 1).chain(once(0)).collect()).collect::<Vec<Vec<u64>>>())
             .chain(once(vec![]))
             .collect();
 

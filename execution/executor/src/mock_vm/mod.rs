@@ -34,6 +34,7 @@ use aptos_vm::VMExecutor;
 use move_core_types::{language_storage::TypeTag, move_resource::MoveResource};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use aptos_types::transaction::TransactionRegister;
 
 #[derive(Debug)]
 enum MockVMTransaction {
@@ -59,7 +60,7 @@ pub struct MockVM;
 
 impl TransactionBlockExecutor<Transaction> for MockVM {
     fn execute_transaction_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         ChunkOutput::by_transaction_execution::<MockVM>(transactions, state_view)

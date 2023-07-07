@@ -30,6 +30,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::str::FromStr;
+use aptos_types::transaction::TransactionRegister;
 
 pub struct FakeExecutor {}
 
@@ -321,7 +322,7 @@ impl FakeExecutor {
 
 impl TransactionBlockExecutor<BenchmarkTransaction> for FakeExecutor {
     fn execute_transaction_block(
-        transactions: Vec<BenchmarkTransaction>,
+        transactions: TransactionRegister<BenchmarkTransaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
         let transaction_outputs = FAKE_EXECUTOR_POOL.install(|| {

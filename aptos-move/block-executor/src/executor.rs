@@ -14,7 +14,7 @@ use crate::{
 
 use tracing::info;
 use color_eyre::Report;
-use itertools::Itertools;
+use itertools::{Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
 use std::{
     collections::HashMap,
@@ -268,7 +268,7 @@ where
         let executor = E::init(*executor_arguments);
 
 
-        profiler.start_timing(&"thread time".to_string());
+        profiler.start_timing(&format!("thread time {}", idx).to_string());
         let mut extimer: u128 = 0;
         let mut valtimer: u128 = 0;
         let mut resttimer: u128 = 0;
@@ -282,12 +282,14 @@ where
         loop {
             // Only one thread try_commit to avoid contention.
             if committing {
+                profiler.start_timing(&"committing".to_string());
                 // Keep committing txns until there is no more that can be committed now.
                 loop {
                     if scheduler.try_commit().is_none() {
                         break;
                     }
                 }
+                profiler.end_timing(&"committing".to_string());
             }
 
             scheduler_task = match scheduler_task {
@@ -312,22 +314,28 @@ where
                     ret
                 },
                 SchedulerTask::SigTask(index) => {
+                    profiler.start_timing(&"sig".to_string());
+                    profiler.count_one("sigc".to_string());
                     for n in 0..24 {
                         if index + n < block.len() {
                             executor.verify_transaction(block[index + n].borrow());
                         }
                     }
+                    profiler.end_timing(&"sig".to_string());
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
                     profiler.end_timing(&"scheduling".to_string());
+                    /*if matches!(ret, SchedulerTask::NoTask) {
+                        thread::sleep(Duration::from_millis(5));
+                    }*/
                     ret
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
-                    profiler.end_timing(&"thread time".to_string());
+                    profiler.end_timing(&format!("thread time {}", idx.to_string()));
                     (*total_profiler.lock()).add_from(&profiler);
 
                     break;
@@ -339,7 +347,7 @@ where
                     //     thread_id,
                     //     version_to_execute.0
                     // );
-                    profiler.start_timing(&"execution".to_string());
+                    profiler.start_timing(&format!("execution {}", idx).to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -353,7 +361,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&"execution".to_string());
+                    profiler.end_timing(&format!("execution {}", idx.to_string()));
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
@@ -383,9 +391,6 @@ where
         assert!(self.concurrency_level > 1, "Must use sequential execution");
 
         let profiler = Arc::new(Mutex::new(input_profiler));
-        (*profiler.lock()).start_timing(&"total time".to_string());
-
-        println!("bla runblock {}", signature_verified_block.txns().len());
 
         let versioned_data_cache = MVHashMap::new();
 
@@ -394,6 +399,12 @@ where
         }
 
         let num_txns = signature_verified_block.len();
+
+        if num_txns > 2 {
+            //println!("bla runblock {}", signature_verified_block.txns().len());
+            //println!("bla runwith {}", self.concurrency_level);
+        }
+
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
@@ -401,34 +412,45 @@ where
         INIT.call_once(|| {Self::setup();
              ()});
 
-        RAYON_EXEC_POOL.scope(|s| {
-            for i in 0..self.concurrency_level {
-                struct NotCopy<T>(T);
-                let i = NotCopy(i);
-                s.spawn(|_|  {
-                    let i = i;
-                    self.work_task_with_scope(
-                        &executor_initial_arguments,
-                        signature_verified_block.txns(),
-                        &last_input_output,
-                        &versioned_data_cache,
-                        &scheduler,
-                        base_view,
-                        committing.swap(false, Ordering::SeqCst),
-                        profiler.clone(),
-                        barrier.clone(),
-                        i.0,
-                        mode
-                    );
-                });
-            }
-        });
+        {
+            (*profiler.lock()).start_timing(&"total time1".to_string());
 
-        (*profiler.lock()).end_timing(&"total time".to_string());
+            let pool = RAYON_EXEC_POOL.lock().unwrap();
+            (*profiler.lock()).start_timing(&"total time2".to_string());
+
+            pool.scope(|s| {
+                for i in 0..self.concurrency_level {
+                    struct NotCopy<T>(T);
+                    let i = NotCopy(i);
+                    s.spawn(|_| {
+                        let i = i;
+                        self.work_task_with_scope(
+                            &executor_initial_arguments,
+                            signature_verified_block.txns(),
+                            &last_input_output,
+                            &versioned_data_cache,
+                            &scheduler,
+                            base_view,
+                            committing.swap(false, Ordering::SeqCst),
+                            profiler.clone(),
+                            barrier.clone(),
+                            i.0,
+                            mode
+                        );
+                    });
+                }
+            });
+        }
+
+        (*profiler.lock()).end_timing(&"total time1".to_string());
+        (*profiler.lock()).end_timing(&"total time2".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
-
-        println!("bla excount: {}", (*profiler.lock()).counters.get("exec").unwrap());
+        if num_txns > 2 {
+            //let mut prof = &(*profiler.lock());
+            //prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
+            //prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1));
+        }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);
@@ -444,7 +466,7 @@ where
 
         let chunk_size =
             (num_txns + 4 * self.concurrency_level - 1) / (4 * self.concurrency_level);
-        let interm_result: Vec<ExtrResult<E>> = RAYON_EXEC_POOL.install(|| {
+        let interm_result: Vec<ExtrResult<E>> = RAYON_EXEC_POOL.lock().unwrap().install(|| {
             (0..num_txns)
                 .collect::<Vec<TxnIndex>>()
                 .par_chunks(chunk_size)
@@ -481,7 +503,7 @@ where
             }
         }
 
-        RAYON_EXEC_POOL.spawn(move || {
+        RAYON_EXEC_POOL.lock().unwrap().spawn(move || {
             // Explicit async drops.
             drop(last_input_output);
             drop(scheduler);
@@ -598,7 +620,7 @@ where
             )
         }
 
-        RAYON_EXEC_POOL.spawn(move || {
+        RAYON_EXEC_POOL.lock().unwrap().spawn(move || {
             // Explicit async drops.
             drop(signature_verified_block);
         });

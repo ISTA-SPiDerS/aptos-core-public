@@ -264,14 +264,10 @@ impl SubmissionWorker {
     }
 
     fn gen_requests(&mut self) -> Vec<SignedTransaction> {
-        let batch_size = max(
-            1,
-            100,
-        );
         let accounts = self
             .accounts
             .iter_mut()
-            .choose_multiple(&mut self.rng, batch_size);
+            .choose_multiple(&mut self.rng, self.params.accounts_per_worker);
         self.txn_generator
             .generate_transactions(accounts, self.params.transactions_per_account)
     }

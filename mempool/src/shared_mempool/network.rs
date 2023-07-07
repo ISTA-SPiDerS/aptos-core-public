@@ -39,6 +39,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
+use std::any::Any;
 use thiserror::Error;
 
 /// Container for exchanging transactions with other Mempools.
@@ -85,6 +86,7 @@ pub(crate) struct MempoolNetworkInterface<NetworkClient> {
     role: RoleType,
     mempool_config: MempoolConfig,
     prioritized_peers_comparator: PrioritizedPeersComparator,
+    peer_id: PeerId
 }
 
 impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterface<NetworkClient> {
@@ -92,6 +94,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
         network_client: NetworkClient,
         role: RoleType,
         mempool_config: MempoolConfig,
+        peer_id: PeerId
     ) -> MempoolNetworkInterface<NetworkClient> {
         Self {
             network_client,
@@ -100,7 +103,24 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
             role,
             mempool_config,
             prioritized_peers_comparator: PrioritizedPeersComparator::new(),
+            peer_id
         }
+    }
+
+    pub fn get_peer_count(&self) -> usize {
+        return self.sync_states.write().len() as usize;
+    }
+
+    pub fn get_peer_position(&self) -> usize {
+
+        let mut pos: usize = self.get_peer_count();
+        for entry in self.sync_states.write().iter() {
+            if entry.0.peer_id() > self.peer_id {
+                pos -=1;
+            }
+        }
+
+        return pos as usize;
     }
 
     /// Add a peer to sync states, and returns `false` if the peer already is in storage

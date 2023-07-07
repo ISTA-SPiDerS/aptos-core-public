@@ -27,25 +27,13 @@ pub enum SecureBackend {
 impl SecureBackend {
     pub fn namespace(&self) -> Option<&str> {
         match self {
-            SecureBackend::GitHub(GitHubConfig { namespace, .. })
-            | SecureBackend::Vault(VaultConfig { namespace, .. })
-            | SecureBackend::OnDiskStorage(OnDiskStorageConfig { namespace, .. })
-            | SecureBackend::RocksDbStorage(RocksDbStorageConfig { namespace, .. }) => {
-                namespace.as_deref()
-            },
-            SecureBackend::InMemoryStorage => None,
+            _ => None,
         }
     }
 
     pub fn clear_namespace(&mut self) {
         match self {
-            SecureBackend::GitHub(GitHubConfig { namespace, .. })
-            | SecureBackend::Vault(VaultConfig { namespace, .. })
-            | SecureBackend::OnDiskStorage(OnDiskStorageConfig { namespace, .. })
-            | SecureBackend::RocksDbStorage(RocksDbStorageConfig { namespace, .. }) => {
-                *namespace = None;
-            },
-            SecureBackend::InMemoryStorage => {},
+           _ => {},
         }
     }
 }
@@ -218,59 +206,7 @@ fn read_file(path: &Path) -> Result<String, Error> {
 impl From<&SecureBackend> for Storage {
     fn from(backend: &SecureBackend) -> Self {
         match backend {
-            SecureBackend::GitHub(config) => {
-                let storage = Storage::from(GitHubStorage::new(
-                    config.repository_owner.clone(),
-                    config.repository.clone(),
-                    config
-                        .branch
-                        .as_ref()
-                        .cloned()
-                        .unwrap_or_else(|| "master".to_string()),
-                    config.token.read_token().expect("Unable to read token"),
-                ));
-                if let Some(namespace) = &config.namespace {
-                    Storage::from(Namespaced::new(namespace, Box::new(storage)))
-                } else {
-                    storage
-                }
-            },
-            SecureBackend::InMemoryStorage => Storage::from(InMemoryStorage::new()),
-            SecureBackend::OnDiskStorage(config) => {
-                let storage = Storage::from(OnDiskStorage::new(config.path()));
-                if let Some(namespace) = &config.namespace {
-                    Storage::from(Namespaced::new(namespace, Box::new(storage)))
-                } else {
-                    storage
-                }
-            },
-            SecureBackend::RocksDbStorage(config) => {
-                let storage = Storage::from(RocksDbStorage::new(config.path()));
-                if let Some(namespace) = &config.namespace {
-                    Storage::from(Namespaced::new(namespace, Box::new(storage)))
-                } else {
-                    storage
-                }
-            },
-            SecureBackend::Vault(config) => {
-                let storage = Storage::from(VaultStorage::new(
-                    config.server.clone(),
-                    config.token.read_token().expect("Unable to read token"),
-                    config
-                        .ca_certificate
-                        .as_ref()
-                        .map(|_| config.ca_certificate().unwrap()),
-                    config.renew_ttl_secs,
-                    config.disable_cas.map_or_else(|| true, |disable| !disable),
-                    config.connection_timeout_ms,
-                    config.response_timeout_ms,
-                ));
-                if let Some(namespace) = &config.namespace {
-                    Storage::from(Namespaced::new(namespace, Box::new(storage)))
-                } else {
-                    storage
-                }
-            },
+            _ => Storage::from(InMemoryStorage::new()),
         }
     }
 }

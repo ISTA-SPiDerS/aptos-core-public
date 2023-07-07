@@ -28,12 +28,7 @@ use move_core_types::transaction_argument::convert_txn_args;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    convert::TryFrom,
-    fmt,
-    fmt::{Debug, Display, Formatter},
-};
+use std::{cmp, collections::HashMap, convert::TryFrom, fmt, fmt::{Debug, Display, Formatter}};
 
 pub mod authenticator;
 mod change_set;
@@ -56,6 +51,7 @@ use num_cpus;
 use rayon::prelude::*;
 use std::{collections::BTreeSet, hash::Hash, ops::Deref, sync::atomic::AtomicU64};
 use std::ops::{Add, AddAssign};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use itertools::Itertools;
 use rayon::iter::plumbing::UnindexedConsumer;
@@ -1690,22 +1686,21 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
     }
 }
 
-pub static RAYON_EXEC_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
-// let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
+pub static RAYON_EXEC_POOL: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex::new({
     rayon::ThreadPoolBuilder::new()
-        .num_threads(num_cpus::get())
-        .thread_name(|index| format!("par_exec_{}", index))
+        .num_threads(cmp::min(10, num_cpus::get()))
+        /*.thread_name(|index| format!("par_exec_{}", index))
         .spawn_handler(|thread| {
             std::thread::spawn(|| {
-                let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
-                let res = core_affinity::set_for_current(core_ids[thread.index()].clone());
+                //let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
+                //let res = core_affinity::set_for_current(core_ids[thread.index()].clone());
                 thread.run();
             });
             Ok(())
-        })
+        })*/
         .build()
         .unwrap()
-});
+}));
 
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]

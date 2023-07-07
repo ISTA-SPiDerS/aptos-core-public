@@ -32,19 +32,19 @@ use fail::fail_point;
 use std::{marker::PhantomData, sync::Arc};
 use aptos_types::transaction::TransactionRegister;
 
-pub trait TransactionBlockExecutor<T>: Send + Sync {
+pub trait TransactionBlockExecutor<T: Sync + Clone + Send>: Send + Sync + Clone {
     fn execute_transaction_block(
-        transactions: Vec<T>,
+        transactions: TransactionRegister<T>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput>;
 }
 
 impl TransactionBlockExecutor<Transaction> for AptosVM {
     fn execute_transaction_block(
-        transactions: Vec<Transaction>,
+        transactions: TransactionRegister<Transaction>,
         state_view: CachedStateView,
     ) -> Result<ChunkOutput> {
-        ChunkOutput::by_transaction_execution::<AptosVM>(transactions.into(), state_view)
+        ChunkOutput::by_transaction_execution::<AptosVM>(transactions, state_view)
     }
 }
 
@@ -141,7 +141,7 @@ struct BlockExecutorInner<V, T> {
 impl<V, T> BlockExecutorInner<V, T>
 where
     V: TransactionBlockExecutor<T>,
-    T: Send + Sync,
+    T: Send + Sync + Clone,
 {
     pub fn new(db: DbReaderWriter) -> Result<Self> {
         let block_tree = BlockTree::new(&db.reader)?;
@@ -227,7 +227,7 @@ where
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_transaction_block(transactions.into_txns(), state_view)?
+                V::execute_transaction_block(transactions, state_view)?
             };
             chunk_output.trace_log_transaction_status();
 
