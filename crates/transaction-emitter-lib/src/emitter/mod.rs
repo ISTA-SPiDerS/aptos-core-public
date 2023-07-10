@@ -254,6 +254,16 @@ impl EmitJobRequest {
         self
     }
 
+    pub fn workers_per_endpoint(mut self, workers_per_endpoint: usize) -> Self {
+        self.workers_per_endpoint = workers_per_endpoint;
+        self
+    }
+
+    pub fn accounts_per_worker(mut self, accounts_per_worker: usize) -> Self {
+        self.accounts_per_worker = accounts_per_worker;
+        self
+    }
+
     pub fn coordination_delay_between_instances(
         mut self,
         coordination_delay_between_instances: Duration,
