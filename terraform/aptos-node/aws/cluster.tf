@@ -52,7 +52,7 @@ locals {
       desired_size  = 8
       max_size      = 10
       taint         = var.validator_instance_enable_taint
-      num_cpus      = 16
+      num_cpus      = 24
     }
   }
 }
@@ -93,16 +93,16 @@ resource "aws_eks_node_group" "nodes" {
   subnet_ids      = [aws_subnet.private[0].id]
   tags            = local.default_tags
 
-  lifecycle {
-    ignore_changes = [
-      # ignore autoupgrade version
-      version,
-      # ignore changes to the desired size that may occur due to cluster autoscaler
-      scaling_config[0].desired_size,
-      # ignore changes to max size, especially when it decreases to < desired_size, which fails
-      scaling_config[0].max_size,
-    ]
-  }
+ # lifecycle {
+ #   ignore_changes = [
+ #     # ignore autoupgrade version
+ #     version,
+ #     # ignore changes to the desired size that may occur due to cluster autoscaler
+ #     scaling_config[0].desired_size,
+ #     # ignore changes to max size, especially when it decreases to < desired_size, which fails
+ #     scaling_config[0].max_size,
+ #   ]
+ # }
 
   # if the NodeGroup should be tainted, then create the below dynamic block
   dynamic "taint" {
