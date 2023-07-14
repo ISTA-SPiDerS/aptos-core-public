@@ -52,7 +52,7 @@ locals {
       desired_size  = 8
       max_size      = 10
       taint         = var.validator_instance_enable_taint
-      num_cpus      = 16
+      num_cpus      = 24
     }
   }
 }
