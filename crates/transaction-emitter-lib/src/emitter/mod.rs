@@ -131,6 +131,9 @@ pub struct EmitJobRequest {
     txn_expiration_time_secs: u64,
     init_expiration_multiplier: f64,
 
+    accounts_per_worker: usize,
+    workers_per_endpoint:  usize,
+
     init_retry_interval: Duration,
 
     max_transactions_per_account: usize,
@@ -155,10 +158,12 @@ impl Default for EmitJobRequest {
             init_gas_price_multiplier: 1,
             reuse_accounts: false,
             mint_to_root: false,
-            txn_expiration_time_secs: 60,
+            txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
-            init_retry_interval: Duration::from_secs(10),
-            max_transactions_per_account: 1000,
+            accounts_per_worker: 500,
+            workers_per_endpoint:  20,
+            init_retry_interval: Duration::from_secs(60),
+            max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
             expected_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
             prompt_before_spending: false,
@@ -249,6 +254,16 @@ impl EmitJobRequest {
         self
     }
 
+    pub fn workers_per_endpoint(mut self, workers_per_endpoint: usize) -> Self {
+        self.workers_per_endpoint = workers_per_endpoint;
+        self
+    }
+
+    pub fn accounts_per_worker(mut self, accounts_per_worker: usize) -> Self {
+        self.accounts_per_worker = accounts_per_worker;
+        self
+    }
+
     pub fn coordination_delay_between_instances(
         mut self,
         coordination_delay_between_instances: Duration,
@@ -266,7 +281,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 1;
+                let num_workers_per_endpoint = self.workers_per_endpoint;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -284,7 +299,7 @@ impl EmitJobRequest {
                     transactions_per_account,
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 1000,
+                    accounts_per_worker: self.accounts_per_worker,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,

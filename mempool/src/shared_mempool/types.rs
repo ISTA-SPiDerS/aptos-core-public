@@ -19,15 +19,9 @@ use aptos_network::{
     application::interface::NetworkClientInterface, transport::ConnectionMetadata,
 };
 use aptos_storage_interface::DbReader;
-use aptos_types::{
-    mempool_status::MempoolStatus, transaction::SignedTransaction, vm_status::DiscardedVMStatus,
-};
-use aptos_vm_validator::vm_validator::TransactionValidation;
-use futures::{
-    channel::{mpsc, mpsc::UnboundedSender, oneshot},
-    future::Future,
-    task::{Context, Poll},
-};
+use aptos_types::{mempool_status::MempoolStatus, PeerId, transaction::SignedTransaction, vm_status::DiscardedVMStatus};
+use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
+use futures::{channel::{mpsc::UnboundedSender, oneshot}, future::Future, StreamExt, task::{Context, Poll}};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
@@ -38,7 +32,23 @@ use std::{
     task::Waker,
     time::{Instant, SystemTime},
 };
+use std::ptr::null;
+use std::sync::atomic::AtomicU64;
+use std::sync::mpsc;
+use std::time::Duration;
+use dashmap::DashMap;
 use tokio::runtime::Handle;
+use aptos_types::transaction::authenticator::TransactionAuthenticator;
+use aptos_types::transaction::RAYON_EXEC_POOL;
+use aptos_types::vm_status::{StatusCode, VMStatus};
+use once_cell::sync::{Lazy, OnceCell};
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
+use rayon::prelude::*;
+
+pub static CACHE: Lazy<DashMap<u64, (VMSpeculationResult, VMStatus, SignedTransaction)>> = Lazy::new(|| {
+    DashMap::new()
+});
 
 /// Struct that owns all dependencies required by shared mempool routines.
 #[derive(Clone)]
@@ -50,6 +60,7 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
+    pub channel: mpsc::SyncSender<(u64, SignedTransaction)>
 }
 
 impl<
@@ -65,8 +76,63 @@ impl<
         validator: Arc<RwLock<TransactionValidator>>,
         subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
         role: RoleType,
+        peer_id: PeerId
     ) -> Self {
-        let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone());
+        let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone(), peer_id);
+        let (tx, rx):(mpsc::SyncSender<(u64, SignedTransaction)>, mpsc::Receiver<(u64, SignedTransaction)>) = mpsc::sync_channel(100000);
+        let tem_locked_val = validator.clone();
+
+        rayon::spawn(move || {
+            let locked_val = tem_locked_val.clone();
+
+            let mut input = vec![];
+            loop
+            {
+                loop
+                {
+                    if input.len() >= 512 {
+                        break;
+                    }
+                    if let Ok((index, tx)) = rx.try_recv() {
+                        input.push((index, tx));
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                let failures = DashMap::new();
+
+                {
+                    let val = locked_val.write();
+                    RAYON_EXEC_POOL.lock().unwrap().install(|| {
+                        input.par_drain(..)
+                            .for_each(|(index, tx)| {
+                                let result = val.speculate_transaction(&tx);
+                                let (a, b) = result.unwrap();
+
+                                match b {
+                                    VMStatus::Executed => {
+                                        CACHE.insert(index, (a, b, tx));
+                                    }
+                                    _ => {
+                                        failures.insert(index, tx);
+                                    }
+                                }
+                            });
+                    });
+                }
+
+                for value in failures {
+                    input.push(value);
+                }
+
+                if input.is_empty() {
+                    input.push(rx.recv().unwrap());
+                }
+            }
+        });
+
         SharedMempool {
             mempool,
             config,
@@ -75,6 +141,7 @@ impl<
             validator,
             subscribers,
             broadcast_within_validator_network: Arc::new(RwLock::new(true)),
+            channel: tx
         }
     }
 
@@ -219,8 +286,8 @@ pub enum MempoolClientRequest {
     GetTransactionByHash(HashValue, oneshot::Sender<Option<SignedTransaction>>),
 }
 
-pub type MempoolClientSender = mpsc::Sender<MempoolClientRequest>;
-pub type MempoolEventsReceiver = mpsc::Receiver<MempoolClientRequest>;
+pub type MempoolClientSender = futures::channel::mpsc::Sender<MempoolClientRequest>;
+pub type MempoolEventsReceiver = futures::channel::mpsc::Receiver<MempoolClientRequest>;
 
 /// State of last sync with peer:
 /// `timeline_id` is position in log of ready transactions

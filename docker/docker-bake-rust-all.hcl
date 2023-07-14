@@ -53,7 +53,7 @@ variable "FEATURES" {
 
 group "all" {
   targets = flatten([
-//    "validator",
+    "validator",
     "tools",
     BUILD_ADDL_TESTING_IMAGES == "true" ? [
       "validator-testing"

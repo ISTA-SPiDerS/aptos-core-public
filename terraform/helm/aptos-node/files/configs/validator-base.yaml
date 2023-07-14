@@ -12,9 +12,7 @@ consensus:
     service:
       type: "local"
     backend:
-      type: "on_disk_storage"
-      path: secure-data.json
-      namespace: ~
+      type: "in_memory_storage"
     initial_safety_rules_config:
       from_file:
         waypoint:

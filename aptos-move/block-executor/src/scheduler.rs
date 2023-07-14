@@ -362,8 +362,8 @@ impl Scheduler {
             gas_estimates: CachePadded::new(gas_estimates.clone()),
             sched_lock: AtomicUsize::new(usize::MAX),
             condvars: (0..(*concurrency_level))
-            .map(|_| (Mutex::new(false),Condvar::new()))
-            .collect(),
+                .map(|_| (Mutex::new(false),Condvar::new()))
+                .collect(),
             heap: SkipSet::new(),
             finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
             mapping: Mutex::new((0..num_txns +1).map(|_| usize::MAX).collect()),
@@ -460,6 +460,10 @@ impl Scheduler {
 
     /// Return the next task for the thread.
     pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
+        profiler.start_timing(&"try_exec".to_string());
+        profiler.start_timing(&"exec_crit".to_string());
+        profiler.start_timing(&"try_val".to_string());
+
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
         //     .unwrap();
@@ -509,6 +513,7 @@ impl Scheduler {
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                         // //println!("validate: {:?}", version_to_validate);
                         let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                        profiler.end_timing(&"try_val".to_string());
                         profiler.end_timing(&"SCHEDULING".to_string());
                         return val;
                     }
@@ -561,6 +566,7 @@ impl Scheduler {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
                     profiler.end_timing(&"SCHEDULING".to_string());
+                    profiler.end_timing(&"try_val".to_string());
                     return val;
                 }
 
@@ -619,6 +625,9 @@ impl Scheduler {
 
 
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
+        //println!("bla estimates {:?}", self.gas_estimates);
+        //println!("bla deps {:?}", self.hint_graph);
+
         if self.done() {
             // No more tasks.
             return Some(SchedulerTask::Done);
@@ -644,11 +653,11 @@ impl Scheduler {
             ui = *self.heap.pop_front().unwrap();
             // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
 
-        /* Sort Pred[ui] in a non-decreasing order of finish times */
+            /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
-            .clone().iter()
-            .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
-            .collect::<Vec<Parent>>();
+                .clone().iter()
+                .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
+                .collect::<Vec<Parent>>();
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
             //         cmpOrdering::Less
@@ -686,7 +695,7 @@ impl Scheduler {
             // self.thread_buffer[best_proc].insert(ui.index);
             {
                 let (tx, rx) = &self.channels[best_proc];
-
+                profiler.count(format!("go-to {}", best_proc.to_string()), 1);
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
 
@@ -717,8 +726,6 @@ impl Scheduler {
 
 
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
-
-        profiler.start_timing(&"try_exec".to_string());
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
@@ -729,10 +736,11 @@ impl Scheduler {
             //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
             if let Some((version_to_execute, maybe_condvar)) =
-            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
 
                 profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
         }
@@ -745,7 +753,7 @@ impl Scheduler {
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =
-            self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
                 // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
                 // if localidx < *my_global_idx_mutex {
@@ -754,6 +762,8 @@ impl Scheduler {
                 // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
                 // drop(my_global_idx_mutex);
                 profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
+
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
 
@@ -763,8 +773,10 @@ impl Scheduler {
         }
         else {
             if self.done() {
+                profiler.end_timing(&"try_exec".to_string());
                 return SchedulerTask::Done
             }
+            profiler.end_timing(&"try_exec".to_string());
             // //info!("Channel empty");
             return SchedulerTask::NoTask;
         }
@@ -815,7 +827,7 @@ impl Scheduler {
 
         // Create a condition variable associated with the dependency.
         panic!("This should not be called");
-        let thread_id = RAYON_EXEC_POOL.current_thread_index().unwrap();
+        let thread_id = RAYON_EXEC_POOL.lock().unwrap().current_thread_index().unwrap();
         let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
@@ -904,7 +916,7 @@ impl Scheduler {
             //info!("after acquiring prio channel lock in finish execution of {}", txn_idx);
 
             // //info!("PRIO Sent {}", *txn);
-                   //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
+            //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
 
         }
         stored_deps.clear();

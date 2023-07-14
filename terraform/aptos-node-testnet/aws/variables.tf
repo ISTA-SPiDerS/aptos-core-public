@@ -154,7 +154,7 @@ variable "node_health_checker_helm_values" {
 
 variable "num_validators" {
   description = "The number of validator nodes to create"
-  default     = 4
+  default     = 8
 }
 
 variable "num_fullnode_groups" {
@@ -169,17 +169,17 @@ variable "num_utility_instance" {
 
 variable "num_validator_instance" {
   description = "Number of instances for validator node pool, when it's 0, it will be set to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "utility_instance_max_num" {
   description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "validator_instance_max_num" {
   description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "utility_instance_type" {

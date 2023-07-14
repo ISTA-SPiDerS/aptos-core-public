@@ -186,6 +186,12 @@ pub struct EmitArgs {
     #[clap(long)]
     pub max_transactions_per_account: Option<usize>,
 
+    #[clap(long, default_value = "500")]
+    pub accounts_per_worker: usize,
+
+    #[clap(long, default_value = "20")]
+    pub workers_per_endpoint:  usize,
+
     // In cases you want to run txn emitter from multiple machines,
     // and want to make sure that initialization succeeds
     // (account minting and txn-specific initialization), before the

@@ -53,6 +53,7 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
             validator,
             subscribers,
             config.base.role,
+            config.peer_id().unwrap().clone()
         );
 
     executor.spawn(coordinator(

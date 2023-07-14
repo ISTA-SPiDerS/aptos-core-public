@@ -90,14 +90,14 @@ impl BlockAptosVM {
         mode: ExecutionMode,
         profiler: &mut Profiler,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
-        let _timer = BLOCK_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
+        let timer = BLOCK_EXECUTOR_EXECUTE_BLOCK_SECONDS.start_timer();
         // Verify the signatures of all the transactions in parallel.
         // This is time consuming so don't wait and do the checking
         // sequentially while executing the transactions.
         let signature_verification_timer =
             BLOCK_EXECUTOR_SIGNATURE_VERIFICATION_SECONDS.start_timer();
         let signature_verified_block: Vec<PreprocessedTransaction> =
-            RAYON_EXEC_POOL.install(|| {
+            RAYON_EXEC_POOL.lock().unwrap().install(|| {
                 transactions.txns().to_vec()
                     .into_par_iter()
                     .with_min_len(25)
@@ -118,7 +118,7 @@ impl BlockAptosVM {
             .execute_block(state_view, register, state_view, mode, profiler)
             .map(|results| {
                 // Process the outputs in parallel, combining delta writes with other writes.
-                RAYON_EXEC_POOL.install(|| {
+                RAYON_EXEC_POOL.lock().unwrap().install(|| {
                     results
                         .into_par_iter()
                         .map(|(output, delta_writes)| {
@@ -130,6 +130,8 @@ impl BlockAptosVM {
                 })
             });
 
+        let block_ex_timer = timer.stop_and_discard();
+        println!("Execution time of block = {}", block_ex_timer);
         match ret {
             Ok(outputs) => {
                 let ot:Vec<TransactionOutput> = outputs;
@@ -148,8 +150,10 @@ impl BlockAptosVM {
             Err(Error::ModulePathReadWrite) => {
                 unreachable!("[Execution]: Must be handled by sequential fallback")
             },
-            Err(Error::UserError(err)) => Err(err),
+            Err(Error::UserError(err)) => return Err(err),
             _ => unreachable!("What")
         }
+
+
     }
 }

@@ -186,6 +186,8 @@ pub async fn emit_transactions_with_cluster(
             .mode(emitter_mode)
             .transaction_mix_per_phase(transaction_mix_per_phase)
             .txn_expiration_time_secs(args.txn_expiration_time_secs)
+            .workers_per_endpoint(args.workers_per_endpoint)
+            .accounts_per_worker(args.accounts_per_worker)
             .coordination_delay_between_instances(Duration::from_secs(
                 args.coordination_delay_between_instances.unwrap_or(0),
             ));
