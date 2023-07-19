@@ -236,22 +236,29 @@ impl BlockFiller for DependencyFiller {
         pending: &mut HashSet<TxnPointer>
     ) -> Vec<SignedTransaction> {
 
+        let mut force = false;
+        if *total == u64::MAX {
+            force = true;
+            *total = 0
+        }
+
         {
             while let Some(tx) = txn.pop_front() {
                 pending.insert((tx.sender(), tx.sequence_number()));
                 self.sender.send((total.clone(), tx));
                 *total += 1;
             }
-        }
 
-        //println!("bla cache len other side {}", CACHE.len());
-        {
-            while CACHE.contains_key(current)
+            //println!("bla cache len other side {}", CACHE.len());
+            while force && *current < *total
             {
-                let out = CACHE.remove(current).unwrap().1;
-                previous.push(out);
+                while CACHE.contains_key(current)
+                {
+                    let out = CACHE.remove(current).unwrap().1;
+                    previous.push(out);
 
-                *current += 1;
+                    *current += 1;
+                }
             }
         }
 
@@ -374,7 +381,7 @@ impl BlockFiller for DependencyFiller {
                     self.writes.insert(delta.clone(), vec![]);
                 }
 
-                if read_set.contains(&delta) {
+                if copy_read_set.contains(&delta) {
                     self.writes.remove(delta);
                     self.writes.insert(delta.clone(), vec![]);
                 }

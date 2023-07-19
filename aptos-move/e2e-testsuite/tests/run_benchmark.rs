@@ -12,6 +12,7 @@ use aptos_types::{
     },
 };
 use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
+use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
@@ -20,10 +21,13 @@ use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
 use std::cmp::max;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
+use std::ptr::null;
+use std::sync::mpsc;
+use std::sync::mpsc::SyncSender;
 use itertools::Itertools;
 use move_core_types::{ident_str, identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -44,8 +48,13 @@ use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
 use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 use aptos_types::transaction::ExecutionMode::{Pythia, Pythia_Sig, Standard};
-use aptos_types::transaction::{EntryFunction, Profiler, TransactionOutput};
+use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
+use move_core_types::vm_status::VMStatus;
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
+use rayon::prelude::*;
+use aptos_mempool::shared_mempool::types::{CACHE};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -105,7 +114,7 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,8,12,16];
+    let core_set = [8,12,16];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
@@ -242,15 +251,65 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
 
 fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
+
+    let (tx, rx):(mpsc::SyncSender<(u64, SignedTransaction)>, mpsc::Receiver<(u64, SignedTransaction)>) = mpsc::sync_channel(100000);
+
     let mut filler: DependencyFiller = DependencyFiller::new(
         1000000000,
         1_000_000_000,
         10_000_000,
-        16, &DashMap::new()
+        16, tx
     );
-    let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
 
-    filler.add_all(txns, &DashMap::new());
+    rayon::spawn(move || {
+        let val = transaction_validation.clone();
+
+        let mut input = vec![];
+        loop
+        {
+            loop
+            {
+                if input.len() >= 512 {
+                    break;
+                }
+                if let Ok((index, tx)) = rx.try_recv() {
+                    input.push((index, tx));
+                }
+                else {
+                    break;
+                }
+            }
+
+            let failures = DashMap::new();
+
+            {
+                RAYON_EXEC_POOL.lock().unwrap().install(|| {
+                    input.par_drain(..)
+                        .for_each(|(index, tx)| {
+                            let result = val.speculate_transaction(&tx);
+                            let (a, b) = result.unwrap();
+
+                            match b {
+                                VMStatus::Executed => {
+                                    CACHE.insert(index, (a, b, tx));
+                                }
+                                _ => {
+                                    failures.insert(index, tx);
+                                }
+                            }
+                        });
+                });
+            }
+
+            for value in failures {
+                input.push(value);
+            }
+        }
+    });
+
+
+    let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
+    filler.add_all(txns, &mut Vec::new(), &mut u64::MAX, &mut 0, &mut HashSet::new());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
