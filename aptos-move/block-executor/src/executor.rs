@@ -223,6 +223,7 @@ where
         base_view: &S,
         committing: bool,
         total_profiler: Arc<Mutex<&mut Profiler>>,
+        idx: usize,
         mode: ExecutionMode,
     ) {
         let mut profiler = Profiler::new();
@@ -351,7 +352,10 @@ where
 
         RAYON_EXEC_POOL.scope(|s| {
             for i in 0..self.concurrency_level {
+                struct NotCopy<T>(T);
+                let i = NotCopy(i);
                 s.spawn(|_|  {
+                    let i = i;
                     self.work_task_with_scope(
                         &executor_initial_arguments,
                         signature_verified_block.txns(),
@@ -361,6 +365,7 @@ where
                         base_view,
                         committing.swap(false, Ordering::SeqCst),
                         profiler.clone(),
+                        i.0,
                         mode
                     );
                 });
