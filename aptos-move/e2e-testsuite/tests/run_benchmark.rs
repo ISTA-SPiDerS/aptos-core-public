@@ -114,7 +114,7 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [16];
+    let core_set = [8];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 3;
     let modes = [Pythia, Pythia_Sig];
