@@ -88,7 +88,7 @@ fn main() {
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
             block.clone(),
-            6 as usize,
+            4 as usize,
             Pythia, &mut Profiler::new(),
         )
             .unwrap();
