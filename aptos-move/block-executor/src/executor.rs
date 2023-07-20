@@ -279,7 +279,7 @@ where
                 },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
                     let now = Instant::now();
-                    profiler.start_timing(&"execution".to_string());
+                    profiler.start_timing(&format!("execution {}", idx).to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -292,7 +292,7 @@ where
                         base_view,
                         &mut profiler
                     );
-                    profiler.end_timing(&"execution".to_string());
+                    profiler.end_timing(&format!("execution {}", idx.to_string()));
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
