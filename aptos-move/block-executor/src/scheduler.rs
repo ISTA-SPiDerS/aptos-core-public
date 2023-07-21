@@ -315,9 +315,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    channels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
 
-    priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    priochannels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -373,8 +373,8 @@ impl Scheduler {
             bottomlevels: Arc::new(Mutex::new((Vec::new()))),
             init_lock: Mutex::new(true),
             nscheduled: AtomicUsize::new(0),
-            channels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
-            priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            channels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            priochannels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
         }
@@ -383,6 +383,7 @@ impl Scheduler {
     /// If successful, returns Some(TxnIndex), the index of committed transaction.
     /// The current implementation has one dedicated thread to try_commit.
     pub fn try_commit(&self) -> Option<TxnIndex> {
+
         let mut commit_state_mutex = self.commit_state.lock();
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
@@ -479,7 +480,8 @@ impl Scheduler {
             // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
-            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+
+            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns && (*self.channels[thread_id].1.lock()).len() < 10 {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     profiler.start_timing(&"newScheduler".to_string());
 
