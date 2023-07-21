@@ -47,6 +47,8 @@ use aptos_infallible::Mutex;
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
 use std::sync::{Once, ONCE_INIT};
+use std::thread::sleep;
+
 static INIT: Once = Once::new();
 
 pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
@@ -327,6 +329,10 @@ where
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
+                    if matches!(ret, SchedulerTask::NoTask)
+                    {
+                        //sleep(Duration::from_millis(1));
+                    }
                     profiler.end_timing(&"scheduling".to_string());
                     /*if matches!(ret, SchedulerTask::NoTask) {
                         thread::sleep(Duration::from_millis(5));
