@@ -891,7 +891,11 @@ impl Scheduler {
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
         {
             let mut finish_time_lock = self.finish_time[thread_id].lock();
-            *finish_time_lock = *finish_time_lock - self.gas_estimates[txn_idx] as usize;
+            let runtimecost = self.gas_estimates[txn_idx] as usize;
+            if *finish_time_lock >= runtimecost
+            {
+                *finish_time_lock = *finish_time_lock - runtimecost;
+            }
         }
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
