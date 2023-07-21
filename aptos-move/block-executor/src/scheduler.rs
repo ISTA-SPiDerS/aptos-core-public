@@ -761,7 +761,7 @@ impl Scheduler {
 
         if let Ok(txn_to_exec) = rx.try_recv() {
 
-            drop(rx);
+            //drop(rx);
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =
