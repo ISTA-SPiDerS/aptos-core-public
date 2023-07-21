@@ -493,6 +493,11 @@ impl Scheduler {
 
                         // //println!("In here");
                         self.sched_setup();
+                        let current_time = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis();
+                        println!("{} {} bla sched", current_time, thread_id);
                         // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                         let x = self.sched_next_chunk(profiler).unwrap();
                         profiler.end_timing(&"newScheduler".to_string());
@@ -633,11 +638,7 @@ impl Scheduler {
 
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
         //println!("bla estimates {:?}", self.gas_estimates);
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        println!("{} bla sched", current_time);
+
         if self.done() {
             // No more tasks.
             return Some(SchedulerTask::Done);
