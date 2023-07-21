@@ -299,7 +299,7 @@ pub struct Scheduler {
 
     heap: SkipSet<Task>,
 
-    finish_time: Mutex<Vec<usize>>,
+    finish_time: Vec<Mutex<usize>>,
 
     mapping: Mutex<Vec<usize>>,
 
@@ -365,7 +365,7 @@ impl Scheduler {
                 .map(|_| (Mutex::new(false),Condvar::new()))
                 .collect(),
             heap: SkipSet::new(),
-            finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
+            finish_time: (0..num_txns +1).map(|_| Mutex::new(0)).collect(),
             mapping: Mutex::new((0..num_txns +1).map(|_| usize::MAX).collect()),
             incoming: Mutex::new((0..num_txns).map(|_| 0).collect()),
             children: Mutex::new((0..num_txns).map(|_|{Vec::new()}).collect()),
@@ -639,7 +639,6 @@ impl Scheduler {
         let mut ready: usize;
         let mut best_proc: usize = usize::MAX;
         let mut counter: usize = 0;
-        let mut finish_time_lock  = self.finish_time.lock();
         let mut mapping_lock = self.mapping.lock();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
@@ -656,7 +655,7 @@ impl Scheduler {
             /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
                 .clone().iter()
-                .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
+                .map(|i| Parent {idx: *i, finish_time: *self.finish_time[*i].lock()})
                 .collect::<Vec<Parent>>();
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
@@ -678,10 +677,10 @@ impl Scheduler {
                 for dad in &parents {
                     // //println!("parent {}", dad.idx);
                     if mapping_lock[dad.idx] == proc {
-                        ready = finish_time_lock[dad.idx];
+                        ready = *self.finish_time[dad.idx].lock();
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = *self.finish_time[dad.idx].lock() +  (self.gas_estimates[dad.idx] as usize / 3);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
@@ -708,7 +707,7 @@ impl Scheduler {
             /* run time estimation*/
             end_comp_lock[best_proc] = best_begin_time + (self.gas_estimates[ui.index] as usize);
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
-            finish_time_lock[ui.index] = end_comp_lock[best_proc];
+            *self.finish_time[ui.index].lock() = end_comp_lock[best_proc];
             // let bottomlock = &*self.bottomlevels.lock();
             for child in &*children_lock[ui.index] {
                 incoming_lock[*child] -= 1;
@@ -890,6 +889,7 @@ impl Scheduler {
         //info!("set executed status in finish execution of {}", txn_idx);
 
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
+        *self.finish_time[thread_id].lock() = *self.finish_time[thread_id].lock() - self.gas_estimates[txn_idx];
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
