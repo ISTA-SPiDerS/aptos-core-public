@@ -271,17 +271,17 @@ pub struct Scheduler {
 
     /// An index i maps to indices of other transactions that depend on transaction i, i.e. they
     /// should be re-executed once transaction i's next incarnation finishes.
-    txn_dependency: Vec<CachePadded<Mutex<HashMap<TxnIndex, usize>>>>,
+    txn_dependency: Vec<Mutex<HashMap<TxnIndex, usize>>>,
     opt_txn_dependency: DashSet<(TxnIndex, TxnIndex)>,
 
     /// An index i maps to the most up-to-date status of transaction i.
-    txn_status: Vec<CachePadded<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>>,
+    txn_status: Vec<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>,
 
-    hint_graph: Vec<CachePadded<Vec<TxnIndex>>>,
+    hint_graph: Vec<Vec<TxnIndex>>,
 
     use_hints: bool,
 
-    on_thread: Vec<CachePadded<Mutex<usize>>>,
+    on_thread: Vec<Mutex<usize>>,
 
     // round_number: AtomicUsize, //might need to make this AtomicUsize, no actual need but Rust
 
@@ -291,7 +291,7 @@ pub struct Scheduler {
 
     concurrency_level: usize,
 
-    gas_estimates: CachePadded<Vec<u64>>,
+    gas_estimates: Vec<u64>,
 
     sched_lock: AtomicUsize,
 
@@ -336,18 +336,18 @@ impl Scheduler {
             opt_txn_dependency: DashSet::with_capacity(num_txns),
 
             txn_dependency: (0..num_txns)
-                .map(|_| CachePadded::new(Mutex::new(HashMap::new())))
+                .map(|_| (Mutex::new(HashMap::new())))
                 .collect(),
             txn_status: (0..num_txns)
                 .map(|_| {
-                    CachePadded::new((
+                    ((
                         RwLock::new(ExecutionStatus::ReadyToExecute(0, None)),
                         RwLock::new(ValidationStatus::new()),
                     ))
                 })
                 .collect(),
             hint_graph: (0..num_txns)
-                .map(|idx| CachePadded::new(dependencies[idx].iter().map(|v| *v as TxnIndex).collect()))
+                .map(|idx| (dependencies[idx].iter().map(|v| *v as TxnIndex).collect()))
                 .collect(),
             // use_hints: (x==1),
             use_hints: true,
@@ -359,7 +359,7 @@ impl Scheduler {
                 .collect(),
             max: Mutex::new(42),
             concurrency_level: *concurrency_level,
-            gas_estimates: CachePadded::new(gas_estimates.clone()),
+            gas_estimates: (gas_estimates.clone()),
             sched_lock: AtomicUsize::new(usize::MAX),
             condvars: (0..(*concurrency_level))
                 .map(|_| (Mutex::new(false),Condvar::new()))
