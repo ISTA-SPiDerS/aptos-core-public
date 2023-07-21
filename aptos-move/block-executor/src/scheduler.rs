@@ -480,6 +480,7 @@ impl Scheduler {
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
             if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+                println!("go");
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     profiler.start_timing(&"newScheduler".to_string());
 
