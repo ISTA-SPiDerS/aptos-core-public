@@ -271,9 +271,8 @@ where
 
 
         profiler.start_timing(&format!("thread time {}", idx).to_string());
-        let mut extimer: u128 = 0;
-        let mut valtimer: u128 = 0;
-        let mut resttimer: u128 = 0;
+
+        let mut resttimer: u64 = 1000;
         let thread_id = idx;
 
         drop(init_timer);
@@ -329,14 +328,15 @@ where
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
-                    if matches!(ret, SchedulerTask::NoTask)
-                    {
-                        //sleep(Duration::from_millis(1));
-                    }
                     profiler.end_timing(&"scheduling".to_string());
-                    /*if matches!(ret, SchedulerTask::NoTask) {
-                        thread::sleep(Duration::from_millis(5));
-                    }*/
+                    if matches!(ret, SchedulerTask::NoTask) {
+                        thread::sleep(Duration::from_micros(resttimer));
+                        resttimer = resttimer * 2;
+                    }
+                    else
+                    {
+                        resttimer = 1000;
+                    }
                     ret
                 },
                 SchedulerTask::Done => {
@@ -368,7 +368,6 @@ where
                         thread_id,
                     );
                     profiler.end_timing(&format!("execution {}", idx.to_string()));
-                    extimer += now.elapsed().as_nanos();
                     ret
                 },
                 SchedulerTask::ExecutionTask(_, Some(condvar)) => {
