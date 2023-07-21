@@ -332,6 +332,9 @@ where
                     if matches!(ret, SchedulerTask::NoTask) {
                         thread::sleep(Duration::from_micros(resttimer));
                         resttimer = resttimer * 2;
+                        if resttimer > 1000*100 {
+                            resttime = 1000*100;
+                        }
                     }
                     else
                     {
