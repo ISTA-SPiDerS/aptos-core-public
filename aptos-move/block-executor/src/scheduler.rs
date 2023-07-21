@@ -626,7 +626,11 @@ impl Scheduler {
 
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
         //println!("bla estimates {:?}", self.gas_estimates);
-        println!("bla sched");
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        println!("{} bla sched", current_time);
         if self.done() {
             // No more tasks.
             return Some(SchedulerTask::Done);
