@@ -481,23 +481,22 @@ impl Scheduler {
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
 
-            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+            let mut check = false;
+            {
+                check = (*self.channels[thread_id].1.lock()).len() < 10
+            }
+
+            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns && check {
                 {
                     if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                        let mut check = false;
-                        {
-                            check = (*self.channels[thread_id].1.lock()).len() < 10
-                        }
-                        if check {
-                            profiler.start_timing(&"newScheduler".to_string());
+                        profiler.start_timing(&"newScheduler".to_string());
 
-                            // //println!("In here");
-                            self.sched_setup();
-                            // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
-                            let x = self.sched_next_chunk(profiler).unwrap();
-                            profiler.end_timing(&"newScheduler".to_string());
-                            return x;
-                        }
+                        // //println!("In here");
+                        self.sched_setup();
+                        // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
+                        let x = self.sched_next_chunk(profiler).unwrap();
+                        profiler.end_timing(&"newScheduler".to_string());
+                        return x;
                     }
                 }
                 profiler.start_timing(&"SCHEDULING".to_string());
