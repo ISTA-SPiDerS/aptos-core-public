@@ -276,6 +276,7 @@ where
 
         let mut scheduler_task = SchedulerTask::NoTask;
         barrier.wait();
+        let mut local_flag = true;
 
         loop {
             // Only one thread try_commit to avoid contention.
@@ -324,7 +325,7 @@ where
                 },
                 SchedulerTask::NoTask => {
                     profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag);
                     profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
