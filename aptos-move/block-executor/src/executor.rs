@@ -269,10 +269,7 @@ where
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
 
-
         profiler.start_timing(&format!("thread time {}", idx).to_string());
-
-        let mut resttimer: u64 = 1000;
         let thread_id = idx;
 
         drop(init_timer);
@@ -329,17 +326,6 @@ where
                     profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
                     profiler.end_timing(&"scheduling".to_string());
-                    if matches!(ret, SchedulerTask::NoTask) {
-                        thread::sleep(Duration::from_micros(resttimer));
-                        resttimer = resttimer * 2;
-                        if resttimer > 1000*100 {
-                            resttimer = 1000*100;
-                        }
-                    }
-                    else
-                    {
-                        resttimer = 1000;
-                    }
                     ret
                 },
                 SchedulerTask::Done => {
