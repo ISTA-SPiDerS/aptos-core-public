@@ -889,7 +889,7 @@ impl Scheduler {
         //info!("set executed status in finish execution of {}", txn_idx);
 
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
-        *self.finish_time[thread_id].lock() = *self.finish_time[thread_id].lock() - self.gas_estimates[txn_idx];
+        *self.finish_time[thread_id].lock() = *self.finish_time[thread_id].lock() - self.gas_estimates[txn_idx] as usize;
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
