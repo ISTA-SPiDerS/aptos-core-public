@@ -626,8 +626,7 @@ impl Scheduler {
 
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
         //println!("bla estimates {:?}", self.gas_estimates);
-        //println!("bla deps {:?}", self.hint_graph);
-
+        println!("bla sched");
         if self.done() {
             // No more tasks.
             return Some(SchedulerTask::Done);
