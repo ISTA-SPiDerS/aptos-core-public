@@ -322,6 +322,7 @@ pub struct Scheduler {
     valock: MyMut<bool>,
 
     sig_val_idx: AtomicUsize,
+    local_flag: bool
 }
 
 /// Public Interfaces for the Scheduler
@@ -377,6 +378,7 @@ impl Scheduler {
             priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
+            local_flag: false
         }
     }
 
@@ -459,7 +461,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
+    pub fn next_task(&mut self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
         profiler.start_timing(&"try_exec".to_string());
         profiler.start_timing(&"exec_crit".to_string());
         profiler.start_timing(&"try_val".to_string());
@@ -479,11 +481,9 @@ impl Scheduler {
             // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
-            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
-                println!("go");
+            if !self.local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     profiler.start_timing(&"newScheduler".to_string());
-
                     // //println!("In here");
                     self.sched_setup();
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
@@ -539,6 +539,7 @@ impl Scheduler {
                 }
             }
             else {
+                self.local_flag = true;
                 profiler.start_timing(&"SCHEDULING".to_string());
 
                 //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
