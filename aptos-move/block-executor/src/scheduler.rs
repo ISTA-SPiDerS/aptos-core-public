@@ -481,63 +481,63 @@ impl Scheduler {
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
 
-            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns && (*self.channels[thread_id].1.lock()).len() < 10 {
+            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                    profiler.start_timing(&"newScheduler".to_string());
+                    if (*self.channels[thread_id].1.lock()).len() < 10 {
+                        profiler.start_timing(&"newScheduler".to_string());
 
-                    // //println!("In here");
-                    self.sched_setup();
-                    // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
-                    let x = self.sched_next_chunk(profiler).unwrap();
-                    profiler.end_timing(&"newScheduler".to_string());
-                    return x;
-                }
-                else {
-                    profiler.start_timing(&"SCHEDULING".to_string());
-
-                    let (idx_to_validate, _) =
-                        Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                    // if my_len == 0 && idx_to_validate >= self.num_txns {
-                    //     return if self.done() {
-                    //         SchedulerTask::Done
-                    //     } else {
-                    //         if !commiting {
-                    //             // //println!("STUCK HERE");
-                    //             hint::spin_loop();
-                    //         }
-                    //         SchedulerTask::NoTask
-                    //     };
-                    // }
-                    // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
-                    // btreeset.len()}).max().unwrap();
-                    // *self.max.lock() = max;
-
-                    if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                        // //println!("validate: {:?}", version_to_validate);
-                        let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                        profiler.end_timing(&"try_val".to_string());
-                        profiler.end_timing(&"SCHEDULING".to_string());
-                        return val;
+                        // //println!("In here");
+                        self.sched_setup();
+                        // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
+                        let x = self.sched_next_chunk(profiler).unwrap();
+                        profiler.end_timing(&"newScheduler".to_string());
+                        return x;
                     }
+                }
+                profiler.start_timing(&"SCHEDULING".to_string());
 
-                    let ex = self.try_exec(thread_id, profiler, commiting);
+                let (idx_to_validate, _) =
+                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                // if my_len == 0 && idx_to_validate >= self.num_txns {
+                //     return if self.done() {
+                //         SchedulerTask::Done
+                //     } else {
+                //         if !commiting {
+                //             // //println!("STUCK HERE");
+                //             hint::spin_loop();
+                //         }
+                //         SchedulerTask::NoTask
+                //     };
+                // }
+                // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
+                // btreeset.len()}).max().unwrap();
+                // *self.max.lock() = max;
+
+                if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
+                    // //println!("validate: {:?}", version_to_validate);
+                    let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                    profiler.end_timing(&"try_val".to_string());
                     profiler.end_timing(&"SCHEDULING".to_string());
-                    if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
-                    {
-                        if !matches!(mode, ExecutionMode::Pythia_Sig) {
-                            self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
-                            return ex;
-                        }
-                        let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
-                        if idx > self.num_txns
-                        {
-                            return ex;
-                        }
-                        return SchedulerTask::SigTask(idx);
-                        //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
-                    }
-                    return ex;
+                    return val;
                 }
+
+                let ex = self.try_exec(thread_id, profiler, commiting);
+                profiler.end_timing(&"SCHEDULING".to_string());
+                if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
+                {
+                    if !matches!(mode, ExecutionMode::Pythia_Sig) {
+                        self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
+                        return ex;
+                    }
+                    let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
+                    if idx > self.num_txns
+                    {
+                        return ex;
+                    }
+                    return SchedulerTask::SigTask(idx);
+                    //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
+                }
+                return ex;
             }
             else {
                 profiler.start_timing(&"SCHEDULING".to_string());
