@@ -459,7 +459,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool) -> SchedulerTask {
         profiler.start_timing(&"try_exec".to_string());
         profiler.start_timing(&"exec_crit".to_string());
         profiler.start_timing(&"try_val".to_string());
