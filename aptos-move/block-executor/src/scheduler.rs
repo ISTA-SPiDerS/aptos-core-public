@@ -647,7 +647,7 @@ impl Scheduler {
         let bottomlock = self.bottomlevels.lock();
         while self.heap.len() > 0 {
 
-            if counter > 1000 {
+            if counter > usize::MAX {
                 break
             }
             ui = *self.heap.pop_front().unwrap();
