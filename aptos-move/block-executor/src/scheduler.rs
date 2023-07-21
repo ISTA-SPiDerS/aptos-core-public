@@ -484,8 +484,8 @@ impl Scheduler {
             let mut check = false;
             {
                 let len = (*self.channels[thread_id].1.lock()).len();
-                println!("{}", len);
-                check = len < 10
+                //println!("{}", len);
+                check = len < 1
             }
 
             if self.nscheduled.load(Ordering::SeqCst) < self.num_txns && check {
