@@ -324,9 +324,9 @@ where
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
-                    profiler.start_timing(&"scheduling".to_string());
+                    //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag);
-                    profiler.end_timing(&"scheduling".to_string());
+                    //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
                 SchedulerTask::Done => {

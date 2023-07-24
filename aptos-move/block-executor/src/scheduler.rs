@@ -460,9 +460,9 @@ impl Scheduler {
 
     /// Return the next task for the thread.
     pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool) -> SchedulerTask {
-        profiler.start_timing(&"try_exec".to_string());
-        profiler.start_timing(&"exec_crit".to_string());
-        profiler.start_timing(&"try_val".to_string());
+        //profiler.start_timing(&"try_exec".to_string());
+        //profiler.start_timing(&"exec_crit".to_string());
+        //profiler.start_timing(&"try_val".to_string());
 
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
@@ -482,16 +482,16 @@ impl Scheduler {
             if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 *local_flag = false;
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                    profiler.start_timing(&"newScheduler".to_string());
+                    //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
                     self.sched_setup();
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                     let x = self.sched_next_chunk(profiler).unwrap();
-                    profiler.end_timing(&"newScheduler".to_string());
+                    //profiler.end_timing(&"newScheduler".to_string());
                     return x;
                 }
                 else {
-                    profiler.start_timing(&"SCHEDULING".to_string());
+                    //profiler.start_timing(&"SCHEDULING".to_string());
 
                     let (idx_to_validate, _) =
                         Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
@@ -513,13 +513,13 @@ impl Scheduler {
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                         // //println!("validate: {:?}", version_to_validate);
                         let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                        profiler.end_timing(&"try_val".to_string());
-                        profiler.end_timing(&"SCHEDULING".to_string());
+                        //profiler.end_timing(&"try_val".to_string());
+                        //profiler.end_timing(&"SCHEDULING".to_string());
                         return val;
                     }
 
                     let ex = self.try_exec(thread_id, profiler, commiting);
-                    profiler.end_timing(&"SCHEDULING".to_string());
+                    //profiler.end_timing(&"SCHEDULING".to_string());
                     if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                     {
                         if !matches!(mode, ExecutionMode::Pythia_Sig) {
@@ -539,7 +539,7 @@ impl Scheduler {
             }
             else {
                 *local_flag = false;
-                profiler.start_timing(&"SCHEDULING".to_string());
+                //profiler.start_timing(&"SCHEDULING".to_string());
 
                 //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
                 // //println!("Stuck here");
@@ -566,13 +566,13 @@ impl Scheduler {
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                    profiler.end_timing(&"SCHEDULING".to_string());
-                    profiler.end_timing(&"try_val".to_string());
+                    //profiler.end_timing(&"SCHEDULING".to_string());
+                    //profiler.end_timing(&"try_val".to_string());
                     return val;
                 }
 
                 let ex = self.try_exec(thread_id, profiler, commiting);
-                profiler.end_timing(&"SCHEDULING".to_string());
+                //profiler.end_timing(&"SCHEDULING".to_string());
                 if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                 {
                     if !matches!(mode, ExecutionMode::Pythia_Sig) {

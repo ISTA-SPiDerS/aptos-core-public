@@ -259,6 +259,11 @@ impl BlockFiller for DependencyFiller {
 
                     *current += 1;
                 }
+                if force && !CACHE.contains_key(current)
+                {
+                    thread::sleep(Duration::from_millis(100));
+                    println!("waiting.... {} {}", *current, *total);
+                }
             }
         }
 

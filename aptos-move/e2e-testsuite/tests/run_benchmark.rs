@@ -114,9 +114,9 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4, 8,12,16,20,24,28,32,64];
+    let core_set = [6];
     let coin_set = [2,4,8,16,32,64,128];
-    let trial_count = 3;
+    let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
 
@@ -136,6 +136,33 @@ fn main() {
         println!("#################################################################################");
     }
 
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+        }
+        println!("#################################################################################");
+    }
 
     println!("EXECUTION SUCCESS");
 }
@@ -233,19 +260,20 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
         16, tx
     );
 
-    rayon::spawn(move || {
+    let len = txns.len();
+
+    let th = rayon::spawn(move || {
         let val = transaction_validation.clone();
+        let mut count = 0;
 
         let mut input = vec![];
         loop
         {
             loop
             {
-                if input.len() >= 512 {
-                    break;
-                }
                 if let Ok((index, tx)) = rx.try_recv() {
                     input.push((index, tx));
+                    count += 1;
                 }
                 else {
                     break;
@@ -253,7 +281,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
             }
 
             let failures = DashMap::new();
-
+            if !input.is_empty()
             {
                 RAYON_EXEC_POOL.lock().unwrap().install(|| {
                     input.par_drain(..)
@@ -273,6 +301,11 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
                 });
             }
 
+            if input.is_empty() && count >= len {
+                println!("xxx thread end xxx");
+                return;
+            }
+
             for value in failures {
                 input.push(value);
             }
@@ -286,6 +319,8 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
+
+    println!("---Start---");
 
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
