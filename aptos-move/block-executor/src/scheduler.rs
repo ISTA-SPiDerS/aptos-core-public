@@ -38,6 +38,7 @@ use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, Transac
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::UnboundedReceiver;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
@@ -315,9 +316,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    pub(crate) channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
 
-    priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    pub(crate) priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -459,7 +460,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
@@ -518,7 +519,7 @@ impl Scheduler {
                         return val;
                     }
 
-                    let ex = self.try_exec(thread_id, profiler, commiting);
+                    let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
                     //profiler.end_timing(&"SCHEDULING".to_string());
                     if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                     {
@@ -571,7 +572,7 @@ impl Scheduler {
                     return val;
                 }
 
-                let ex = self.try_exec(thread_id, profiler, commiting);
+                let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
                 //profiler.end_timing(&"SCHEDULING".to_string());
                 if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                 {
@@ -726,31 +727,27 @@ impl Scheduler {
     }
 
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
-        let mut priolock = &self.priochannels[thread_id];
-        if let Ok(txn_to_exec) = priolock.1.lock().try_recv() {
+        {
+            if let Ok(txn_to_exec) = prioChannel.try_recv() {
 
-            drop(priolock);
-            //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
+                //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
-            if let Some((version_to_execute, maybe_condvar)) =
-                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
-            {
-
-                profiler.end_timing(&"try_exec".to_string());
-                profiler.end_timing(&"exec_crit".to_string());
-                return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+                if let Some((version_to_execute, maybe_condvar)) =
+                    self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                {
+                    profiler.end_timing(&"try_exec".to_string());
+                    profiler.end_timing(&"exec_crit".to_string());
+                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+                }
             }
         }
 
-        let rx = &mut self.channels[thread_id].1.lock();
+        if let Ok(txn_to_exec) = defaultChannel.try_recv() {
 
-        if let Ok(txn_to_exec) = rx.try_recv() {
-
-            drop(rx);
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =

@@ -278,6 +278,9 @@ where
         barrier.wait();
         let mut local_flag = true;
 
+        let prioChannel = &mut *scheduler.priochannels[thread_id].1.lock();
+        let channel = &mut *scheduler.channels[thread_id].1.lock();
+
         loop {
             // Only one thread try_commit to avoid contention.
             if committing {
@@ -324,8 +327,9 @@ where
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
+
                     //profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag);
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
                     //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
