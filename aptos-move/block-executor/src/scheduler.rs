@@ -1139,6 +1139,7 @@ impl Scheduler {
     /// to the caller.
     /// - Otherwise, return None.
     fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
+        let mut lock = ;
         if let Ok(ref mut mutex) = self.valock.lock() {
             let (mut idx_to_validate, mut wave) =
                 Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
