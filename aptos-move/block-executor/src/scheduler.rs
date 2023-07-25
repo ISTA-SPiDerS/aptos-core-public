@@ -739,8 +739,8 @@ impl Scheduler {
                 if let Some((version_to_execute, maybe_condvar)) =
                     self.try_execute_next_version(profiler, txn_to_exec, thread_id)
                 {
-                    profiler.end_timing(&"try_exec".to_string());
-                    profiler.end_timing(&"exec_crit".to_string());
+                    //profiler.end_timing(&"try_exec".to_string());
+                    //profiler.end_timing(&"exec_crit".to_string());
                     return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
                 }
             }
@@ -759,22 +759,22 @@ impl Scheduler {
                 // }
                 // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
                 // drop(my_global_idx_mutex);
-                profiler.end_timing(&"try_exec".to_string());
-                profiler.end_timing(&"exec_crit".to_string());
+                //profiler.end_timing(&"try_exec".to_string());
+                //profiler.end_timing(&"exec_crit".to_string());
 
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
 
-            profiler.end_timing(&"try_exec".to_string());
+            //profiler.end_timing(&"try_exec".to_string());
 
             return SchedulerTask::NoTask
         }
         else {
             if self.done() {
-                profiler.end_timing(&"try_exec".to_string());
+                //profiler.end_timing(&"try_exec".to_string());
                 return SchedulerTask::Done
             }
-            profiler.end_timing(&"try_exec".to_string());
+            //profiler.end_timing(&"try_exec".to_string());
             // //info!("Channel empty");
             return SchedulerTask::NoTask;
         }
