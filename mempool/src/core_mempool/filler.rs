@@ -29,7 +29,7 @@ pub trait BlockFiller {
     fn add_all(
         &mut self,
         txn: VecDeque<SignedTransaction>,
-        previous: &mut Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+        previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
         total: &mut u64,
         current: &mut u64,
         pending: &mut HashSet<TxnPointer>
@@ -94,7 +94,7 @@ impl BlockFiller for SimpleFiller {
     fn add_all(
         &mut self,
         txn: VecDeque<SignedTransaction>,
-        previous: &mut Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+        previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
         mut total: &mut u64,
         mut current: &mut u64,
         pending: &mut HashSet<TxnPointer>
@@ -230,7 +230,7 @@ impl BlockFiller for DependencyFiller {
     fn add_all(
         &mut self,
         mut txn: VecDeque<SignedTransaction>,
-        previous: &mut Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+        previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
         total: &mut u64,
         current: &mut u64,
         pending: &mut HashSet<TxnPointer>
@@ -255,7 +255,7 @@ impl BlockFiller for DependencyFiller {
                 while CACHE.contains_key(current)
                 {
                     let out = CACHE.remove(current).unwrap().1;
-                    previous.push(out);
+                    previous.push_back(out);
 
                     *current += 1;
                 }
@@ -267,16 +267,17 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
+        println!("starting to add");
+
         //println!("bla prev len: {}", previous.len());
+        let mut cache : VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)> = VecDeque::new();
 
         let mut longestChain = 0;
-        let mut ind = 0;
-        while ind < previous.len()
+        while let Some((speculation, status, tx)) = previous.pop_front()
         {
-            let (speculation, status, tx) = previous.get(ind).unwrap();
+            //let (speculation, status, tx) = previous.get(ind).unwrap();
 
             if self.full {
-                ind+=1;
                 break;
             }
 
@@ -284,12 +285,8 @@ impl BlockFiller for DependencyFiller {
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
                 //println!("bla final gas2: {}", self.total_estimated_gas);
-                ind+=1;
                 break;
             }
-
-            let mut copy_write_set:Vec<&StateKey> = vec![];
-            let mut copy_read_set :Vec<&StateKey> = vec![];
 
             let mut read_set = &speculation.input;
             let write_set = speculation.output.txn_output().write_set();
@@ -300,27 +297,16 @@ impl BlockFiller for DependencyFiller {
                 //println!("bla Wat a big tx: {}", gas_used);
             }
 
-            for write in write_set {
-                copy_write_set.push(write.0);
-            }
-            let stateKey = StateKey::raw(tx.sender().to_vec());
-            copy_write_set.push(&stateKey);
-
-            for read in read_set {
-                copy_read_set.push(read);
-            }
-            copy_read_set.push(&stateKey);
-
             if write_set.is_empty()
             {
                 println!("Empty????");
-                previous.remove(ind);
+                cache.push_back((speculation, status, tx));
                 continue;
             }
 
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
-            for read in &copy_read_set {
+            for read in read_set {
                 if self.last_touched.contains_key(&read) {
                     arrival_time = max(arrival_time, *self.last_touched.get(&read).unwrap())
                 }
@@ -339,19 +325,18 @@ impl BlockFiller for DependencyFiller {
             if finish_time > self.gas_per_core as u64 {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
-                ind+=1;
+                cache.push_back((speculation, status, tx));
                 continue;
             }
 
             if self.total_estimated_gas + gas_used > self.gas_per_core * self.cores {
                 self.full = true;
                 //println!("bla final gas4: {}", self.total_estimated_gas);
-                ind+=1;
                 break;
             }
 
             let mut dependencies = HashSet::new();
-            for read in &copy_read_set {
+            for read in read_set {
                 if self.writes.contains_key(&read) {
                     for parent_txn in self.writes.get(&read).unwrap() {
                         dependencies.insert(*parent_txn);
@@ -362,7 +347,6 @@ impl BlockFiller for DependencyFiller {
             if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                 self.full = true;
                 //println!("bla final gas5: {}", self.total_estimated_gas);
-                ind+=1;
                 break;
             }
 
@@ -386,25 +370,23 @@ impl BlockFiller for DependencyFiller {
                     self.writes.insert(delta.clone(), vec![]);
                 }
 
-                if copy_read_set.contains(&delta) {
-                    self.writes.remove(delta);
+                if read_set.contains(&delta) {
                     self.writes.insert(delta.clone(), vec![]);
                 }
                 self.writes.get_mut(delta).unwrap().push(current_idx);
             }
             
-            for write in copy_write_set {
-                let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&0u64));
-                self.last_touched.insert(write.clone(), mx.into());
+            for write in write_set {
+                let mx = max(finish_time, *self.last_touched.get(write.0).unwrap_or(&0u64));
+                self.last_touched.insert(write.0.clone(), mx.into());
 
-                if !self.writes.contains_key(write) {
-                    self.writes.insert(write.clone(), vec![]);
+                if !self.writes.contains_key(write.0) {
+                    self.writes.insert(write.0.clone(), vec![]);
                 }
 
-                self.writes.remove(write);
-                self.writes.insert(write.clone(), vec![current_idx]);
+                self.writes.insert(write.0.clone(), vec![current_idx]);
             }
-            self.block.push(previous.remove(ind).2);
+            self.block.push(tx);
 
             if self.block.len() as u64 == self.max_txns {
                 self.full = true;
@@ -412,9 +394,13 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
+        println!("goto");
+
         for tx in &self.block {
             pending.remove(&(tx.sender(), tx.sequence_number()));
         }
+
+        previous.extend(cache);
 
         //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];

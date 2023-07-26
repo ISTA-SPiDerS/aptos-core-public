@@ -49,7 +49,7 @@ pub struct Mempool {
 
     pub system_transaction_timeout: Duration,
     last_max_gas: u64,
-    cached_ex: Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+    cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
     total: u64,
     current: u64,
     pending: HashSet<TxnPointer>
@@ -64,7 +64,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             last_max_gas: 100_000_000_000,
-            cached_ex: vec![],
+            cached_ex: VecDeque::new(),
             total: 0,
             current: 0,
             pending: HashSet::new()

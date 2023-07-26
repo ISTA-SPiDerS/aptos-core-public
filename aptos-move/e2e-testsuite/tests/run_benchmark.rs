@@ -286,7 +286,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
 
 
     let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
-    filler.add_all(txns, &mut Vec::new(), &mut u64::MAX, &mut 0, &mut HashSet::new());
+    filler.add_all(txns, &mut VecDeque::new(), &mut u64::MAX, &mut 0, &mut HashSet::new());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
