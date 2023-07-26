@@ -57,7 +57,7 @@ module Owner::benchmark {
         };
     }
 
-    public entry fun exchange(s: &signer, location: address, resource: u64) acquires TestTables {
+    public entry fun exchange(s: &signer, location: address, resource: u64, value: u64) acquires TestTables {
         let i = 0;
         while (i < 3) {
             i = i + 1;
@@ -67,7 +67,7 @@ module Owner::benchmark {
                 table::add(res_table, resource, 0);
             } else {
                 let dst_token = table::borrow_mut(res_table, resource);
-                *dst_token = *dst_token + 1;
+                *dst_token = value;
             };
         }
     }

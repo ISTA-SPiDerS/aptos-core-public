@@ -65,7 +65,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 100;
+    let block_size = 10000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
@@ -458,11 +458,13 @@ fn create_block(
                 coin_1_num = rng.gen::<usize>() % coins;
             }
 
+            let value : u64 = rng.gen();
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap(), bcs::to_bytes(&value).unwrap()],
             );
         }
 
