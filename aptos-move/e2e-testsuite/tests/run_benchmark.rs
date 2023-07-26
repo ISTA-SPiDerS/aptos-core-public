@@ -380,11 +380,13 @@ fn create_block(
                 coin_1_num = rng.gen::<usize>() % coins;
             }
 
+            let value : u64 = rng.gen();
+
             entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap(), bcs::to_bytes(&value).unwrap()],
             );
         }
 
