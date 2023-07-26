@@ -114,7 +114,7 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [8];
+    let core_set = [4,8,16,20,24,28,32];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
@@ -132,6 +132,34 @@ fn main() {
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
         }
         println!("#################################################################################");
     }
