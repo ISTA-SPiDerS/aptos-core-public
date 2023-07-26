@@ -90,7 +90,7 @@ where
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
-        println!("id: {} {}", thread_id, idx_to_execute);
+        println!("id start: {} {}", thread_id, idx_to_execute);
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
         profiler.start_timing(&"execute#1".to_string());
@@ -168,6 +168,8 @@ where
         let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler, thread_id);
 
         profiler.end_timing(&"execute#4".to_string());
+
+        println!("id end: {} {}", thread_id, idx_to_execute);
 
         return result;
     }
