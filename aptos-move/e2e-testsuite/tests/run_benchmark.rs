@@ -71,7 +71,7 @@ fn main() {
     }
     seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
-    println!("STARTING WARMUP");
+    /*println!("STARTING WARMUP");
     for warmup in [1, 2, 3] {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, LoadType::P2PTX);
         let block = get_transaction_register(txn.clone(), &executor)
@@ -101,7 +101,7 @@ fn main() {
             };
         }
     }
-    println!("END WARMUP");
+    println!("END WARMUP");*/
 
 
     println!("EXECUTE BLOCKS");
