@@ -16,21 +16,10 @@ use tracing::info;
 use color_eyre::Report;
 use itertools::{Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
-use std::{
-    collections::HashMap,
-    collections::HashSet,
-    hash::Hash,
-    io,
-    marker::PhantomData,
-    ops::{Add, AddAssign},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock, Barrier
-    },
-    thread,
-    thread::spawn,
-    time::{Instant, Duration},
-};
+use std::{collections::HashMap, collections::HashSet, hash::Hash, hint, io, marker::PhantomData, ops::{Add, AddAssign}, sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, RwLock, Barrier
+}, thread, thread::spawn, time::{Instant, Duration}};
 use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use dashmap::DashMap;
 use aptos_logger::debug;
@@ -98,10 +87,10 @@ where
         thread_id: usize,
     ) -> SchedulerTask {
 
-
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
+        println!("id: {} {}", thread_id, idx_to_execute);
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
         profiler.start_timing(&"execute#1".to_string());
@@ -330,6 +319,10 @@ where
 
                     //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
+                    if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
+                    {
+                        hint::spin_loop();
+                    }
                     //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },

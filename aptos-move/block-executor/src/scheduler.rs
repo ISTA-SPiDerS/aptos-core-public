@@ -550,8 +550,7 @@ impl Scheduler {
                 // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
                 //     btreeset.len()}).max().unwrap();
                 // *self.max.lock() = max;
-                let (idx_to_validate, _) =
-                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                //let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                 // if my_len == 0 && idx_to_validate >= self.num_txns {
                 //     return if self.done() {
                 //         SchedulerTask::Done
@@ -1139,8 +1138,7 @@ impl Scheduler {
     /// to the caller.
     /// - Otherwise, return None.
     fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
-        let mut lock = self.valock.try_lock();
-        if let Ok(ref mut mutex) = lock {
+        if let Ok(ref mut mutex) = self.valock.try_lock() {
             let (mut idx_to_validate, mut wave) =
                 Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
 
@@ -1148,7 +1146,7 @@ impl Scheduler {
                 if !self.done() {
                     // Avoid pointlessly spinning, and give priority to other threads that may
                     // be working to finish the remaining tasks.
-                    // hint::spin_loop();
+                    hint::spin_loop();
                 }
                 return None;
             }
