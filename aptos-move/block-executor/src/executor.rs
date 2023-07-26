@@ -321,10 +321,10 @@ where
 
                     //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
-                    //if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
-                    //{
-                    //    hint::spin_loop();
-                    //}
+                    if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
+                    {
+                        hint::spin_loop();
+                    }
                     //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
