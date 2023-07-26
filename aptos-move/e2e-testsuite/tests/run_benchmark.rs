@@ -56,7 +56,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 100000;
+    let block_size = 10000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
@@ -106,7 +106,7 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [8];
+    let core_set = [4,8,16,20,24,28,32];
     let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
     let modes = [BlockSTM, BlockSTM_Sig];
@@ -127,7 +127,35 @@ fn main() {
         }
         println!("#################################################################################");
     }
-    
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+        }
+        println!("#################################################################################");
+    }
+
     println!("EXECUTION SUCCESS");
 }
 
