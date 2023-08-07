@@ -30,14 +30,9 @@ use num_cpus;
 use once_cell::sync::Lazy;
 use std::{
     collections::btree_map::BTreeMap,
-    marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering},
 };
-use std::sync::Arc;
 use std::borrow::Borrow;
 use aptos_infallible::Mutex;
-use std::time::Instant;
-use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
 use std::sync::{Once, ONCE_INIT};
