@@ -414,7 +414,7 @@ fn create_block(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap(), bcs::to_bytes(&value).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()],
             );
         }
 
