@@ -16,21 +16,10 @@ use tracing::info;
 use color_eyre::Report;
 use itertools::{Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
-use std::{
-    collections::HashMap,
-    collections::HashSet,
-    hash::Hash,
-    io,
-    marker::PhantomData,
-    ops::{Add, AddAssign},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock, Barrier
-    },
-    thread,
-    thread::spawn,
-    time::{Instant, Duration},
-};
+use std::{collections::HashMap, collections::HashSet, hash::Hash, hint, io, marker::PhantomData, ops::{Add, AddAssign}, sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, RwLock, Barrier
+}, thread, thread::spawn, time::{Instant, Duration}};
 use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use dashmap::DashMap;
 use aptos_logger::debug;
@@ -47,6 +36,8 @@ use aptos_infallible::Mutex;
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
 use std::sync::{Once, ONCE_INIT};
+use std::thread::sleep;
+
 static INIT: Once = Once::new();
 
 pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
@@ -96,10 +87,10 @@ where
         thread_id: usize,
     ) -> SchedulerTask {
 
-
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
+        //println!("id start: {} {}", thread_id, idx_to_execute);
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
         profiler.start_timing(&"execute#1".to_string());
@@ -177,6 +168,8 @@ where
         let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler, thread_id);
 
         profiler.end_timing(&"execute#4".to_string());
+
+        //println!("id end: {} {}", thread_id, idx_to_execute);
 
         return result;
     }
@@ -267,17 +260,17 @@ where
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
 
-
         profiler.start_timing(&format!("thread time {}", idx).to_string());
-        let mut extimer: u128 = 0;
-        let mut valtimer: u128 = 0;
-        let mut resttimer: u128 = 0;
         let thread_id = idx;
 
         drop(init_timer);
 
         let mut scheduler_task = SchedulerTask::NoTask;
         barrier.wait();
+        let mut local_flag = true;
+
+        let prioChannel = &mut *scheduler.priochannels[thread_id].1.lock();
+        let channel = &mut *scheduler.channels[thread_id].1.lock();
 
         loop {
             // Only one thread try_commit to avoid contention.
@@ -325,12 +318,14 @@ where
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
-                    profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
-                    profiler.end_timing(&"scheduling".to_string());
-                    /*if matches!(ret, SchedulerTask::NoTask) {
-                        thread::sleep(Duration::from_millis(5));
-                    }*/
+
+                    //profiler.start_timing(&"scheduling".to_string());
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
+                    if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
+                    {
+                        hint::spin_loop();
+                    }
+                    //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
                 SchedulerTask::Done => {
@@ -362,7 +357,6 @@ where
                         thread_id,
                     );
                     profiler.end_timing(&format!("execution {}", idx.to_string()));
-                    extimer += now.elapsed().as_nanos();
                     ret
                 },
                 SchedulerTask::ExecutionTask(_, Some(condvar)) => {
