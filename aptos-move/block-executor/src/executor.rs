@@ -18,11 +18,15 @@ use aptos_state_view::TStateView;
 use aptos_types::write_set::WriteOp;
 use num_cpus;
 use once_cell::sync::Lazy;
-use std::{collections::btree_map::BTreeMap, marker::PhantomData, sync::atomic::{AtomicBool, Ordering}, thread};
+use std::{
+    collections::btree_map::BTreeMap,
+    marker::PhantomData,
+    sync::atomic::{AtomicBool, Ordering},
+};
 use std::sync::Arc;
 use std::borrow::Borrow;
 use aptos_infallible::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 
@@ -239,8 +243,6 @@ where
         let mut scheduler_task = SchedulerTask::NoTask;
 
         loop {
-            thread::sleep(Duration::from_millis(1));
-            
             // Only one thread try_commit to avoid contention.
             if committing {
                 // Keep committing txns until there is no more that can be committed now.
