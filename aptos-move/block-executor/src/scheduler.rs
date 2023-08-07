@@ -1146,7 +1146,7 @@ impl Scheduler {
                 if !self.done() {
                     // Avoid pointlessly spinning, and give priority to other threads that may
                     // be working to finish the remaining tasks.
-                    hint::spin_loop();
+                    //hint::spin_loop();
                 }
                 return None;
             }
