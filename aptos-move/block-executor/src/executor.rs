@@ -30,9 +30,14 @@ use num_cpus;
 use once_cell::sync::Lazy;
 use std::{
     collections::btree_map::BTreeMap,
+    marker::PhantomData,
+    sync::atomic::{AtomicBool, Ordering},
 };
+use std::sync::Arc;
 use std::borrow::Borrow;
 use aptos_infallible::Mutex;
+use std::time::Instant;
+use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
 use std::sync::{Once, ONCE_INIT};
@@ -273,6 +278,8 @@ where
         let channel = &mut *scheduler.channels[thread_id].1.lock();
 
         loop {
+            thread::sleep(Duration::from_millis(1));
+            
             // Only one thread try_commit to avoid contention.
             if committing {
                 profiler.start_timing(&"committing".to_string());
