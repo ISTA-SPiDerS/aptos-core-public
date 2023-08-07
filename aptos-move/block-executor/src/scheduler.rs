@@ -38,7 +38,6 @@ use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, Transac
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedReceiver;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
@@ -316,9 +315,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    pub(crate) channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
 
-    pub(crate) priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -460,10 +459,10 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>) -> SchedulerTask {
-        //profiler.start_timing(&"try_exec".to_string());
-        //profiler.start_timing(&"exec_crit".to_string());
-        //profiler.start_timing(&"try_val".to_string());
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode) -> SchedulerTask {
+        profiler.start_timing(&"try_exec".to_string());
+        profiler.start_timing(&"exec_crit".to_string());
+        profiler.start_timing(&"try_val".to_string());
 
         // let thread_id = crate::executor::RAYON_EXEC_POOL
         //     .current_thread_index()
@@ -480,19 +479,19 @@ impl Scheduler {
             // //println!("SCHED_SETUP");
             // let my_end_comp = *self.end_comp[thread_id].lock();
             // let my_len = self.thread_buffer[thread_id].len();
-            if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
-                *local_flag = false;
+            if self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
-                    //profiler.start_timing(&"newScheduler".to_string());
+                    profiler.start_timing(&"newScheduler".to_string());
+
                     // //println!("In here");
                     self.sched_setup();
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                     let x = self.sched_next_chunk(profiler).unwrap();
-                    //profiler.end_timing(&"newScheduler".to_string());
+                    profiler.end_timing(&"newScheduler".to_string());
                     return x;
                 }
                 else {
-                    //profiler.start_timing(&"SCHEDULING".to_string());
+                    profiler.start_timing(&"SCHEDULING".to_string());
 
                     let (idx_to_validate, _) =
                         Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
@@ -514,13 +513,13 @@ impl Scheduler {
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                         // //println!("validate: {:?}", version_to_validate);
                         let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                        //profiler.end_timing(&"try_val".to_string());
-                        //profiler.end_timing(&"SCHEDULING".to_string());
+                        profiler.end_timing(&"try_val".to_string());
+                        profiler.end_timing(&"SCHEDULING".to_string());
                         return val;
                     }
 
-                    let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-                    //profiler.end_timing(&"SCHEDULING".to_string());
+                    let ex = self.try_exec(thread_id, profiler, commiting);
+                    profiler.end_timing(&"SCHEDULING".to_string());
                     if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                     {
                         if !matches!(mode, ExecutionMode::Pythia_Sig) {
@@ -539,8 +538,7 @@ impl Scheduler {
                 }
             }
             else {
-                *local_flag = false;
-                //profiler.start_timing(&"SCHEDULING".to_string());
+                profiler.start_timing(&"SCHEDULING".to_string());
 
                 //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
                 // //println!("Stuck here");
@@ -550,7 +548,8 @@ impl Scheduler {
                 // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
                 //     btreeset.len()}).max().unwrap();
                 // *self.max.lock() = max;
-                //let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+                let (idx_to_validate, _) =
+                    Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
                 // if my_len == 0 && idx_to_validate >= self.num_txns {
                 //     return if self.done() {
                 //         SchedulerTask::Done
@@ -566,13 +565,13 @@ impl Scheduler {
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                    //profiler.end_timing(&"SCHEDULING".to_string());
-                    //profiler.end_timing(&"try_val".to_string());
+                    profiler.end_timing(&"SCHEDULING".to_string());
+                    profiler.end_timing(&"try_val".to_string());
                     return val;
                 }
 
-                let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-                //profiler.end_timing(&"SCHEDULING".to_string());
+                let ex = self.try_exec(thread_id, profiler, commiting);
+                profiler.end_timing(&"SCHEDULING".to_string());
                 if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                 {
                     if !matches!(mode, ExecutionMode::Pythia_Sig) {
@@ -726,27 +725,31 @@ impl Scheduler {
     }
 
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
-        {
-            if let Ok(txn_to_exec) = prioChannel.try_recv() {
+        let mut priolock = &self.priochannels[thread_id];
+        if let Ok(txn_to_exec) = priolock.1.lock().try_recv() {
 
-                //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
+            drop(priolock);
+            //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
-                if let Some((version_to_execute, maybe_condvar)) =
-                    self.try_execute_next_version(profiler, txn_to_exec, thread_id)
-                {
-                    //profiler.end_timing(&"try_exec".to_string());
-                    //profiler.end_timing(&"exec_crit".to_string());
-                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
-                }
+            if let Some((version_to_execute, maybe_condvar)) =
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+            {
+
+                profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
+                return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
         }
 
-        if let Ok(txn_to_exec) = defaultChannel.try_recv() {
+        let rx = &mut self.channels[thread_id].1.lock();
 
+        if let Ok(txn_to_exec) = rx.try_recv() {
+
+            drop(rx);
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =
@@ -758,22 +761,22 @@ impl Scheduler {
                 // }
                 // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
                 // drop(my_global_idx_mutex);
-                //profiler.end_timing(&"try_exec".to_string());
-                //profiler.end_timing(&"exec_crit".to_string());
+                profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"exec_crit".to_string());
 
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
 
-            //profiler.end_timing(&"try_exec".to_string());
+            profiler.end_timing(&"try_exec".to_string());
 
             return SchedulerTask::NoTask
         }
         else {
             if self.done() {
-                //profiler.end_timing(&"try_exec".to_string());
+                profiler.end_timing(&"try_exec".to_string());
                 return SchedulerTask::Done
             }
-            //profiler.end_timing(&"try_exec".to_string());
+            profiler.end_timing(&"try_exec".to_string());
             // //info!("Channel empty");
             return SchedulerTask::NoTask;
         }
@@ -1138,7 +1141,8 @@ impl Scheduler {
     /// to the caller.
     /// - Otherwise, return None.
     fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
-        if let Ok(ref mut mutex) = self.valock.try_lock() {
+        let mut lock = self.valock.try_lock();
+        if let Ok(ref mut mutex) = lock {
             let (mut idx_to_validate, mut wave) =
                 Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
 
@@ -1146,7 +1150,7 @@ impl Scheduler {
                 if !self.done() {
                     // Avoid pointlessly spinning, and give priority to other threads that may
                     // be working to finish the remaining tasks.
-                    hint::spin_loop();
+                    // hint::spin_loop();
                 }
                 return None;
             }
