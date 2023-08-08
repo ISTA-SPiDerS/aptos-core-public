@@ -236,10 +236,9 @@ fn test_new_genesis() {
                     ),
                 ),
                 (
-                    StateKey::access_path(AccessPath::new(
+                    StateKey::access_path(AccessPath::new_base(
                         account1,
-                        CoinStoreResource::resource_path(),
-                        false
+                        CoinStoreResource::resource_path()
                     )),
                     WriteOp::Modification(
                         bcs::to_bytes(&CoinStoreResource::new(
