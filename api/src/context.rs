@@ -348,6 +348,7 @@ impl Context {
             StateKey::access_path(AccessPath::new(
                 address,
                 AccessPath::resource_path_vec(struct_tag),
+                false
             ))
         });
         Ok((kvs, next_key))
@@ -391,6 +392,7 @@ impl Context {
             StateKey::access_path(AccessPath::new(
                 address,
                 AccessPath::code_path_vec(module_id),
+                true
             ))
         });
         Ok((kvs, next_key))

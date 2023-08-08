@@ -42,6 +42,7 @@ fn test_genesis() {
     let account_resource_path = StateKey::access_path(AccessPath::new(
         CORE_CODE_ADDRESS,
         AccountResource::struct_tag().access_vector(),
+        true
     ));
     let (aptos_framework_account_resource, state_proof) = db
         .reader

@@ -229,6 +229,7 @@ fn test_new_genesis() {
                     StateKey::access_path(AccessPath::new(
                         CORE_CODE_ADDRESS,
                         ConfigurationResource::resource_path(),
+                        true
                     )),
                     WriteOp::Modification(
                         bcs::to_bytes(&configuration.bump_epoch_for_test()).unwrap(),
@@ -238,6 +239,7 @@ fn test_new_genesis() {
                     StateKey::access_path(AccessPath::new(
                         account1,
                         CoinStoreResource::resource_path(),
+                        false
                     )),
                     WriteOp::Modification(
                         bcs::to_bytes(&CoinStoreResource::new(

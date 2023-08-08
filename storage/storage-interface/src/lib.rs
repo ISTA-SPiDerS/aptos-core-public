@@ -555,6 +555,7 @@ impl MoveStorage for &dyn DbReader {
             &StateKey::access_path(AccessPath::new(
                 CORE_CODE_ADDRESS,
                 access_path_for_config(config_id).path,
+                true
             )),
             version,
         )?;

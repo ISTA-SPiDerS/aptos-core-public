@@ -136,6 +136,7 @@ impl FakeExecutor {
                 name,
                 type_params,
             )),
+            false
         ))
     }
 

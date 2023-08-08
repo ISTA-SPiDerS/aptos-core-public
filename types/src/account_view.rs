@@ -66,6 +66,7 @@ pub trait AccountView {
         Ok(StateKey::access_path(AccessPath::new(
             account_address,
             path,
+            false
         )))
     }
 

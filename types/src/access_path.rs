@@ -54,6 +54,7 @@ pub struct AccessPath {
     pub address: AccountAddress,
     #[serde(with = "serde_bytes")]
     pub path: Vec<u8>,
+    pub is_code: bool
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd)]
@@ -70,8 +71,8 @@ pub enum PathType {
 }
 
 impl AccessPath {
-    pub fn new(address: AccountAddress, path: Vec<u8>) -> Self {
-        AccessPath { address, path }
+    pub fn new(address: AccountAddress, path: Vec<u8>, is_code: bool) -> Self {
+        AccessPath { address, path, is_code }
     }
 
     pub fn resource_path_vec(tag: StructTag) -> Vec<u8> {
@@ -84,6 +85,7 @@ impl AccessPath {
         AccessPath {
             address,
             path: AccessPath::resource_path_vec(type_),
+            is_code: false
         }
     }
 
@@ -97,6 +99,7 @@ impl AccessPath {
         AccessPath {
             address,
             path: AccessPath::resource_group_path_vec(type_),
+            is_code: false
         }
     }
 
@@ -107,7 +110,7 @@ impl AccessPath {
     pub fn code_access_path(key: ModuleId) -> Self {
         let address = *key.address();
         let path = AccessPath::code_path_vec(key);
-        AccessPath { address, path }
+        AccessPath { address, path, is_code: true }
     }
 
     /// Extract the structured resource or module `Path` from `self`
@@ -126,7 +129,7 @@ impl AccessPath {
     }
 
     pub fn is_code(&self) -> bool {
-        matches!(self.get_path(), Path::Code(_))
+        self.is_code
     }
 
     pub fn size(&self) -> usize {
@@ -176,6 +179,7 @@ impl From<&ModuleId> for AccessPath {
         AccessPath {
             address: *id.address(),
             path: id.access_vector(),
+            is_code: true
         }
     }
 }
