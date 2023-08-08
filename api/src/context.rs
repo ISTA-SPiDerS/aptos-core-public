@@ -293,7 +293,7 @@ impl Context {
         let mut resource_iter = account_iter
             .filter_map(|res| match res {
                 Ok((k, v)) => match k.inner() {
-                    StateKeyInner::AccessPath(AccessPath { address: _, path }) => {
+                    StateKeyInner::AccessPath(AccessPath { address: _, path,  is_code: false }) => {
                         match Path::try_from(path.as_slice()) {
                             Ok(Path::Resource(struct_tag)) => {
                                 Some(Ok((struct_tag, v.into_bytes())))
@@ -369,7 +369,7 @@ impl Context {
         let mut module_iter = account_iter
             .filter_map(|res| match res {
                 Ok((k, v)) => match k.inner() {
-                    StateKeyInner::AccessPath(AccessPath { address: _, path }) => {
+                    StateKeyInner::AccessPath(AccessPath { address: _, path, is_code: false }) => {
                         match Path::try_from(path.as_slice()) {
                             Ok(Path::Code(module_id)) => Some(Ok((module_id, v.into_bytes()))),
                             Ok(Path::Resource(_)) | Ok(Path::ResourceGroup(_)) => None,
