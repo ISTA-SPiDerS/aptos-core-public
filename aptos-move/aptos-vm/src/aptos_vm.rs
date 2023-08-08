@@ -1207,7 +1207,6 @@ impl VMAdapter for AptosVM {
             },
             PreprocessedTransaction::UserTransaction(txn) => {
                 fail_point!("aptos_vm::execution::user_transaction");
-                let sender = txn.sender().to_string();
                 let _timer = TXN_TOTAL_SECONDS.start_timer();
                 let (vm_status, output) =
                     self.execute_user_transaction(data_cache, txn, log_context);
@@ -1232,7 +1231,7 @@ impl VMAdapter for AptosVM {
                 if let Some(label) = counter_label {
                     USER_TRANSACTIONS_EXECUTED.with_label_values(&[label]).inc();
                 }
-                (vm_status, output, Some(sender))
+                (vm_status, output, Some("valid".to_string()))
             },
             PreprocessedTransaction::InvalidSignature => {
                 let (vm_status, output) =
