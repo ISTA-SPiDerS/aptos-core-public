@@ -76,7 +76,7 @@ impl AccessPath {
     }
 
     pub fn new_base(address: AccountAddress, path: Vec<u8>) -> Self {
-        AccessPath { address, path, is_code: matches!(bcs::from_bytes::<Path>(&path).expect("Unexpected serialization error"), Path::Code(_)) }
+        AccessPath { address, path: path.clone(), is_code: matches!(bcs::from_bytes::<Path>(path.clone()).expect("Unexpected serialization error"), Path::Code(_)) }
     }
 
     pub fn resource_path_vec(tag: StructTag) -> Vec<u8> {
