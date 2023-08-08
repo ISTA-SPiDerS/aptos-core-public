@@ -48,7 +48,7 @@ use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
 use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
 use aptos_types::transaction::ExecutionMode::{Pythia, Pythia_Sig, Standard};
-use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, RAYON_EXEC_POOL2, TransactionOutput};
+use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
 use move_core_types::vm_status::VMStatus;
 use rayon::iter::ParallelIterator;
@@ -283,7 +283,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
             let failures = DashMap::new();
             if !input.is_empty()
             {
-                RAYON_EXEC_POOL2.lock().unwrap().install(|| {
+                RAYON_EXEC_POOL.lock().unwrap().install(|| {
                     input.par_drain(..)
                         .for_each(|(index, tx)| {
                             let result = val.speculate_transaction(&tx);
