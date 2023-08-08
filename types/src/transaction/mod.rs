@@ -1702,6 +1702,14 @@ pub static RAYON_EXEC_POOL: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex:
         .unwrap()
 }));
 
+pub static RAYON_EXEC_POOL2: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex::new({
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(cmp::min(32, num_cpus::get()))
+        .thread_name(|index| format!("par_exec_{}", index))
+        .build()
+        .unwrap()
+}));
+
 /// Different types of Execution Models for easy comparisons.
 #[derive(Clone, Copy, Debug)]
 pub enum ExecutionMode {
