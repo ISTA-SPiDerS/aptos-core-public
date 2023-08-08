@@ -273,8 +273,6 @@ where
         let channel = &mut *scheduler.channels[thread_id].1.lock();
 
         loop {
-            thread::sleep(Duration::from_millis(1));
-            
             // Only one thread try_commit to avoid contention.
             if committing {
                 profiler.start_timing(&"committing".to_string());
