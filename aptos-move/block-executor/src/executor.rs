@@ -82,7 +82,7 @@ where
         let txn = &signature_verified_block[idx_to_execute];
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
-        profiler.start_timing(&"execute#1".to_string());
+        //profiler.start_timing(&"execute#1".to_string());
 
         // VM execution.
         let execute_result = executor.execute_transaction(
@@ -91,9 +91,9 @@ where
             idx_to_execute,
             false,
         );
-        profiler.end_timing(&"execute#1".to_string());
+        //profiler.end_timing(&"execute#1".to_string());
 
-        profiler.start_timing(&"execute#2".to_string());
+        //profiler.start_timing(&"execute#2".to_string());
 
         let mut prev_modified_keys = last_input_output.modified_keys(idx_to_execute);
 
@@ -144,19 +144,19 @@ where
             versioned_data_cache.delete(&k, idx_to_execute);
         }
 
-        profiler.end_timing(&"execute#2".to_string());
+        //profiler.end_timing(&"execute#2".to_string());
 
-        profiler.start_timing(&"execute#3".to_string());
+        //profiler.start_timing(&"execute#3".to_string());
 
         last_input_output.record(idx_to_execute, speculative_view.take_reads(), result);
 
-        profiler.end_timing(&"execute#3".to_string());
+        //profiler.end_timing(&"execute#3".to_string());
 
-        profiler.start_timing(&"execute#4".to_string());
+        //profiler.start_timing(&"execute#4".to_string());
 
         let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler);
 
-        profiler.end_timing(&"execute#4".to_string());
+        //profiler.end_timing(&"execute#4".to_string());
 
         return result;
     }
