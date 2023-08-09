@@ -175,7 +175,7 @@ impl TransactionValidation for VMValidator {
         let mut read_recorder_view = ReadRecorderView::new_view(&self.state_view);
         let preprocessed_txn = preprocess_transaction::<AptosVM>(Transaction::UserTransaction(transaction.clone()));
 
-        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn, &read_recorder_view, &log_context).unwrap();
+        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn, &read_recorder_view, &log_context, true).unwrap();
         let input = read_recorder_view.reads();
 
         anyhow::Ok((VMSpeculationResult {input, output}, status))
