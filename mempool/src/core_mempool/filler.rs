@@ -366,7 +366,7 @@ impl BlockFiller for DependencyFiller {
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
 
-            self.transaction_validation.add_write_set(write_set);
+            //self.transaction_validation.add_write_set(write_set);
 
             // Update last touched time for used resources.
             for (delta, _op) in delta_set {
@@ -394,8 +394,8 @@ impl BlockFiller for DependencyFiller {
                 self.writes.insert(write.0.clone(), vec![current_idx]);
             }
 
-            let mx = max(finish_time, *self.last_touched.get(user_state_key.0).unwrap_or(&0u64));
-            self.last_touched.insert(user_state_key.0.clone(), mx.into());
+            let mx = max(finish_time, *self.last_touched.get(&user_state_key).unwrap_or(&0u64));
+            self.last_touched.insert(user_state_key.clone(), mx.into());
 
             self.writes.insert(user_state_key, vec![current_idx]);
 
