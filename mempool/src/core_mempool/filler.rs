@@ -344,6 +344,13 @@ impl BlockFiller for DependencyFiller {
                 }
             }
 
+            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            if self.writes.contains_key(&user_state_key) {
+                for parent_txn in self.writes.get(&user_state_key).unwrap() {
+                    dependencies.insert(*parent_txn);
+                }
+            }
+
             if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                 self.full = true;
                 //println!("bla final gas5: {}", self.total_estimated_gas);
@@ -359,22 +366,22 @@ impl BlockFiller for DependencyFiller {
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
 
-            //self.transaction_validation.add_write_set(write_set);
+            self.transaction_validation.add_write_set(write_set);
 
             // Update last touched time for used resources.
-            //for (delta, _op) in delta_set {
-            //    let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&0u64));
-            //    self.last_touched.insert(delta.clone(), mx.into());
-            //
-            //    if !self.writes.contains_key(delta) {
-            //        self.writes.insert(delta.clone(), vec![]);
-            //    }
-            //
-            //    if read_set.contains(&delta) {
-            //        self.writes.insert(delta.clone(), vec![]);
-            //    }
-            //    self.writes.get_mut(delta).unwrap().push(current_idx);
-            //}
+            for (delta, _op) in delta_set {
+                let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&0u64));
+                self.last_touched.insert(delta.clone(), mx.into());
+
+                if !self.writes.contains_key(delta) {
+                    self.writes.insert(delta.clone(), vec![]);
+                }
+
+                if read_set.contains(&delta) {
+                    self.writes.insert(delta.clone(), vec![]);
+                }
+                self.writes.get_mut(delta).unwrap().push(current_idx);
+            }
             
             for write in write_set {
                 let mx = max(finish_time, *self.last_touched.get(write.0).unwrap_or(&0u64));
@@ -386,6 +393,13 @@ impl BlockFiller for DependencyFiller {
 
                 self.writes.insert(write.0.clone(), vec![current_idx]);
             }
+
+            let mx = max(finish_time, *self.last_touched.get(user_state_key.0).unwrap_or(&0u64));
+            self.last_touched.insert(user_state_key.0.clone(), mx.into());
+
+            self.writes.insert(user_state_key, vec![current_idx]);
+
+
             self.block.push(tx);
 
             if self.block.len() as u64 == self.max_txns {
