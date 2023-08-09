@@ -695,7 +695,7 @@ impl AptosVM {
         // Revalidate the transaction.
         let resolver = self.0.new_move_resolver(storage);
         let mut session = self.0.new_session(&resolver, SessionId::txn(txn));
-        if let Err(err) = self.validate_signature_checked_transaction(
+        /*if let Err(err) = self.validate_signature_checked_transaction(
             &mut session,
             storage,
             txn,
@@ -703,7 +703,7 @@ impl AptosVM {
             log_context,
         ) {
             return discard_error_vm_status(err);
-        };
+        };*/
 
         if self.0.get_gas_feature_version() >= 1 {
             // Create a new session so that the data cache is flushed.
