@@ -3,6 +3,7 @@
 
 pub(crate) mod vm_wrapper;
 
+use std::collections::{HashMap, HashSet};
 use crate::{
     adapter_common::{preprocess_transaction, PreprocessedTransaction},
     block_executor::vm_wrapper::AptosExecutorTask,
@@ -94,14 +95,20 @@ impl BlockAptosVM {
         // Verify the signatures of all the transactions in parallel.
         // This is time consuming so don't wait and do the checking
         // sequentially while executing the transactions.
-        let signature_verified_block: Vec<PreprocessedTransaction> =
-                transactions.txns().to_vec()
-                    .into_iter()
-                    .map(preprocess_transaction::<AptosVM>)
-                    .collect();
+        let mut signature_verified_block: Vec<PreprocessedTransaction> = vec![];
 
-        let register = TransactionRegister::new(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone());
-        
+        let mut map : HashMap<Vec<u8>, Vec<i32>> = HashMap::new();
+
+        let ind = 0;
+        for tx in transactions.txns().to_vec() {
+            let (mut res, ve) = preprocess_transaction::<AptosVM>(tx);
+            map.entry(ve).or_insert(vec![]).push(ind);
+            signature_verified_block.push(res);
+            index = index + 1;
+        }
+
+        let register = TransactionRegister::new2(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone(), map);
+
         BLOCK_EXECUTOR_CONCURRENCY.set(concurrency_level as i64);
         let executor = BlockExecutor::<PreprocessedTransaction, AptosExecutorTask<S>, S>::new(
             concurrency_level,
