@@ -94,21 +94,14 @@ impl BlockAptosVM {
         // Verify the signatures of all the transactions in parallel.
         // This is time consuming so don't wait and do the checking
         // sequentially while executing the transactions.
-        let signature_verification_timer =
-            BLOCK_EXECUTOR_SIGNATURE_VERIFICATION_SECONDS.start_timer();
         let signature_verified_block: Vec<PreprocessedTransaction> =
-            RAYON_EXEC_POOL.lock().unwrap().install(|| {
                 transactions.txns().to_vec()
-                    .into_par_iter()
-                    .with_min_len(25)
+                    .into_iter()
                     .map(preprocess_transaction::<AptosVM>)
-                    .collect()
-            });
+                    .collect();
 
         let register = TransactionRegister::new(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone());
-
-        drop(signature_verification_timer);
-
+        
         BLOCK_EXECUTOR_CONCURRENCY.set(concurrency_level as i64);
         let executor = BlockExecutor::<PreprocessedTransaction, AptosExecutorTask<S>, S>::new(
             concurrency_level,
