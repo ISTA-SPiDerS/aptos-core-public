@@ -3,6 +3,7 @@
 
 pub(crate) mod vm_wrapper;
 
+use std::sync::Mutex as MyMut;
 use std::collections::{HashMap, HashSet};
 use crate::{
     adapter_common::{preprocess_transaction, PreprocessedTransaction},
@@ -97,17 +98,26 @@ impl BlockAptosVM {
         // sequentially while executing the transactions.
         let mut signature_verified_block: Vec<PreprocessedTransaction> = vec![];
 
-        let mut map : HashMap<Vec<u8>, Vec<i32>> = HashMap::new();
+        let mut check_set : HashSet<Vec<u8>> = HashSet::new();
 
-        let ind = 0;
+        let mut map : HashMap<u16, (bool, MyMut<bool>)> = HashMap::new();
+
+        let mut ind : u16 = 0;
         for tx in transactions.txns().to_vec() {
             let (mut res, ve) = preprocess_transaction::<AptosVM>(tx);
-            map.entry(ve).or_insert(vec![]).push(ind);
+            if check_set.insert(ve)
+            {
+                map.insert(ind, (true, MyMut::new(false)));
+            }
+            else {
+                map.insert(ind, (false, MyMut::new(false)));
+            }
+
             signature_verified_block.push(res);
-            index = index + 1;
+            ind = ind + 1;
         }
 
-        let register = TransactionRegister::new2(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone(), map);
+        let register = TransactionRegister::new(signature_verified_block, transactions.gas_estimates().clone(), transactions.dependency_graph().clone());
 
         BLOCK_EXECUTOR_CONCURRENCY.set(concurrency_level as i64);
         let executor = BlockExecutor::<PreprocessedTransaction, AptosExecutorTask<S>, S>::new(
@@ -115,7 +125,7 @@ impl BlockAptosVM {
         );
 
         let ret = executor
-            .execute_block(state_view, register, state_view, mode, profiler)
+            .execute_block(state_view, register, state_view, mode, profiler, map)
             .map(|results| {
                 // Process the outputs in parallel, combining delta writes with other writes.
                 RAYON_EXEC_POOL.lock().unwrap().install(|| {

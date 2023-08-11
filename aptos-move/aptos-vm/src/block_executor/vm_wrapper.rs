@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Mutex;
 use crate::{
     adapter_common::{PreprocessedTransaction, VMAdapter},
     aptos_vm::AptosVM,
@@ -80,12 +81,13 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
         txn: &PreprocessedTransaction,
         txn_idx: usize,
         materialize_deltas: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> ExecutionStatus<AptosTransactionOutput, VMStatus> {
         let log_context = AdapterLogSchema::new(self.base_view.id(), txn_idx);
 
         match self
             .vm
-            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context, false)
+            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context, false, prologue)
         {
             Ok((vm_status, mut output_ext, sender)) => {
                 if materialize_deltas {
@@ -120,5 +122,15 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
                 ExecutionStatus::Abort(err)
             },
         }
+    }
+
+    fn execute_prologue(
+        &self,
+        view: &impl StateView,
+        txn: &PreprocessedTransaction,
+        txn_idx: usize,
+    ) -> bool {
+        let log_context = AdapterLogSchema::new(self.base_view.id(), txn_idx);
+        self.vm.execute_single_transaction_prologue(txn, &view.as_move_resolver(), &log_context)
     }
 }

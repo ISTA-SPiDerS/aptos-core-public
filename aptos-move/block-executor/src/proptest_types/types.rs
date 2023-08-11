@@ -34,6 +34,7 @@ use std::{
         Arc,
     },
 };
+use std::sync::Mutex;
 
 // Should not be possible to overflow or underflow, as each delta is at
 // most 100 in the tests.
@@ -422,6 +423,7 @@ where
         txn: &Self::Txn,
         txn_idx: TxnIndex,
         _materialize_deltas: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> ExecutionStatus<Self::Output, Self::Error> {
         match txn {
             Transaction::Write {

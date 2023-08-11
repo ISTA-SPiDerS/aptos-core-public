@@ -26,6 +26,7 @@ use std::{
     pin::Pin,
     task::{Context,Poll, Waker},
 };
+use std::sync::atomic::AtomicU16;
 use std::time::SystemTime;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -87,6 +88,7 @@ pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
     ValidationTask(Version, Wave),
     SigTask(usize),
+    PrologueTask,
     NoTask,
     Done,
 }
@@ -323,11 +325,15 @@ pub struct Scheduler {
     valock: MyMut<bool>,
 
     sig_val_idx: AtomicUsize,
+
+    pub prologue_map: HashMap<u16, (bool, MyMut<bool>)>,
+
+    pub prologue_index: AtomicU16
 }
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize) -> Self {
+    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
@@ -378,6 +384,8 @@ impl Scheduler {
             priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
+            prologue_map: map,
+            prologue_index: AtomicU16::new(0)
         }
     }
 
@@ -1061,7 +1069,7 @@ impl Scheduler {
         // while unlikely there would be much contention on a specific index lock.
         let mut status = self.txn_status[txn_idx].0.write();
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
-            if (self.use_hints) {
+            if self.use_hints {
                 for dependency in &*self.hint_graph[txn_idx] {
                     // unsafe {
                     //     count += 1;

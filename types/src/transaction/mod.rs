@@ -1601,7 +1601,6 @@ pub struct TransactionRegister<T: Send + Sync + Clone> {
     txns: Vec<T>,
     gas_estimates: Vec<u64>,
     dependency_graph: Vec<Vec<u64>>,
-    map: HashMap<Vec<u8>, Vec<i32>>
 }
 
 impl<T: Send + Sync + Clone> TransactionRegister<T> {
@@ -1610,7 +1609,6 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
             txns: vec![],
             gas_estimates: vec![],
             dependency_graph: vec![],
-            map: HashMap::new()
         }
     }
 
@@ -1619,16 +1617,6 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
             txns,
             gas_estimates,
             dependency_graph,
-            map: HashMap::new()
-        }
-    }
-
-    pub fn new2(txns: Vec<T>, gas_estimates: Vec<u64>, dependency_graph: Vec<Vec<u64>>, map: HashMap<Vec<u8>, Vec<i32>>) -> Self {
-        Self {
-            txns,
-            gas_estimates,
-            dependency_graph,
-            map
         }
     }
 
@@ -1662,7 +1650,6 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
             txns: self.txns.clone().into_par_iter().map(f).collect(),
             gas_estimates: self.gas_estimates.clone(),
             dependency_graph: self.dependency_graph.clone(),
-            map: self.map.clone()
         }
     }
 }
@@ -1695,7 +1682,6 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
             txns: self,
             gas_estimates,
             dependency_graph,
-            map: HashMap::new()
         }
     }
 }

@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Mutex;
 use crate::{
     logging::AdapterLogSchema,
     move_vm_ext::{MoveResolverExt, SessionExt, SessionId},
@@ -50,21 +51,23 @@ pub trait VMAdapter {
     /// TODO: maybe remove this after more refactoring of execution logic.
     fn should_restart_execution(output: &TransactionOutput) -> bool;
 
-    fn prologue_single_transaction<S: MoveResolverExt>(
-        &self,
-        storage: &S,
-        txn: &PreprocessedTransaction,
-        log_context: &AdapterLogSchema,
-    ) -> bool;
-
     /// Execute a single transaction.
     fn execute_single_transaction<S: MoveResolverExt>(
         &self,
         txn: &PreprocessedTransaction,
         data_cache: &S,
         log_context: &AdapterLogSchema,
-        skip_pro_epi: bool
+        skip_pro_epi: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> Result<(VMStatus, TransactionOutputExt, Option<String>), VMStatus>;
+
+    /// Execute a single transaction.
+    fn execute_single_transaction_prologue<S: MoveResolverExt>(
+        &self,
+        txn: &PreprocessedTransaction,
+        data_cache: &S,
+        log_context: &AdapterLogSchema,
+    ) -> bool;
 
     fn validate_signature_checked_transaction<S: MoveResolverExt, SS: MoveResolverExt>(
         &self,

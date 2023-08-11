@@ -68,6 +68,8 @@ use std::{
         Arc,
     },
 };
+use std::collections::HashMap;
+use std::sync::Mutex;
 use aptos_types::transaction::{ExecutionMode, Profiler, TransactionRegister};
 
 static EXECUTION_CONCURRENCY_LEVEL: OnceCell<usize> = OnceCell::new();
@@ -688,6 +690,7 @@ impl AptosVM {
         txn: &SignatureCheckedTransaction,
         log_context: &AdapterLogSchema,
         skip_pro_epi: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> (VMStatus, TransactionOutputExt) {
         macro_rules! unwrap_or_discard {
             ($res:expr) => {
@@ -704,15 +707,33 @@ impl AptosVM {
 
         if !skip_pro_epi
         {
-            if let Err(err) = self.validate_signature_checked_transaction(
-                &mut session,
-                storage,
-                txn,
-                false,
-                log_context,
-            ) {
-                return discard_error_vm_status(err);
-            };
+            if !prologue.0
+            {
+                if let Err(err) = self.validate_signature_checked_transaction(
+                    &mut session,
+                    storage,
+                    txn,
+                    false,
+                    log_context,
+                ) {
+                    return discard_error_vm_status(err);
+                };
+            }
+            else {
+                let mut res = *prologue.1.lock().unwrap();
+                if res {
+                    res = true;
+                    if let Err(err) = self.validate_signature_checked_transaction(
+                        &mut session,
+                        storage,
+                        txn,
+                        false,
+                        log_context,
+                    ) {
+                        return discard_error_vm_status(err);
+                    };
+                }
+            }
         }
 
         if self.0.get_gas_feature_version() >= 1 {
@@ -794,6 +815,29 @@ impl AptosVM {
                 }
             },
         }
+    }
+
+    pub(crate) fn execute_user_transaction_prologue<S: MoveResolverExt>(
+        &self,
+        storage: &S,
+        txn: &SignatureCheckedTransaction,
+        log_context: &AdapterLogSchema,
+    ) -> bool {
+
+        // Revalidate the transaction.
+        let resolver = self.0.new_move_resolver(storage);
+        let mut session = self.0.new_session(&resolver, SessionId::txn(txn));
+
+        if let Err(err) = self.validate_signature_checked_transaction(
+            &mut session,
+            storage,
+            txn,
+            false,
+            log_context) {
+            return false;
+        };
+
+        return true;
     }
 
     fn execute_writeset<S: MoveResolverExt>(
@@ -1200,7 +1244,8 @@ impl VMAdapter for AptosVM {
         txn: &PreprocessedTransaction,
         data_cache: &S,
         log_context: &AdapterLogSchema,
-        skip_pro_epi: bool
+        skip_pro_epi: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> Result<(VMStatus, TransactionOutputExt, Option<String>), VMStatus> {
         Ok(match txn {
             PreprocessedTransaction::BlockMetadata(block_metadata) => {
@@ -1221,7 +1266,7 @@ impl VMAdapter for AptosVM {
                 fail_point!("aptos_vm::execution::user_transaction");
                 let _timer = TXN_TOTAL_SECONDS.start_timer();
                 let (vm_status, output) =
-                    self.execute_user_transaction(data_cache, txn, log_context, skip_pro_epi);
+                    self.execute_user_transaction(data_cache, txn, log_context, skip_pro_epi, prologue);
 
                 if let Err(DiscardedVMStatus::UNKNOWN_INVARIANT_VIOLATION_ERROR) =
                     vm_status.clone().keep_or_discard()
@@ -1264,6 +1309,22 @@ impl VMAdapter for AptosVM {
                 )
             },
         })
+    }
+
+    fn execute_single_transaction_prologue<S: MoveResolverExt>(
+        &self,
+        txn: &PreprocessedTransaction,
+        data_cache: &S,
+        log_context: &AdapterLogSchema
+    ) -> bool {
+        match txn {
+            PreprocessedTransaction::UserTransaction(txn) => {
+                self.execute_user_transaction_prologue(data_cache, txn, log_context)
+            },
+            _ => {
+               false
+            }
+        }
     }
 }
 

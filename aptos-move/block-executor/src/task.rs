@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_aggregator::delta_change_set::DeltaOp;
-use aptos_state_view::TStateView;
+use aptos_state_view::{StateView, TStateView};
 use aptos_types::{
     access_path::AccessPath,
     state_store::state_key::{StateKey, StateKeyInner},
     write_set::TransactionWrite,
 };
 use std::{fmt::Debug, hash::Hash};
+use std::sync::Mutex;
 
 /// The execution result of a transaction
 #[derive(Debug)]
@@ -77,12 +78,20 @@ pub trait ExecutorTask: Sync {
         txn: &Self::Txn,
         txn_idx: usize,
         materialize_deltas: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> ExecutionStatus<Self::Output, Self::Error>;
 
     /// Verify a single transaction.
     fn verify_transaction(
         &self,
         txn: &Self::Txn,
+    ) -> bool;
+
+    fn execute_prologue(
+        &self,
+        view: &impl TStateView<Key = <Self::Txn as Transaction>::Key>,
+        txn: &Self::Txn,
+        txn_idx: usize,
     ) -> bool;
 }
 
