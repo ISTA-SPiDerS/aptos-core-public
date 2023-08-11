@@ -273,7 +273,6 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
                 });
             }
 
-
             if input.is_empty() && count >= len {
                 println!("xxx thread end xxx");
                 return;
@@ -442,22 +441,6 @@ fn create_block(
                 vec![],
                 vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
             );
-
-            let txn = accounts[idx_from]
-                .transaction()
-                .payload(
-                    coin_transfer(
-                        aptos_types::utility_coin::APTOS_COIN_TYPE.clone(),
-                        *accounts[idx_to].address(),
-                        1,
-                    ))
-                .sequence_number(seq_num[&idx_from])
-                .sign();
-
-            seq_num.insert(idx_from, seq_num[&idx_from] + 1);
-
-            result.push_back(txn);
-            continue
         }
         else
         {
