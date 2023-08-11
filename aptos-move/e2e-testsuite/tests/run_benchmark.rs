@@ -131,34 +131,6 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
             runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
         }
         println!("#################################################################################");
@@ -300,6 +272,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
                         });
                 });
             }
+
 
             if input.is_empty() && count >= len {
                 println!("xxx thread end xxx");
@@ -469,6 +442,22 @@ fn create_block(
                 vec![],
                 vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
             );
+
+            let txn = accounts[idx_from]
+                .transaction()
+                .payload(
+                    coin_transfer(
+                        aptos_types::utility_coin::APTOS_COIN_TYPE.clone(),
+                        *accounts[idx_to].address(),
+                        1,
+                    ))
+                .sequence_number(seq_num[&idx_from])
+                .sign();
+
+            seq_num.insert(idx_from, seq_num[&idx_from] + 1);
+
+            result.push_back(txn);
+            continue
         }
         else
         {
