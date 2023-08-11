@@ -131,6 +131,34 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
             runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
         }
         println!("#################################################################################");
