@@ -430,6 +430,10 @@ where
                                             &executor,
                                             base_view,
                                         );
+                                        if !*res
+                                        {
+                                            println!("pre failed");
+                                        }
                                     }
                                 }
                             }
