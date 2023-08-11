@@ -733,9 +733,6 @@ impl AptosVM {
                         return discard_error_vm_status(err);
                     };
                 }
-                else {
-                    println!("skipped it!")
-                }
             }
         }
 
