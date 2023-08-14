@@ -33,7 +33,7 @@ use rand::seq::index::IndexVec::USize;
 use regex::internal::Exec;
 use aptos_cached_packages::aptos_stdlib::coin_transfer;
 use aptos_language_e2e_tests::account::{Account, AccountData};
-use aptos_language_e2e_tests::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use aptos_language_e2e_tests::account_activity_distribution::{TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
 use aptos_language_e2e_tests::solana_distribution::{RES_DISTR, COST_DISTR, LEN_DISTR};
 
 use aptos_language_e2e_tests::uniswap_distribution::{AVG, BURSTY};
@@ -71,9 +71,9 @@ fn main() {
     }
     seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
-    /*println!("STARTING WARMUP");
-    for warmup in [1, 2, 3] {
-        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, 2, LoadType::P2PTX);
+    println!("STARTING WARMUP");
+    for _ in [1, 2, 3] {
+        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
         let block = get_transaction_register(txn.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
@@ -101,13 +101,12 @@ fn main() {
             };
         }
     }
-    println!("END WARMUP");*/
+    println!("END WARMUP");
 
 
     println!("EXECUTE BLOCKS");
 
     let core_set = [4,8,16,20,24,28,32];
-    let coin_set = [2,4,8,16,32,64,128];
     let trial_count = 10;
     let modes = [BlockSTM, BlockSTM_Sig];
     //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
@@ -123,35 +122,35 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
         }
         println!("#################################################################################");
     }
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
         }
         println!("#################################################################################");
     }
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
         }
         println!("#################################################################################");
     }
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, COIN_DISTR.len(), c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
         }
         println!("#################################################################################");
     }
@@ -159,7 +158,7 @@ fn main() {
     println!("EXECUTION SUCCESS");
 }
 
-fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType) {
+fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType) {
     // This is for the total time
     let mut times = vec![];
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
@@ -168,7 +167,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, coins: usize, c: usize, trial_c
     for trial in 0..trial_count {
         let mut profiler = Profiler::new();
 
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, coins, load_type.clone());
+        let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
@@ -254,28 +253,27 @@ fn create_block(
     accounts: Vec<Account>,
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
-    coins: usize,
     load_type: LoadType,
 ) -> VecDeque<SignedTransaction> {
 
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
 
-    let mut distr:Vec<f64> = vec![];
+    let mut resource_distribution_vec:Vec<f64> = vec![];
     if matches!(load_type, LoadType::DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
-                distr.push(key)
+                resource_distribution_vec.push(key)
             }
         }
-        println!("{}", distr.len())
+        println!("{}", resource_distribution_vec.len())
     }
     else if matches!(load_type, LoadType::DEXBURSTY)
     {
         for (key, value) in BURSTY {
             for i in 0..value {
-                distr.push(key)
+                resource_distribution_vec.push(key)
             }
         }
     }
@@ -283,97 +281,85 @@ fn create_block(
     {
         for (key, value) in TX_NFT_TO {
             for i in 0..value {
-                distr.push(key)
+                resource_distribution_vec.push(key)
             }
         }
     }
     else if matches!(load_type, LoadType::SOLANA)
     {
         for (key, value) in RES_DISTR {
-            for i in 0..value*20 {
-                distr.push(key)
+            for i in 0..value * 20 {
+                resource_distribution_vec.push(key)
             }
         }
     }
-    else
-    {
-        distr = Vec::from(COIN_DISTR);
-    }
 
-    let mut len_options:Vec<usize> = vec![];
-    let mut len_distr:Vec<usize> = vec![];
+    let mut solana_len_options:Vec<usize> = vec![];
+    let mut solana_len_distr_vec:Vec<u64> = vec![];
 
     for (key, value) in LEN_DISTR {
-        len_options.push(key.round() as usize);
-        len_distr.push(value as usize);
+        solana_len_options.push(key.round() as usize);
+        solana_len_distr_vec.push(value);
     }
 
-    let mut cost_options:Vec<f64> = vec![];
-    let mut cost_distr:Vec<usize> = vec![];
+    let mut solana_cost_options:Vec<f64> = vec![];
+    let mut solana_cost_distr_vec:Vec<u64> = vec![];
 
     for (key, value) in COST_DISTR {
-        cost_options.push(key);
-        cost_distr.push(value as usize);
+        solana_cost_options.push(key);
+        solana_cost_distr_vec.push(value);
     }
 
-    let tx_num_writes_distr : WeightedIndex<usize> = WeightedIndex::new(&len_distr).unwrap();
-    let tx_cost_distr : WeightedIndex<usize> = WeightedIndex::new(&cost_distr).unwrap();
+    let solana_len_distribution: WeightedIndex<u64> = WeightedIndex::new(&solana_len_distr_vec).unwrap();
+    let solana_cost_distribution: WeightedIndex<u64> = WeightedIndex::new(&solana_cost_distr_vec).unwrap();
 
-    let dist : WeightedIndex<f64> = WeightedIndex::new(&distr).unwrap();
+    let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
 
-    let mut fromVec: Vec<usize> = vec![];
+    let mut nft_sender_distr_vec: Vec<f64> = vec![];
     for (key, value) in TX_NFT_FROM {
-        for i in 0..(value as usize) {
-            fromVec.push(key as usize)
+        for i in 0..value {
+            nft_sender_distr_vec.push(key)
         }
     }
-    let from_dist: WeightedIndex<usize> = WeightedIndex::new(&fromVec).unwrap();
+    let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
 
-    let mut max_count:usize = 1;
-    let max_value_opt = len_options.iter().max();
-    match max_value_opt {
-        Some(max) => { max_count = *max; },
-        None      => println!("vec empty, wat!")
-    }
-
-
-    let mut fromVecP2P:Vec<f64> = vec![];
-    let mut toVecP2P:Vec<f64> = vec![];
+    let mut p2p_sender_distr_vec:Vec<f64> = vec![];
+    let mut p2p_receiver_distr_vec:Vec<f64> = vec![];
 
     for (key, value) in TX_TO {
         for i in 0..value {
-            toVecP2P.push(key);
+            p2p_receiver_distr_vec.push(key);
         }
     }
 
     for (key, value) in TX_FROM {
         for i in 0..value {
-            fromVecP2P.push(key);
+            p2p_sender_distr_vec.push(key);
         }
     }
 
-    let to_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&toVecP2P).unwrap();
-    let from_dist_p2p:WeightedIndex<f64> = WeightedIndex::new(&fromVecP2P).unwrap();
+    let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
+    let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
 
     for i in 0..size {
-        let mut idx: usize = (i as usize) % accounts.len();
-        let entry_function;
+        let mut sender_id: usize = (i as usize) % accounts.len();
+        let tx_entry_function;
 
         if matches!(load_type, SOLANA)
         {
-            let cost = cost_options[tx_cost_distr.sample(&mut rng)];
-            let num_writes = len_options[tx_num_writes_distr.sample(&mut rng)];
+            let cost_sample = solana_cost_options[solana_cost_distribution.sample(&mut rng)];
+            let write_len_sample = solana_len_options[solana_len_distribution.sample(&mut rng)];
 
             let mut writes: Vec<u64> = Vec::new();
             let mut i = 0;
-            while i < num_writes {
+            while i < write_len_sample {
                 i+=1;
-                writes.push(dist.sample(&mut rng) as u64);
+                writes.push(general_resource_distribution.sample(&mut rng) as u64);
             }
 
-            let length = max(1, cost.round() as usize);
+            let length = max(1, cost_sample.round() as usize);
 
-            entry_function = EntryFunction::new(
+            tx_entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
                 vec![],
@@ -382,49 +368,38 @@ fn create_block(
         }
         else if matches!(load_type, P2PTX)
         {
-            let idx_to = to_dist_p2p.sample(&mut rng) % accounts.len();
-            let idx_from = from_dist_p2p.sample(&mut rng) % accounts.len();
+            let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
+            let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
 
-            entry_function = EntryFunction::new(
+            tx_entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchangetwo").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&idx_to).unwrap(), bcs::to_bytes(&idx_from).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()],
             );
         }
         else
         {
-            let coin_1_num;
-            if matches!(load_type, DEXAVG) || matches!(load_type, DEXBURSTY)
+            resource_id = general_resource_distribution.sample(&mut rng);
+            if matches!(load_type, NFT)
             {
-                coin_1_num = dist.sample(&mut rng) % coins;
-            }
-            else if matches!(load_type, NFT)
-            {
-                idx = from_dist.sample(&mut rng) % accounts.len();
-                coin_1_num = dist.sample(&mut rng) % coins;
-            }
-            else {
-                coin_1_num = rng.gen::<usize>() % coins;
+                sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
             }
 
-            let value : u64 = rng.gen();
-
-            entry_function = EntryFunction::new(
+            tx_entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("exchange").to_owned(),
                 vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&coin_1_num).unwrap()],
+                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&resource_id).unwrap()],
             );
         }
 
-
-        let txn = accounts[idx]
+        let txn = accounts[sender_id]
             .transaction()
-            .entry_function(entry_function.clone())
-            .sequence_number(seq_num[&idx])
+            .entry_function(tx_entry_function.clone())
+            .sequence_number(seq_num[&sender_id])
             .sign();
-        seq_num.insert(idx, seq_num[&idx] + 1);
+        seq_num.insert(sender_id, seq_num[&sender_id] + 1);
         result.push_back(txn);
     }
     // println!("{:?}", result);
