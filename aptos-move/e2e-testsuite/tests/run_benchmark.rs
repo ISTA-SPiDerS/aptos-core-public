@@ -12,6 +12,7 @@ use aptos_types::{
     },
 };
 use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
+use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
@@ -20,10 +21,13 @@ use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
 use std::cmp::max;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
+use std::ptr::null;
+use std::sync::mpsc;
+use std::sync::mpsc::SyncSender;
 use itertools::Itertools;
 use move_core_types::{ident_str, identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -43,9 +47,14 @@ use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
 use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
-use aptos_types::transaction::{EntryFunction, Profiler, TransactionOutput};
+use aptos_types::transaction::ExecutionMode::{Pythia, Pythia_Sig, Standard};
+use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
-use aptos_types::transaction::ExecutionMode::{Hints, BlockSTM, BlockSTM_Sig};
+use move_core_types::vm_status::VMStatus;
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
+use rayon::prelude::*;
+use aptos_mempool::shared_mempool::types::{CACHE};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -248,13 +257,16 @@ fn create_block(
 
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
+    let extended_size = size * 10;
 
     let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
+    let mut count = 0.0;
     if matches!(load_type, LoadType::DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -262,7 +274,8 @@ fn create_block(
     {
         for (key, value) in BURSTY {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -270,7 +283,8 @@ fn create_block(
     {
         for (key, value) in TX_NFT_TO {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -278,10 +292,12 @@ fn create_block(
     {
         for (key, value) in RES_DISTR {
             for i in 0..value * 20 {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
+    normalize_distribution_vectors(count, extended_size, &mut resource_distribution_vec);
 
     let mut solana_len_options:Vec<usize> = vec![];
     let mut solana_len_distr_vec:Vec<u64> = vec![];
@@ -304,28 +320,38 @@ fn create_block(
 
     let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
 
+    let mut sum = 0.0;
     let mut nft_sender_distr_vec: Vec<f64> = vec![];
     for (key, value) in TX_NFT_FROM {
         for i in 0..value {
-            nft_sender_distr_vec.push(key)
+            nft_sender_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut nft_sender_distr_vec);
+
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
 
     let mut p2p_sender_distr_vec:Vec<f64> = vec![];
     let mut p2p_receiver_distr_vec:Vec<f64> = vec![];
 
+    sum = 0.0;
     for (key, value) in TX_TO {
         for i in 0..value {
             p2p_receiver_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut p2p_receiver_distr_vec);
 
+    sum = 0.0;
     for (key, value) in TX_FROM {
         for i in 0..value {
             p2p_sender_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
     let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
@@ -395,7 +421,16 @@ fn create_block(
     result
 }
 
-//todo! resource allocation is odd!
+fn normalize_distribution_vectors(current_size: f64, preferred_size: u64, distribution_vector: &mut Vec<f64>) {
+    if current_size < (preferred_size as f64) && current_size > 1.0 {
+        let quota = ((preferred_size as f64) / current_size).ceil() as usize;
+        let original = distribution_vector.clone();
+
+        for _ in 0..quota {
+            distribution_vector.extend(original.clone());
+        }
+    }
+}
 
 fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountData, ModuleId) {
     let owner_account = executor.create_raw_account_data(INITIAL_BALANCE, SEQ_NUM);
