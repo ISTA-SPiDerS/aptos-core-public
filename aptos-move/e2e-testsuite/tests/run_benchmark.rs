@@ -326,13 +326,16 @@ fn create_block(
 
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
+    let extended_size = size * 10;
 
     let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
+    let mut count = 0.0;
     if matches!(load_type, LoadType::DEXAVG)
     {
         for (key, value) in AVG {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -340,7 +343,8 @@ fn create_block(
     {
         for (key, value) in BURSTY {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -348,7 +352,8 @@ fn create_block(
     {
         for (key, value) in TX_NFT_TO {
             for i in 0..value {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
@@ -356,10 +361,12 @@ fn create_block(
     {
         for (key, value) in RES_DISTR {
             for i in 0..value * 20 {
-                resource_distribution_vec.push(key)
+                resource_distribution_vec.push(key);
+                count+=key;
             }
         }
     }
+    normalize_distribution_vectors(count, extended_size, &mut resource_distribution_vec);
 
     let mut solana_len_options:Vec<usize> = vec![];
     let mut solana_len_distr_vec:Vec<u64> = vec![];
@@ -382,28 +389,38 @@ fn create_block(
 
     let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
 
+    let mut sum = 0.0;
     let mut nft_sender_distr_vec: Vec<f64> = vec![];
     for (key, value) in TX_NFT_FROM {
         for i in 0..value {
-            nft_sender_distr_vec.push(key)
+            nft_sender_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut nft_sender_distr_vec);
+
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
 
     let mut p2p_sender_distr_vec:Vec<f64> = vec![];
     let mut p2p_receiver_distr_vec:Vec<f64> = vec![];
 
+    sum = 0.0;
     for (key, value) in TX_TO {
         for i in 0..value {
             p2p_receiver_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut p2p_receiver_distr_vec);
 
+    sum = 0.0;
     for (key, value) in TX_FROM {
         for i in 0..value {
             p2p_sender_distr_vec.push(key);
+            sum += key as f64;
         }
     }
+    normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
     let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
@@ -473,7 +490,15 @@ fn create_block(
     result
 }
 
-//todo! resource allocation is odd!
+fn normalize_distribution_vectors(current_size: f64, preferred_size: u64, distribution_vector: &mut Vec<f64>) {
+    if (current_size as u64) < preferred_size {
+        let original = distribution_vector.clone();
+        let quota = ((preferred_size as f64) / current_size).ceil() as usize;
+        for i in 0..quota {
+            distribution_vector.extend(original.clone());
+        }
+    }
+}
 
 fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountData, ModuleId) {
     let owner_account = executor.create_raw_account_data(INITIAL_BALANCE, SEQ_NUM);
