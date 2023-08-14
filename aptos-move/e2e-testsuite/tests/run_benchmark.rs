@@ -495,7 +495,6 @@ fn normalize_distribution_vectors(current_size: f64, preferred_size: u64, distri
         let quota = ((preferred_size as f64) / current_size).ceil() as usize;
         let original = distribution_vector.clone();
 
-        println!("quota: {} {} {}", quota, current_size, preferred_size);
         for _ in 0..quota {
             distribution_vector.extend(original.clone());
         }
