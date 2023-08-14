@@ -492,9 +492,10 @@ fn create_block(
 
 fn normalize_distribution_vectors(current_size: f64, preferred_size: u64, distribution_vector: &mut Vec<f64>) {
     if (current_size as u64) < preferred_size {
-        let original = distribution_vector.clone();
         let quota = ((preferred_size as f64) / current_size).ceil() as usize;
-        println!("quota: {}", quota);
+        let original = distribution_vector.clone();
+
+        println!("quota: {} {} {}", quota, current_size, preferred_size);
         for _ in 0..quota {
             distribution_vector.extend(original.clone());
         }
