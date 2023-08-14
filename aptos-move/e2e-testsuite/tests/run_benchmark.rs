@@ -12,7 +12,6 @@ use aptos_types::{
     },
 };
 use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
-use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
@@ -47,14 +46,10 @@ use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
 use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
-use aptos_types::transaction::ExecutionMode::{Pythia, Pythia_Sig, Standard};
+use aptos_types::transaction::ExecutionMode::{BlockSTM, BlockSTM_Sig};
 use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
 use move_core_types::vm_status::VMStatus;
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelIterator;
-use rayon::prelude::*;
-use aptos_mempool::shared_mempool::types::{CACHE};
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
