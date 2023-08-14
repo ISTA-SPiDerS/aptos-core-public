@@ -491,7 +491,7 @@ fn create_block(
 }
 
 fn normalize_distribution_vectors(current_size: f64, preferred_size: u64, distribution_vector: &mut Vec<f64>) {
-    if (current_size as u64) < preferred_size {
+    if current_size < (preferred_size as f64) {
         let quota = ((preferred_size as f64) / current_size).ceil() as usize;
         let original = distribution_vector.clone();
 
