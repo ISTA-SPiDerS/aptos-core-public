@@ -117,16 +117,6 @@ fn main() {
     let core_set = [4,8,16,20,24,28,32];
     let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
-    //let distributions = [WeightedIndex::new(&COIN_DISTR).unwrap(), WeightedIndex::new([])];
-
-    // for mode in modes {
-    //    for coins in coin_set {
-    //        for c in core_set {
-    //            runExperimentWithSetting(mode, coins, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, COINS);
-    //        }
-    //    }
-    //    println!("#################################################################################");
-    // }
 
     for mode in modes {
         for c in core_set {
@@ -179,7 +169,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let block = get_transaction_register(block.clone(), &executor)
             .map_par_txns(Transaction::UserTransaction);
 
-        println!("block size: {}, accounts: {}, cores: {}, coins: {}, mode: {}, load: {:?}", block_size, num_accounts, c, coins, mode, load_type);
+        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, mode, load_type);
         let start = Instant::now();
         block_result = executor
             .execute_transaction_block_parallel(
@@ -234,7 +224,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     all_stats.insert("final_time".to_string(), times);
 
 
-    println!("###,{},{},{},{:?}", mode, coins, c, load_type);
+    println!("###,{},{},{:?}", mode, c, load_type);
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
@@ -337,7 +327,7 @@ fn create_block(
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
 
-    let mut resource_distribution_vec:Vec<f64> = vec![];
+    let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
     if matches!(load_type, LoadType::DEXAVG)
     {
         for (key, value) in AVG {
@@ -345,7 +335,6 @@ fn create_block(
                 resource_distribution_vec.push(key)
             }
         }
-        println!("{}", resource_distribution_vec.len())
     }
     else if matches!(load_type, LoadType::DEXBURSTY)
     {
@@ -458,7 +447,7 @@ fn create_block(
         }
         else
         {
-            resource_id = general_resource_distribution.sample(&mut rng);
+            let resource_id = general_resource_distribution.sample(&mut rng);
             if matches!(load_type, NFT)
             {
                 sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
@@ -480,7 +469,6 @@ fn create_block(
         seq_num.insert(sender_id, seq_num[&sender_id] + 1);
         result.push_back(txn);
     }
-    // println!("{:?}", result);
 
     result
 }
