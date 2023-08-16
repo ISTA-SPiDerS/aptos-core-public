@@ -252,7 +252,7 @@ fn create_block(
 
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
-    let extended_size = size * 10;
+    let extended_size = size * 2;
 
     let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
     let mut count = 0.0;
