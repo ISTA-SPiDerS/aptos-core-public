@@ -252,7 +252,7 @@ fn create_block(
 
     let mut result = VecDeque::new();
     let mut rng: ThreadRng = thread_rng();
-    let extended_size = size * 2;
+    let extended_size = size * 10;
 
     let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
     let mut count = 0.0;
@@ -292,7 +292,6 @@ fn create_block(
             }
         }
     }
-    normalize_distribution_vectors(count, extended_size, &mut resource_distribution_vec);
 
     let mut solana_len_options:Vec<usize> = vec![];
     let mut solana_len_distr_vec:Vec<u64> = vec![];
