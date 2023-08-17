@@ -322,7 +322,7 @@ fn create_block(
             sum += key as f64;
         }
     }
-    normalize_distribution_vectors(sum, extended_size, &mut nft_sender_distr_vec);
+    //normalize_distribution_vectors(sum, extended_size, &mut nft_sender_distr_vec);
 
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
 
@@ -336,7 +336,7 @@ fn create_block(
             sum += key as f64;
         }
     }
-    normalize_distribution_vectors(sum, extended_size, &mut p2p_receiver_distr_vec);
+    //normalize_distribution_vectors(sum, extended_size, &mut p2p_receiver_distr_vec);
 
     sum = 0.0;
     for (key, value) in TX_FROM {
@@ -345,7 +345,7 @@ fn create_block(
             sum += key as f64;
         }
     }
-    normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
+    //normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
     let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
