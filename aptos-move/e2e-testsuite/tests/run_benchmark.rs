@@ -111,33 +111,12 @@ fn main() {
     println!("EXECUTE BLOCKS");
 
     let core_set = [4,8,12,16,20,24,28,32];
-    let trial_count = 10;
+    let trial_count = 3;
     let modes = [BlockSTM, BlockSTM_Sig];
 
     for mode in modes {
         for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
             runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
