@@ -115,7 +115,7 @@ fn main() {
     println!("EXECUTE BLOCKS");
 
     let core_set = [4,8,12,16,20,24,28,32];
-    let trial_count = 3;
+    let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
 
     for mode in modes {
@@ -351,7 +351,9 @@ fn create_block(
     else if matches!(load_type, LoadType::SOLANA)
     {
         for value in RES_DISTR {
-            resource_distribution_vec.push(value);
+            for _ in 0..20 {
+                resource_distribution_vec.push(value);
+            }
         }
     }
 
