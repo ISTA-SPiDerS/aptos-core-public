@@ -387,7 +387,6 @@ fn create_block(
     for value in TX_FROM {
         p2p_sender_distr_vec.push(value);
     }
-    //normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
     let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
