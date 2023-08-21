@@ -249,9 +249,23 @@ impl BlockFiller for DependencyFiller {
                 *total += 1;
             }
 
-            //println!("bla cache len other side {}", CACHE.len());
-            while force && *current < *total
-            {
+            if force {
+                while *current < *total
+                {
+                    while CACHE.contains_key(current)
+                    {
+                        let out = CACHE.remove(current).unwrap().1;
+                        previous.push_back(out);
+
+                        *current += 1;
+                    }
+                    if force && !CACHE.contains_key(current)
+                    {
+                        thread::sleep(Duration::from_millis(100));
+                        println!("waiting.... {} {}", *current, *total);
+                    }
+                }
+            } else {
                 while CACHE.contains_key(current)
                 {
                     let out = CACHE.remove(current).unwrap().1;
@@ -259,12 +273,9 @@ impl BlockFiller for DependencyFiller {
 
                     *current += 1;
                 }
-                if force && !CACHE.contains_key(current)
-                {
-                    thread::sleep(Duration::from_millis(100));
-                    println!("waiting.... {} {}", *current, *total);
-                }
             }
+            //println!("bla cache len other side {}", CACHE.len());
+
         }
 
         //println!("bla prev len: {}", previous.len());
