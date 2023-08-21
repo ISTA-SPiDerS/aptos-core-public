@@ -267,8 +267,6 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
-        println!("starting to add");
-
         //println!("bla prev len: {}", previous.len());
         let mut cache : VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)> = VecDeque::new();
 
@@ -407,8 +405,6 @@ impl BlockFiller for DependencyFiller {
                 //println!("bla final gas6: {}", self.total_estimated_gas);
             }
         }
-
-        println!("goto");
 
         for tx in &self.block {
             pending.remove(&(tx.sender(), tx.sequence_number()));

@@ -309,7 +309,7 @@ impl Mempool {
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
-            //println!("bla blocklen: {}", block_filler.get_blockx().len());
+            println!("bla blocklen: {}", block_filler.get_blockx().len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
