@@ -348,11 +348,13 @@ where
                 },
                 SchedulerTask::NoTask => {
 
+                    profiler.start_timing(&format!("sched time {}", idx).to_string());
                     //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
                     if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
                     {
                         if lastInd >= block.len() as u16 {
+                            profiler.end_timing(&format!("sched time {}", idx.to_string()));
                             ret
                         }
                         else
@@ -363,6 +365,7 @@ where
                     else
                     {
                         //profiler.end_timing(&"scheduling".to_string());
+                        profiler.end_timing(&format!("sched time {}", idx.to_string()));
                         ret
                     }
                 },
