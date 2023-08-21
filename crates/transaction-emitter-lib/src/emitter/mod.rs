@@ -160,7 +160,7 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
-            accounts_per_worker: 500,
+            accounts_per_worker: 100,
             workers_per_endpoint:  20,
             init_retry_interval: Duration::from_secs(60),
             max_transactions_per_account: 10,
@@ -529,11 +529,12 @@ impl TxnEmitter {
     ) -> Result<EmitJob> {
         ensure!(req.gas_price > 0, "gas_price is required to be non zero");
 
+        println!("start job");
         let mode_params = req.calculate_mode_params();
         let workers_per_endpoint = mode_params.workers_per_endpoint;
         let num_workers = req.rest_clients.len() * workers_per_endpoint;
         let num_accounts = num_workers * mode_params.accounts_per_worker;
-        info!(
+        println!(
             "Will use {} workers per endpoint for a total of {} endpoint clients and {} accounts",
             workers_per_endpoint, num_workers, num_accounts
         );
@@ -579,6 +580,7 @@ impl TxnEmitter {
         let stats = Arc::new(DynamicStatsTracking::new(stats_tracking_phases));
         let tokio_handle = Handle::current();
 
+        println!("here");
         let mut txn_generator_creator = create_txn_generator_creator(
             &req.transaction_mix_per_phase,
             num_workers,

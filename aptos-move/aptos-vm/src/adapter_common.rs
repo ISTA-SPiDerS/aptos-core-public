@@ -1,6 +1,7 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Mutex;
 use crate::{
     logging::AdapterLogSchema,
     move_vm_ext::{MoveResolverExt, SessionExt, SessionId},
@@ -56,7 +57,17 @@ pub trait VMAdapter {
         txn: &PreprocessedTransaction,
         data_cache: &S,
         log_context: &AdapterLogSchema,
+        skip_pro_epi: bool,
+        prologue: &(bool, Mutex<bool>)
     ) -> Result<(VMStatus, TransactionOutputExt, Option<String>), VMStatus>;
+
+    /// Execute a single transaction.
+    fn execute_single_transaction_prologue<S: MoveResolverExt>(
+        &self,
+        txn: &PreprocessedTransaction,
+        data_cache: &S,
+        log_context: &AdapterLogSchema,
+    ) -> bool;
 
     fn validate_signature_checked_transaction<S: MoveResolverExt, SS: MoveResolverExt>(
         &self,
@@ -92,24 +103,36 @@ pub enum PreprocessedTransaction {
     StateCheckpoint,
 }
 
+impl PreprocessedTransaction {
+    pub(crate) fn setMulti(&mut self) {
+        // do nothin
+    }
+
+    pub(crate) fn getMulti(&self) -> bool {
+        true
+    }
+}
+
 /// Check the signature (if any) of a transaction. If the signature is OK, the result
 /// is a PreprocessedTransaction, where a user transaction is translated to a
 /// SignatureCheckedTransaction and also categorized into either a UserTransaction
 /// or a WriteSet transaction.
-pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> PreprocessedTransaction {
+pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> (PreprocessedTransaction, Vec<u8>) {
     match txn {
-        Transaction::BlockMetadata(b) => PreprocessedTransaction::BlockMetadata(b),
-        Transaction::GenesisTransaction(ws) => PreprocessedTransaction::WaypointWriteSet(ws),
+        Transaction::BlockMetadata(b) => (PreprocessedTransaction::BlockMetadata(b), vec![]),
+        Transaction::GenesisTransaction(ws) => (PreprocessedTransaction::WaypointWriteSet(ws), vec![]),
         Transaction::UserTransaction(txn) => {
             let checked_txn = match A::check_signature(txn) {
                 Ok(checked_txn) => checked_txn,
                 _ => {
-                    return PreprocessedTransaction::InvalidSignature;
+                    return (PreprocessedTransaction::InvalidSignature, vec![]);
                 },
             };
-            PreprocessedTransaction::UserTransaction(Box::new(checked_txn))
+
+            let senderclone = checked_txn.sender().to_vec().clone();
+            (PreprocessedTransaction::UserTransaction(Box::new(checked_txn)), senderclone)
         },
-        Transaction::StateCheckpoint(_) => PreprocessedTransaction::StateCheckpoint,
+        Transaction::StateCheckpoint(_) => (PreprocessedTransaction::StateCheckpoint, vec![]),
     }
 }
 

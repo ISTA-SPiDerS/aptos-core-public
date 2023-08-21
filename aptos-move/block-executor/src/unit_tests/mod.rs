@@ -16,6 +16,8 @@ use std::{
     marker::PhantomData,
     sync::{atomic::AtomicUsize, Arc},
 };
+use std::collections::HashMap;
+use aptos_types::transaction::{ExecutionMode, Profiler};
 
 fn run_and_assert<K, V>(transactions: Vec<Transaction<K, V>>)
 where
@@ -28,7 +30,7 @@ where
 
     let output =
         BlockExecutor::<Transaction<K, V>, Task<K, V>, DeltaDataView<K, V>>::new(num_cpus::get())
-            .execute_transactions_parallel((), &transactions, &data_view)
+            .execute_transactions_parallel((), &transactions, &data_view, ExecutionMode::Standard, &mut Profiler::new(), HashMap::new())
             .map(|zipped| zipped.into_iter().map(|(res, _)| res).collect());
 
     let baseline = ExpectedOutput::generate_baseline(&transactions, None);

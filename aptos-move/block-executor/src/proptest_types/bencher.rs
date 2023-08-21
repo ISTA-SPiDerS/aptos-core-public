@@ -119,7 +119,7 @@ where
             Task<KeyType<K>, ValueType<V>>,
             EmptyDataView<KeyType<K>, ValueType<V>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &self.transactions, &data_view, Standard, &mut Profiler::new())
+        .execute_transactions_parallel((), &self.transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new())
         .map(|zipped| zipped.into_iter().map(|(res, _)| res).collect());
 
         self.expected_output.assert_output(&output);

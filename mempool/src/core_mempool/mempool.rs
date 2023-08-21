@@ -49,7 +49,7 @@ pub struct Mempool {
 
     pub system_transaction_timeout: Duration,
     last_max_gas: u64,
-    cached_ex: Vec<(VMSpeculationResult, VMStatus, SignedTransaction)>,
+    cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
     total: u64,
     current: u64,
     pending: HashSet<TxnPointer>
@@ -64,7 +64,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             last_max_gas: 100_000_000_000,
-            cached_ex: vec![],
+            cached_ex: VecDeque::new(),
             total: 0,
             current: 0,
             pending: HashSet::new()
@@ -299,7 +299,7 @@ impl Mempool {
         let result_size = result.len();
         if result_size > 0 || CACHE.len() > 0 || self.cached_ex.len() > 0
         {
-            //println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
+            println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
@@ -309,7 +309,7 @@ impl Mempool {
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
-            //println!("bla blocklen: {}", block_filler.get_blockx().len());
+            println!("bla blocklen: {}", block_filler.get_blockx().len());
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
@@ -319,8 +319,6 @@ impl Mempool {
             result_size = result_size,
             block_size = block_filler.get_blockx().len(),
             byte_size = total_bytes,);
-
-            println!("{}", block_filler.get_blockx().len());
 
             counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
             counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);

@@ -1688,16 +1688,9 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 
 pub static RAYON_EXEC_POOL: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex::new({
     rayon::ThreadPoolBuilder::new()
-        .num_threads(cmp::min(16, num_cpus::get()))
-        /*.thread_name(|index| format!("par_exec_{}", index))
-        .spawn_handler(|thread| {
-            std::thread::spawn(|| {
-                //let core_ids: Vec<core_affinity::CoreId> = core_affinity::get_core_ids().unwrap();
-                //let res = core_affinity::set_for_current(core_ids[thread.index()].clone());
-                thread.run();
-            });
-            Ok(())
-        })*/
+        .num_threads(cmp::min(4, num_cpus::get()))
+        .thread_name(|index| format!("par_exec_{}", index))
+
         .build()
         .unwrap()
 }));

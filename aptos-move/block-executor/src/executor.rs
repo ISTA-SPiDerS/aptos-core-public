@@ -12,25 +12,15 @@ use crate::{
     view::{LatestView, MVHashMapView},
 };
 
+use std::sync::Mutex as MyMut;
 use tracing::info;
 use color_eyre::Report;
 use itertools::{Itertools};
 use rayon::{prelude::*, scope, ThreadPoolBuilder};
-use std::{
-    collections::HashMap,
-    collections::HashSet,
-    hash::Hash,
-    io,
-    marker::PhantomData,
-    ops::{Add, AddAssign},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock, Barrier
-    },
-    thread,
-    thread::spawn,
-    time::{Instant, Duration},
-};
+use std::{collections::HashMap, collections::HashSet, hash::Hash, hint, io, marker::PhantomData, ops::{Add, AddAssign}, sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, RwLock, Barrier
+}, thread, thread::spawn, time::{Instant, Duration}};
 use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionRegister};
 use dashmap::DashMap;
 use aptos_logger::debug;
@@ -47,6 +37,9 @@ use aptos_infallible::Mutex;
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
 use std::sync::{Once, ONCE_INIT};
+use std::thread::sleep;
+use crate::scheduler::SchedulerTask::{NoTask, PrologueTask};
+
 static INIT: Once = Once::new();
 
 pub type TxnInput<K> = Vec<ReadDescriptor<K>>;
@@ -96,13 +89,13 @@ where
         thread_id: usize,
     ) -> SchedulerTask {
 
-
         let _timer = TASK_EXECUTE_SECONDS.start_timer();
         let (idx_to_execute, incarnation) = version;
         let txn = &signature_verified_block[idx_to_execute];
+        //println!("id start: {} {}", thread_id, idx_to_execute);
 
         let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
-        profiler.start_timing(&"execute#1".to_string());
+        //profiler.start_timing(&"execute#1".to_string());
 
         // VM execution.
         let execute_result = executor.execute_transaction(
@@ -110,10 +103,11 @@ where
             txn,
             idx_to_execute,
             false,
+            scheduler.prologue_map.get(&(idx_to_execute as u16)).unwrap()
         );
-        profiler.end_timing(&"execute#1".to_string());
+        //profiler.end_timing(&"execute#1".to_string());
 
-        profiler.start_timing(&"execute#2".to_string());
+        //profiler.start_timing(&"execute#2".to_string());
 
         let mut prev_modified_keys = last_input_output.modified_keys(idx_to_execute);
 
@@ -164,21 +158,48 @@ where
             versioned_data_cache.delete(&k, idx_to_execute);
         }
 
-        profiler.end_timing(&"execute#2".to_string());
+        //profiler.end_timing(&"execute#2".to_string());
 
-        profiler.start_timing(&"execute#3".to_string());
+        //profiler.start_timing(&"execute#3".to_string());
 
         last_input_output.record(idx_to_execute, speculative_view.take_reads(), result);
 
-        profiler.end_timing(&"execute#3".to_string());
+        //profiler.end_timing(&"execute#3".to_string());
 
-        profiler.start_timing(&"execute#4".to_string());
+        //profiler.start_timing(&"execute#4".to_string());
 
         let result = scheduler.finish_execution(idx_to_execute, incarnation, updates_outside, profiler, thread_id);
 
-        profiler.end_timing(&"execute#4".to_string());
+        //profiler.end_timing(&"execute#4".to_string());
+
+        //println!("id end: {} {}", thread_id, idx_to_execute);
 
         return result;
+    }
+
+    fn execute_prologue(
+        &self,
+        idx_to_execute: usize,
+        signature_verified_block: &[T],
+        versioned_data_cache: &MVHashMap<T::Key, T::Value>,
+        scheduler: &Scheduler,
+        executor: &E,
+        base_view: &S,
+    ) -> bool {
+
+        let _timer = TASK_EXECUTE_SECONDS.start_timer();
+        let txn = &signature_verified_block[idx_to_execute];
+        //println!("id start: {} {}", thread_id, idx_to_execute);
+
+        let speculative_view = MVHashMapView::new(versioned_data_cache, scheduler);
+        //profiler.start_timing(&"execute#1".to_string());
+
+        // VM execution.
+        executor.execute_prologue(
+            &LatestView::<T, S>::new_mv_view(base_view, &speculative_view, idx_to_execute),
+            txn,
+            idx_to_execute
+        )
     }
 
     fn setup() -> Result<(), Report> {
@@ -267,17 +288,18 @@ where
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
 
-
         profiler.start_timing(&format!("thread time {}", idx).to_string());
-        let mut extimer: u128 = 0;
-        let mut valtimer: u128 = 0;
-        let mut resttimer: u128 = 0;
         let thread_id = idx;
 
         drop(init_timer);
 
         let mut scheduler_task = SchedulerTask::NoTask;
         barrier.wait();
+        let mut local_flag = true;
+        let mut lastInd : u16 = 0;
+
+        let prioChannel = &mut *scheduler.priochannels[thread_id].1.lock();
+        let channel = &mut *scheduler.channels[thread_id].1.lock();
 
         loop {
             // Only one thread try_commit to avoid contention.
@@ -325,13 +347,25 @@ where
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
-                    profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode);
-                    profiler.end_timing(&"scheduling".to_string());
-                    /*if matches!(ret, SchedulerTask::NoTask) {
-                        thread::sleep(Duration::from_millis(5));
-                    }*/
-                    ret
+
+                    //profiler.start_timing(&"scheduling".to_string());
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
+                    if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
+                    {
+                        if lastInd >= block.len() as u16 {
+                            hint::spin_loop();
+                            ret
+                        }
+                        else
+                        {
+                            SchedulerTask::PrologueTask
+                        }
+                    }
+                    else
+                    {
+                        //profiler.end_timing(&"scheduling".to_string());
+                        ret
+                    }
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
@@ -362,7 +396,6 @@ where
                         thread_id,
                     );
                     profiler.end_timing(&format!("execution {}", idx.to_string()));
-                    extimer += now.elapsed().as_nanos();
                     ret
                 },
                 SchedulerTask::ExecutionTask(_, Some(condvar)) => {
@@ -374,6 +407,36 @@ where
 
                     SchedulerTask::NoTask
                 },
+                SchedulerTask::PrologueTask => {
+                    if lastInd >= block.len() as u16 {
+                        NoTask
+                    }
+                    else {
+                        let ind = scheduler.prologue_index.fetch_add(1, Ordering::SeqCst);
+                        lastInd = ind;
+                        let option = scheduler.prologue_map.get(&ind);
+                        if let Some(opt) = option {
+                            if opt.0
+                            {
+                                let resource = opt.1.try_lock();
+                                if let Ok(mut res) = resource {
+                                    if !*res
+                                    {
+                                        *res = self.execute_prologue(
+                                            ind as usize,
+                                            block,
+                                            versioned_data_cache,
+                                            scheduler,
+                                            &executor,
+                                            base_view,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        NoTask
+                    }
+                }
                 _ => {break;}
             }
 
@@ -386,7 +449,8 @@ where
         signature_verified_block: &TransactionRegister<T>,
         base_view: &S,
         mode: ExecutionMode,
-        input_profiler: &mut Profiler
+        input_profiler: &mut Profiler,
+        map: HashMap<u16, (bool, MyMut<bool>)>
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         assert!(self.concurrency_level > 1, "Must use sequential execution");
 
@@ -407,7 +471,7 @@ where
 
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
-        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level);
+        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, map);
         let barrier = Arc::new(Barrier::new(self.concurrency_level));
         INIT.call_once(|| {Self::setup();
              ()});
@@ -555,6 +619,7 @@ where
                 txn,
                 idx,
                 true,
+                &(false, MyMut::new(true))
             );
 
             let must_skip = matches!(res, ExecutionStatus::SkipRest(_));
@@ -593,14 +658,17 @@ where
         signature_verified_block: TransactionRegister<T>,
         base_view: &S,
         mode: ExecutionMode,
-        profiler: &mut Profiler
+        profiler: &mut Profiler,
+        map: HashMap<u16, (bool, MyMut<bool>)>
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         let mut ret = if self.concurrency_level > 1 {
             self.execute_transactions_parallel(
                 executor_arguments,
                 &signature_verified_block,
                 base_view,
-                mode, profiler
+                mode,
+                profiler,
+                map
             )
         } else {
             self.execute_transactions_sequential(

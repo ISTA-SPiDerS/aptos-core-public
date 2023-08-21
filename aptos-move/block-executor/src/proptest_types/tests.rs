@@ -19,6 +19,7 @@ use proptest::{
     test_runner::TestRunner,
 };
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
+use std::collections::HashMap;
 use aptos_types::transaction::ExecutionMode::Standard;
 use aptos_types::transaction::Profiler;
 
@@ -57,7 +58,7 @@ fn run_transactions<K, V>(
             Task<KeyType<K>, ValueType<V>>,
             EmptyDataView<KeyType<K>, ValueType<V>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new())
+        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new())
         .map(|zipped| zipped.into_iter().map(|(res, _)| res).collect());
 
         if module_access.0 && module_access.1 {
@@ -183,7 +184,7 @@ fn deltas_writes_mixed() {
             Task<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
             DeltaDataView<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new())
+        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new())
         .map(|zipped| zipped.into_iter().map(|(res, _)| res).collect());
 
         let baseline = ExpectedOutput::generate_baseline(&transactions, None);
@@ -224,7 +225,7 @@ fn deltas_resolver() {
             Task<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
             DeltaDataView<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new())
+        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new())
         .unwrap()
         .into_iter()
         .unzip();
@@ -361,7 +362,7 @@ fn publishing_fixed_params() {
         Task<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
         DeltaDataView<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
     >::new(num_cpus::get())
-    .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new());
+    .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new());
     assert_ok!(output);
 
     // Adjust the reads of txn indices[2] to contain module read to key 42.
@@ -397,7 +398,7 @@ fn publishing_fixed_params() {
             Task<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
             DeltaDataView<KeyType<[u8; 32]>, ValueType<[u8; 32]>>,
         >::new(num_cpus::get())
-        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new());
+        .execute_transactions_parallel((), &transactions, &data_view, Standard, &mut Profiler::new(), HashMap::new());
 
         assert_eq!(output.unwrap_err(), Error::ModulePathReadWrite);
     }

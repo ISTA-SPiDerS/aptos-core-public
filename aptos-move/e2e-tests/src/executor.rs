@@ -65,6 +65,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use std::sync::Mutex;
 use anyhow::format_err;
 use aptos_types::on_chain_config::OnChainConfigPayload;
 
@@ -114,7 +115,7 @@ impl TransactionValidation for FakeValidation {
         let mut read_recorder_view = ReadRecorderView::new_view(&self.state_view);
         let preprocessed_txn = preprocess_transaction::<AptosVM>(Transaction::UserTransaction(transaction.clone()));
 
-        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn, &read_recorder_view, &log_context).unwrap();
+        let (status, output, _) = self.vm.execute_single_transaction(&preprocessed_txn.0, &read_recorder_view, &log_context, true, &(false, Mutex::new(false))).unwrap();
         let input = read_recorder_view.reads();
 
         anyhow::Ok((VMSpeculationResult {input, output}, status))
