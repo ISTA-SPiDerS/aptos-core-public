@@ -464,10 +464,10 @@ where
 
         let num_txns = signature_verified_block.len();
 
-        if num_txns > 2 {
+        //if num_txns > 2 {
             println!("bla runblock {}", signature_verified_block.txns().len());
             println!("bla runwith {} {}", self.concurrency_level, num_cpus::get());
-        }
+        //}
 
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
@@ -510,11 +510,11 @@ where
         (*profiler.lock()).end_timing(&"total time2".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
-        if num_txns > 2 {
+        //if num_txns > 2 {
             let mut prof = &(*profiler.lock());
             prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
             prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1));
-        }
+        //}
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);
