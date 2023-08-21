@@ -348,13 +348,12 @@ where
                 },
                 SchedulerTask::NoTask => {
 
-                    profiler.start_timing(&format!("sched time {}", idx).to_string());
                     //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
                     if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
                     {
                         if lastInd >= block.len() as u16 {
-                            profiler.end_timing(&format!("sched time {}", idx.to_string()));
+                            hint::spin_loop();
                             ret
                         }
                         else
@@ -365,7 +364,6 @@ where
                     else
                     {
                         //profiler.end_timing(&"scheduling".to_string());
-                        profiler.end_timing(&format!("sched time {}", idx.to_string()));
                         ret
                     }
                 },
@@ -401,13 +399,12 @@ where
                     ret
                 },
                 SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                    profiler.start_timing(&format!("execution lock {}", idx).to_string());
                     let (lock, cvar) = &*condvar;
                     // Mark dependency resolved.
                     *lock.lock() = true;
                     // Wake up the process waiting for dependency.
                     cvar.notify_one();
-                    profiler.end_timing(&format!("execution lock {}", idx).to_string());
+
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::PrologueTask => {
@@ -415,7 +412,6 @@ where
                         NoTask
                     }
                     else {
-                        profiler.start_timing(&format!("prologue {}", idx).to_string());
                         let ind = scheduler.prologue_index.fetch_add(1, Ordering::SeqCst);
                         lastInd = ind;
                         let option = scheduler.prologue_map.get(&ind);
@@ -438,7 +434,6 @@ where
                                 }
                             }
                         }
-                        profiler.end_timing(&format!("execution {}", idx.to_string()));
                         NoTask
                     }
                 }
@@ -469,10 +464,10 @@ where
 
         let num_txns = signature_verified_block.len();
 
-        //if num_txns > 2 {
+        if num_txns > 2 {
             println!("bla runblock {}", signature_verified_block.txns().len());
             println!("bla runwith {} {}", self.concurrency_level, num_cpus::get());
-        //}
+        }
 
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
@@ -515,11 +510,11 @@ where
         (*profiler.lock()).end_timing(&"total time2".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
-        //if num_txns > 2 {
+        if num_txns > 2 {
             let mut prof = &(*profiler.lock());
             prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
             prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1));
-        //}
+        }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
         let mut final_results = Vec::with_capacity(num_txns);
