@@ -71,7 +71,7 @@ impl SubmissionWorker {
     #[allow(clippy::collapsible_if)]
     pub(crate) async fn run(mut self) -> Vec<LocalAccount> {
         let start_time = Instant::now() + self.start_sleep_duration;
-
+        println!("start run");
         self.sleep_check_done(self.start_sleep_duration).await;
 
         let wait_duration = Duration::from_millis(self.params.wait_millis);
@@ -96,8 +96,10 @@ impl SubmissionWorker {
             }
             // always add expected cycle duration, to not drift from expected pace.
             wait_until += wait_duration;
+            println!("start gen");
 
             let requests = self.gen_requests();
+            println!("did gen");
 
             let mut account_to_start_and_end_seq_num = HashMap::new();
             for req in requests.iter() {
