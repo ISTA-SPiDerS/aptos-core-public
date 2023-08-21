@@ -206,6 +206,7 @@ impl TransactionExecutor for RestApiTransactionExecutor {
     ) -> Result<()> {
         let run_seed: u64 = thread_rng().gen();
 
+        println!("Executing {} tx", txns.len());
         join_all(
             txns.iter()
                 .map(|txn| self.submit_check_and_retry(txn, counters, run_seed)),
