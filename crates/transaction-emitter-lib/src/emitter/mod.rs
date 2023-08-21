@@ -630,8 +630,6 @@ impl TxnEmitter {
                 let txn_generator = txn_generator_creator.create_transaction_generator().await;
                 let worker_index = workers.len();
 
-                println!("after creation");
-
                 let worker = SubmissionWorker::new(
                     accounts,
                     client.clone(),
@@ -643,6 +641,8 @@ impl TxnEmitter {
                     check_account_sequence_only_once_for.contains(&worker_index),
                     self.from_rng(),
                 );
+                println!("after creation");
+
                 let join_handle = tokio_handle.spawn(worker.run().boxed());
                 workers.push(Worker { join_handle });
             }
