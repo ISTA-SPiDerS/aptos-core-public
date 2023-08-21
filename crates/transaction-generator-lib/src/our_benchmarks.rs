@@ -69,6 +69,7 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
+        println!("Enter generate");
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
 
