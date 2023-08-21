@@ -630,6 +630,8 @@ impl TxnEmitter {
                 let txn_generator = txn_generator_creator.create_transaction_generator().await;
                 let worker_index = workers.len();
 
+                println!("after creation");
+
                 let worker = SubmissionWorker::new(
                     accounts,
                     client.clone(),
