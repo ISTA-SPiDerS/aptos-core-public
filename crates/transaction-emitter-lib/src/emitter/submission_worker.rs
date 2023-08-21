@@ -97,7 +97,6 @@ impl SubmissionWorker {
             // always add expected cycle duration, to not drift from expected pace.
             wait_until += wait_duration;
             println!("start gen");
-
             let requests = self.gen_requests();
             println!("did gen");
 
@@ -266,10 +265,12 @@ impl SubmissionWorker {
     }
 
     fn gen_requests(&mut self) -> Vec<SignedTransaction> {
+        println!("at gen {} {}", self.params.accounts_per_worker, self.accounts.len());
         let accounts = self
             .accounts
             .iter_mut()
             .choose_multiple(&mut self.rng, self.params.accounts_per_worker);
+        println!("mid gen");
         self.txn_generator
             .generate_transactions(accounts, self.params.transactions_per_account)
     }
