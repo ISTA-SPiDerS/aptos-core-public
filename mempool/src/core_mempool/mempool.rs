@@ -299,7 +299,7 @@ impl Mempool {
         let result_size = result.len();
         if result_size > 0 || CACHE.len() > 0 || self.cached_ex.len() > 0
         {
-            //println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
+            println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
@@ -319,8 +319,6 @@ impl Mempool {
             result_size = result_size,
             block_size = block_filler.get_blockx().len(),
             byte_size = total_bytes,);
-
-            println!("{}", block_filler.get_blockx().len());
 
             counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
             counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
