@@ -11,6 +11,7 @@ use super::{
 use aptos_logger::info;
 use async_trait::async_trait;
 use rand::prelude::*;
+use rand::seq::index::IndexVec::USize;
 use std::collections::{BTreeMap, HashMap};
 use anyhow::anyhow;
 use rand::distributions::WeightedIndex;
@@ -25,7 +26,7 @@ use aptos_sdk::transaction_builder::TransactionFactory;
 use aptos_sdk::types::{account_config, LocalAccount};
 use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
 use crate::{TransactionGenerator, TransactionGeneratorCreator};
-use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use crate::account_activity_distribution::{TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
 use crate::publishing::publish_util::PackageHandler;
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
 use crate::uniswap_distribution::{AVG, BURSTY};
@@ -68,6 +69,7 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
+        println!("Enter generate");
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
 
@@ -133,7 +135,6 @@ impl TransactionGenerator for OurBenchmark {
         for value in TX_FROM {
             p2p_sender_distr_vec.push(value);
         }
-        //normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
         let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
         let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
@@ -143,11 +144,12 @@ impl TransactionGenerator for OurBenchmark {
 
             if matches!(load_type, SOLANA)
             {
-                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len())];
-                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len())];
+                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0, solana_cost_options.len())];
+                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0, solana_len_options.len())];
 
                 let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
+                println!("{} {}", cost_sample, write_len_sample);
                 while i < write_len_sample {
                     i+=1;
                     writes.push(general_resource_distribution.sample(&mut rng) as u64);
