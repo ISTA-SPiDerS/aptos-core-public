@@ -421,7 +421,10 @@ impl BlockFiller for DependencyFiller {
             pending.remove(&(tx.sender(), tx.sequence_number()));
         }
 
-        previous.extend(cache);
+        if !cache.is_empty() {
+            println!("bla clear cache {}", cache.len());
+            previous.extend(cache);
+        }
 
         //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];
