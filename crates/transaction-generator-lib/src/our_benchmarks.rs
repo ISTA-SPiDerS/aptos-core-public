@@ -26,7 +26,7 @@ use aptos_sdk::transaction_builder::TransactionFactory;
 use aptos_sdk::types::{account_config, LocalAccount};
 use aptos_sdk::types::transaction::{EntryFunction, Module, SignedTransaction};
 use crate::{TransactionGenerator, TransactionGeneratorCreator};
-use crate::account_activity_distribution::{COIN_DISTR, TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
+use crate::account_activity_distribution::{TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_TO};
 use crate::publishing::publish_util::PackageHandler;
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
 use crate::uniswap_distribution::{AVG, BURSTY};
@@ -144,8 +144,8 @@ impl TransactionGenerator for OurBenchmark {
 
             if matches!(load_type, SOLANA)
             {
-                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len()) as usize];
-                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len()) as usize];
+                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len())];
+                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len())];
 
                 let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
