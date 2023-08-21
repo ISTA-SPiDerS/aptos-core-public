@@ -30,7 +30,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 move-binary-format = { workspace = true }
 once_cell = { workspace = true }
-rand = "*"
+rand = { workspace = true }
 rand_core = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
