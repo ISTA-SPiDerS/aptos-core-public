@@ -134,7 +134,6 @@ impl TransactionGenerator for OurBenchmark {
         for value in TX_FROM {
             p2p_sender_distr_vec.push(value);
         }
-        //normalize_distribution_vectors(sum, extended_size, &mut p2p_sender_distr_vec);
 
         let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
         let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
@@ -149,6 +148,7 @@ impl TransactionGenerator for OurBenchmark {
 
                 let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
+                println!("{} {}", cost_sample, write_len_sample);
                 while i < write_len_sample {
                     i+=1;
                     writes.push(general_resource_distribution.sample(&mut rng) as u64);
