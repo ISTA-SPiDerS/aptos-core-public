@@ -11,6 +11,7 @@ use super::{
 use aptos_logger::info;
 use async_trait::async_trait;
 use rand::prelude::*;
+use rand::seq::index::IndexVec::USize;
 use std::collections::{BTreeMap, HashMap};
 use anyhow::anyhow;
 use rand::distributions::WeightedIndex;
@@ -143,8 +144,8 @@ impl TransactionGenerator for OurBenchmark {
 
             if matches!(load_type, SOLANA)
             {
-                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len())];
-                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len())];
+                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len()) as usize];
+                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len()) as usize];
 
                 let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
