@@ -376,7 +376,7 @@ impl Block {
             .collect();
         let dependency_graph = once(vec![])
             .chain(txn_register.dependency_graph().clone().into_iter().map(|f| f.into_iter().map(|k| k + 1).chain(once(0)).collect()).collect::<Vec<Vec<u64>>>())
-            .chain(once(vec![]))
+            .chain(once(vec![0]))
             .collect();
 
         TransactionRegister::new(txn, gas_estimates, dependency_graph)
