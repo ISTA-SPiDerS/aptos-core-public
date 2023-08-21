@@ -287,13 +287,14 @@ impl BlockFiller for DependencyFiller {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
 
             if self.full {
+                cache.push_back((speculation, status, tx));
                 break;
             }
 
             let txn_len = tx.raw_txn_bytes_len() as u64;
             if self.total_bytes + txn_len > self.max_bytes {
                 self.full = true;
-                //println!("bla final gas2: {}", self.total_estimated_gas);
+                cache.push_back((speculation, status, tx));
                 break;
             }
 
@@ -340,7 +341,7 @@ impl BlockFiller for DependencyFiller {
 
             if self.total_estimated_gas + gas_used > self.gas_per_core * self.cores {
                 self.full = true;
-                //println!("bla final gas4: {}", self.total_estimated_gas);
+                cache.push_back((speculation, status, tx));
                 break;
             }
 
@@ -362,7 +363,7 @@ impl BlockFiller for DependencyFiller {
 
             if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                 self.full = true;
-                //println!("bla final gas5: {}", self.total_estimated_gas);
+                cache.push_back((speculation, status, tx));
                 break;
             }
 
