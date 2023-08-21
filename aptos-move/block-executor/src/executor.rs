@@ -353,7 +353,6 @@ where
                     if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
                     {
                         if lastInd >= block.len() as u16 {
-                            hint::spin_loop();
                             ret
                         }
                         else
