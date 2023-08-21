@@ -412,6 +412,7 @@ where
                         NoTask
                     }
                     else {
+                        profiler.start_timing(&format!("prologue {}", idx).to_string());
                         let ind = scheduler.prologue_index.fetch_add(1, Ordering::SeqCst);
                         lastInd = ind;
                         let option = scheduler.prologue_map.get(&ind);
@@ -434,6 +435,7 @@ where
                                 }
                             }
                         }
+                        profiler.end_timing(&format!("execution {}", idx.to_string()));
                         NoTask
                     }
                 }

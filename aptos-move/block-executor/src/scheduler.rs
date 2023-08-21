@@ -334,6 +334,7 @@ pub struct Scheduler {
 /// Public Interfaces for the Scheduler
 impl Scheduler {
     pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
+        println!("bla ests {:?}{:?}", dependencies, gas_estimates);
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
