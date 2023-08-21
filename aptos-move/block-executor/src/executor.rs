@@ -401,12 +401,13 @@ where
                     ret
                 },
                 SchedulerTask::ExecutionTask(_, Some(condvar)) => {
+                    profiler.start_timing(&format!("execution lock {}", idx).to_string());
                     let (lock, cvar) = &*condvar;
                     // Mark dependency resolved.
                     *lock.lock() = true;
                     // Wake up the process waiting for dependency.
                     cvar.notify_one();
-
+                    profiler.end_timing(&format!("execution lock {}", idx).to_string());
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::PrologueTask => {
