@@ -434,6 +434,7 @@ dependencies = [
  "aptos-state-view",
  "aptos-types",
  "arc-swap",
+ "async-priority-channel",
  "bcs 0.1.4",
  "claims",
  "color-eyre",
@@ -10928,11 +10929,33 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
+version = "0.2.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
+dependencies = [
+ "ansi_term",
+ "chrono",
+ "lazy_static 1.4.0",
+ "matchers 0.0.1",
+ "regex",
+ "serde 1.0.160",
+ "serde_json",
+ "sharded-slab",
+ "smallvec",
+ "thread_local",
+ "tracing",
+ "tracing-core",
+ "tracing-log",
+ "tracing-serde",
+]
+
+[[package]]
+name = "tracing-subscriber"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6176eae26dd70d0c919749377897b54a9276bd7061339665dd68777926b5a70"
 dependencies = [
- "matchers",
+ "matchers 0.1.0",
  "nu-ansi-term",
  "once_cell",
  "regex",
