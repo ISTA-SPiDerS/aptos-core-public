@@ -71,10 +71,10 @@ pub trait VMAdapter {
         let prologue_status = self.run_prologue(session, storage, transaction, log_context);
         match prologue_status {
             Err(err)
-                if !allow_too_new || err.status_code() != StatusCode::SEQUENCE_NUMBER_TOO_NEW =>
-            {
-                Err(err)
-            },
+            if !allow_too_new || err.status_code() != StatusCode::SEQUENCE_NUMBER_TOO_NEW =>
+                {
+                    Err(err)
+                },
             _ => Ok(()),
         }
     }
@@ -92,36 +92,24 @@ pub enum PreprocessedTransaction {
     StateCheckpoint,
 }
 
-impl PreprocessedTransaction {
-    pub(crate) fn setMulti(&mut self) {
-        // do nothin
-    }
-
-    pub(crate) fn getMulti(&self) -> bool {
-        true
-    }
-}
-
 /// Check the signature (if any) of a transaction. If the signature is OK, the result
 /// is a PreprocessedTransaction, where a user transaction is translated to a
 /// SignatureCheckedTransaction and also categorized into either a UserTransaction
 /// or a WriteSet transaction.
-pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> (PreprocessedTransaction, Vec<u8>) {
+pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> PreprocessedTransaction {
     match txn {
-        Transaction::BlockMetadata(b) => (PreprocessedTransaction::BlockMetadata(b), vec![]),
-        Transaction::GenesisTransaction(ws) => (PreprocessedTransaction::WaypointWriteSet(ws), vec![]),
+        Transaction::BlockMetadata(b) => PreprocessedTransaction::BlockMetadata(b),
+        Transaction::GenesisTransaction(ws) => PreprocessedTransaction::WaypointWriteSet(ws),
         Transaction::UserTransaction(txn) => {
             let checked_txn = match A::check_signature(txn) {
                 Ok(checked_txn) => checked_txn,
                 _ => {
-                    return (PreprocessedTransaction::InvalidSignature, vec![]);
+                    return PreprocessedTransaction::InvalidSignature;
                 },
             };
-
-            let senderclone = checked_txn.sender().to_vec().clone();
-            (PreprocessedTransaction::UserTransaction(Box::new(checked_txn)), senderclone)
+            PreprocessedTransaction::UserTransaction(Box::new(checked_txn))
         },
-        Transaction::StateCheckpoint(_) => (PreprocessedTransaction::StateCheckpoint, vec![]),
+        Transaction::StateCheckpoint(_) => PreprocessedTransaction::StateCheckpoint,
     }
 }
 
