@@ -64,7 +64,6 @@ where
     table_options.set_cache_index_and_filter_blocks(rocksdb_config.cache_index_and_filter_blocks);
     table_options.set_block_size(rocksdb_config.block_size as usize);
     let cache = Cache::new_lru_cache(rocksdb_config.block_cache_size as usize);
-        //.expect("Create Rocksdb block cache failed.");
     table_options.set_block_cache(&cache);
     let mut cfds = Vec::with_capacity(cfs.len());
     for cf_name in cfs {

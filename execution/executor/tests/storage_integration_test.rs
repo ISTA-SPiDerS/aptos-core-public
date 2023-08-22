@@ -39,9 +39,9 @@ fn test_genesis() {
     let li = state_proof.latest_ledger_info();
     assert_eq!(li.version(), 0);
 
-    let account_resource_path = StateKey::access_path(AccessPath::new(
+    let account_resource_path = StateKey::access_path(AccessPath::new_base(
         CORE_CODE_ADDRESS,
-        AccountResource::struct_tag().access_vector(),
+        AccountResource::struct_tag().access_vector()
     ));
     let (aptos_framework_account_resource, state_proof) = db
         .reader

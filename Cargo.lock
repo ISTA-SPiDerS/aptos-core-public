@@ -6450,6 +6450,7 @@ dependencies = [
  "aptos-types",
  "aptos-vm",
  "aptos-vm-genesis",
+ "aptos-vm-validator",
  "aptos-writeset-generator",
  "bcs 0.1.4",
  "crossbeam-skiplist",
@@ -6461,6 +6462,7 @@ dependencies = [
  "move-ir-compiler",
  "proptest",
  "rand 0.8.5",
+ "rayon",
  "regex",
  "serde 1.0.160",
 ]

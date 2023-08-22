@@ -201,6 +201,7 @@ fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
         .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
             CORE_CODE_ADDRESS,
             TimestampResource::resource_path(),
+            true
         )))?
         .ok_or_else(|| format_err!("TimestampResource missing."))?;
     let rsrc = bcs::from_bytes::<TimestampResource>(rsrc_bytes)?;
@@ -212,6 +213,7 @@ fn get_state_epoch(state_view: &CachedStateView) -> Result<u64> {
         .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
             CORE_CODE_ADDRESS,
             ConfigurationResource::resource_path(),
+            true
         )))?
         .ok_or_else(|| format_err!("ConfigurationResource missing."))?;
     let rsrc = bcs::from_bytes::<ConfigurationResource>(rsrc_bytes)?;

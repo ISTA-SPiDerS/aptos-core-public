@@ -293,7 +293,7 @@ impl Context {
         let mut resource_iter = account_iter
             .filter_map(|res| match res {
                 Ok((k, v)) => match k.inner() {
-                    StateKeyInner::AccessPath(AccessPath { address: _, path }) => {
+                    StateKeyInner::AccessPath(AccessPath { address: _, path,  is_code: false }) => {
                         match Path::try_from(path.as_slice()) {
                             Ok(Path::Resource(struct_tag)) => {
                                 Some(Ok((struct_tag, v.into_bytes())))
@@ -345,9 +345,9 @@ impl Context {
             .collect();
 
         let next_key = resource_iter.next().transpose()?.map(|(struct_tag, _v)| {
-            StateKey::access_path(AccessPath::new(
+            StateKey::access_path(AccessPath::new_base(
                 address,
-                AccessPath::resource_path_vec(struct_tag),
+                AccessPath::resource_path_vec(struct_tag)
             ))
         });
         Ok((kvs, next_key))
@@ -368,7 +368,7 @@ impl Context {
         let mut module_iter = account_iter
             .filter_map(|res| match res {
                 Ok((k, v)) => match k.inner() {
-                    StateKeyInner::AccessPath(AccessPath { address: _, path }) => {
+                    StateKeyInner::AccessPath(AccessPath { address: _, path, is_code: false }) => {
                         match Path::try_from(path.as_slice()) {
                             Ok(Path::Code(module_id)) => Some(Ok((module_id, v.into_bytes()))),
                             Ok(Path::Resource(_)) | Ok(Path::ResourceGroup(_)) => None,
@@ -388,9 +388,9 @@ impl Context {
             .take(limit as usize)
             .collect::<Result<_>>()?;
         let next_key = module_iter.next().transpose()?.map(|(module_id, _v)| {
-            StateKey::access_path(AccessPath::new(
+            StateKey::access_path(AccessPath::new_base(
                 address,
-                AccessPath::code_path_vec(module_id),
+                AccessPath::code_path_vec(module_id)
             ))
         });
         Ok((kvs, next_key))
