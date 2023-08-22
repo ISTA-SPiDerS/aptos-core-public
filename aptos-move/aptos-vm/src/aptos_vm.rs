@@ -1341,8 +1341,7 @@ impl AptosSimulationVM {
                     &txn_data,
                     payload,
                     log_context,
-                    &mut new_published_modules_loaded,
-                    false,
+                    &mut new_published_modules_loaded
                 )
             },
             TransactionPayload::ModuleBundle(m) => self.0.execute_modules(
