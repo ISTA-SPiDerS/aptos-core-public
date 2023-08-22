@@ -1232,7 +1232,7 @@ impl VMAdapter for AptosVM {
                 if let Some(label) = counter_label {
                     USER_TRANSACTIONS_EXECUTED.with_label_values(&[label]).inc();
                 }
-                (vm_status, output, Some(sender))
+                (vm_status, output, Some("valid".to_string()))
             },
             PreprocessedTransaction::InvalidSignature => {
                 let (vm_status, output) =
@@ -1342,6 +1342,7 @@ impl AptosSimulationVM {
                     payload,
                     log_context,
                     &mut new_published_modules_loaded,
+                    false,
                 )
             },
             TransactionPayload::ModuleBundle(m) => self.0.execute_modules(

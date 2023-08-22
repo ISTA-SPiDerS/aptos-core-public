@@ -130,7 +130,7 @@ variable "utility_instance_type" {
 
 variable "fullnode_instance_type" {
   description = "Instance type used for validator and fullnodes"
-  default     = "c6i.8xlarge"
+  default     = "c6i.12xlarge"
 }
 
 variable "num_extra_instance" {
@@ -155,7 +155,7 @@ variable "backup_fullnode_index" {
 
 variable "fullnode_storage_class" {
   description = "Which storage class to use for the validator and fullnode"
-  default     = "io1"
+  default     = "gp3"
   validation {
     condition     = contains(["gp3", "gp2", "io1", "io2"], var.fullnode_storage_class)
     error_message = "Supported storage classes are gp3, io1, io2"
@@ -181,4 +181,9 @@ variable "enable_prometheus_node_exporter" {
 variable "enable_kube_state_metrics" {
   description = "Enable kube-state-metrics within monitoring helm chart"
   default     = false
+}
+
+variable "manage_via_tf" {
+  description = "Whether to manage the aptos-node k8s workload via Terraform. If set to false, the helm_release resource will still be created and updated when values change, but it may not be updated on every apply"
+  default     = true
 }

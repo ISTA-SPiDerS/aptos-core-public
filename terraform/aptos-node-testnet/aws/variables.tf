@@ -112,10 +112,25 @@ variable "logger_helm_values" {
   default     = {}
 }
 
+variable "enable_monitoring" {
+  description = "Enable monitoring helm chart"
+  default     = true
+}
+
 variable "monitoring_helm_values" {
   description = "Map of values to pass to monitoring helm chart"
   type        = any
   default     = {}
+}
+
+variable "enable_prometheus_node_exporter" {
+  description = "Enable prometheus-node-exporter within monitoring helm chart"
+  default     = true
+}
+
+variable "enable_kube_state_metrics" {
+  description = "Enable kube-state-metrics within monitoring helm chart"
+  default     = true
 }
 
 variable "testnet_addons_helm_values" {
@@ -139,7 +154,7 @@ variable "node_health_checker_helm_values" {
 
 variable "num_validators" {
   description = "The number of validator nodes to create"
-  default     = 4
+  default     = 8
 }
 
 variable "num_fullnode_groups" {
@@ -154,17 +169,17 @@ variable "num_utility_instance" {
 
 variable "num_validator_instance" {
   description = "Number of instances for validator node pool, when it's 0, it will be set to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "utility_instance_max_num" {
   description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "validator_instance_max_num" {
   description = "Maximum number of instances for utilities. If left 0, defaults to 2 * var.num_validators"
-  default     = 0
+  default     = 8
 }
 
 variable "utility_instance_type" {
@@ -197,7 +212,7 @@ variable "forge_helm_values" {
 
 variable "validator_storage_class" {
   description = "Which storage class to use for the validator and fullnode"
-  default     = "io1"
+  default     = "gp3"
   validation {
     condition     = contains(["gp3", "io1", "io2"], var.validator_storage_class)
     error_message = "Supported storage classes are gp3, io1, io2"
@@ -206,7 +221,7 @@ variable "validator_storage_class" {
 
 variable "fullnode_storage_class" {
   description = "Which storage class to use for the validator and fullnode"
-  default     = "io1"
+  default     = "gp3"
   validation {
     condition     = contains(["gp3", "io1", "io2"], var.fullnode_storage_class)
     error_message = "Supported storage classes are gp3, io1, io2"
@@ -214,6 +229,6 @@ variable "fullnode_storage_class" {
 }
 
 variable "manage_via_tf" {
-  description = "Whether to manage the aptos-node k8s workload via Terraform"
+  description = "Whether to manage the aptos-node k8s workload via Terraform. If set to false, the helm_release resource will still be created and updated when values change, but it may not be updated on every apply"
   default     = true
 }

@@ -44,13 +44,15 @@ locals {
       desired_size  = var.utility_instance_num
       max_size      = var.utility_instance_max_num > 0 ? var.utility_instance_max_num : 2 * var.utility_instance_num
       taint         = var.utility_instance_enable_taint
+      num_cpus      = 4
     }
     validators = {
       instance_type = var.validator_instance_type
       min_size      = var.validator_instance_min_num
-      desired_size  = var.validator_instance_num
-      max_size      = var.validator_instance_max_num > 0 ? var.validator_instance_max_num : 2 * var.validator_instance_num
+      desired_size  = 8
+      max_size      = 10
       taint         = var.validator_instance_enable_taint
+      num_cpus      = 24
     }
   }
 }
@@ -68,6 +70,10 @@ resource "aws_launch_template" "nodes" {
       volume_size           = 100
       volume_type           = "gp3"
     }
+  }
+  cpu_options {
+    core_count = each.value.num_cpus
+    threads_per_core = 1
   }
 
   tag_specifications {
@@ -87,16 +93,16 @@ resource "aws_eks_node_group" "nodes" {
   subnet_ids      = [aws_subnet.private[0].id]
   tags            = local.default_tags
 
-  lifecycle {
-    ignore_changes = [
-      # ignore autoupgrade version
-      version,
-      # ignore changes to the desired size that may occur due to cluster autoscaler
-      scaling_config[0].desired_size,
-      # ignore changes to max size, especially when it decreases to < desired_size, which fails
-      scaling_config[0].max_size,
-    ]
-  }
+ # lifecycle {
+ #   ignore_changes = [
+ #     # ignore autoupgrade version
+ #     version,
+ #     # ignore changes to the desired size that may occur due to cluster autoscaler
+ #     scaling_config[0].desired_size,
+ #     # ignore changes to max size, especially when it decreases to < desired_size, which fails
+ #     scaling_config[0].max_size,
+ #   ]
+ # }
 
   # if the NodeGroup should be tainted, then create the below dynamic block
   dynamic "taint" {
