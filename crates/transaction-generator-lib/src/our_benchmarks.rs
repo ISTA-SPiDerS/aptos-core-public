@@ -118,18 +118,9 @@ impl TransactionGenerator for OurBenchmark {
 
         let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
 
-        let mut nft_sender_distr_vec: Vec<f64> = vec![];
-        for value in TX_NFT_FROM {
-            nft_sender_distr_vec.push(value);
-        }
-
-        let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
-
-        let mut p2p_sender_distr_vec:Vec<f64> = vec![1.0, 1.0, 1.0, 1.0];
-        let mut p2p_receiver_distr_vec:Vec<f64> = vec![1.0, 1.0, 1.0, 1.0];
-        
-        let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
-        let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
+        let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
+        let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
+        let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
 
         for i in 0..needed {
             let mut sender_id: usize = (i as usize) % accounts.len();
@@ -141,7 +132,6 @@ impl TransactionGenerator for OurBenchmark {
 
                 let mut writes: Vec<u64> = Vec::new();
                 let mut i = 0;
-                println!("{} {}", cost_sample, write_len_sample);
                 while i < write_len_sample {
                     i+=1;
                     writes.push(general_resource_distribution.sample(&mut rng) as u64);
