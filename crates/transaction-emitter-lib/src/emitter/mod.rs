@@ -131,6 +131,9 @@ pub struct EmitJobRequest {
     txn_expiration_time_secs: u64,
     init_expiration_multiplier: f64,
 
+    accounts_per_worker: usize,
+    workers_per_endpoint:  usize,
+
     init_retry_interval: Duration,
 
     max_transactions_per_account: usize,
@@ -147,7 +150,7 @@ impl Default for EmitJobRequest {
         Self {
             rest_clients: Vec::new(),
             mode: EmitJobMode::MaxLoad {
-                mempool_backlog: 50000,
+                mempool_backlog: 5000,
             },
             transaction_mix_per_phase: vec![vec![(TransactionType::default(), 1)]],
             max_gas_per_txn: aptos_global_constants::MAX_GAS_AMOUNT,
@@ -155,10 +158,10 @@ impl Default for EmitJobRequest {
             init_gas_price_multiplier: 1,
             reuse_accounts: false,
             mint_to_root: false,
-            txn_expiration_time_secs: 540,
+            txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
             accounts_per_worker: 100,
-            workers_per_endpoint:  20,
+            workers_per_endpoint:  5,
             init_retry_interval: Duration::from_secs(60),
             max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
@@ -251,6 +254,16 @@ impl EmitJobRequest {
         self
     }
 
+    pub fn workers_per_endpoint(mut self, workers_per_endpoint: usize) -> Self {
+        self.workers_per_endpoint = workers_per_endpoint;
+        self
+    }
+
+    pub fn accounts_per_worker(mut self, accounts_per_worker: usize) -> Self {
+        self.accounts_per_worker = accounts_per_worker;
+        self
+    }
+
     pub fn coordination_delay_between_instances(
         mut self,
         coordination_delay_between_instances: Duration,
@@ -268,7 +281,7 @@ impl EmitJobRequest {
                 // we can ~3 blocks in consensus queue. As long as we have 3x the target TPS as backlog,
                 // it should be enough to produce the target TPS.
                 let transactions_per_account = self.max_transactions_per_account;
-                let num_workers_per_endpoint = 16;
+                let num_workers_per_endpoint = self.workers_per_endpoint;
 
                 info!(
                     " Transaction emitter target mempool backlog is {}",
@@ -286,7 +299,7 @@ impl EmitJobRequest {
                     transactions_per_account,
                     max_submit_batch_size: DEFAULT_MAX_SUBMIT_TRANSACTION_BATCH_SIZE,
                     worker_offset_mode: WorkerOffsetMode::Spread,
-                    accounts_per_worker: 500,
+                    accounts_per_worker: self.accounts_per_worker,
                     workers_per_endpoint: num_workers_per_endpoint,
                     endpoints: clients_count,
                     check_account_sequence_only_once_fraction: 0.0,
@@ -438,9 +451,9 @@ impl EmitModeParams {
                 result
             },
         }
-        .into_iter()
-        .map(Duration::from_millis)
-        .collect()
+            .into_iter()
+            .map(Duration::from_millis)
+            .collect()
     }
 }
 
@@ -516,12 +529,11 @@ impl TxnEmitter {
     ) -> Result<EmitJob> {
         ensure!(req.gas_price > 0, "gas_price is required to be non zero");
 
-        println!("start job");
         let mode_params = req.calculate_mode_params();
         let workers_per_endpoint = mode_params.workers_per_endpoint;
         let num_workers = req.rest_clients.len() * workers_per_endpoint;
         let num_accounts = num_workers * mode_params.accounts_per_worker;
-        println!(
+        info!(
             "Will use {} workers per endpoint for a total of {} endpoint clients and {} accounts",
             workers_per_endpoint, num_workers, num_accounts
         );
@@ -567,7 +579,6 @@ impl TxnEmitter {
         let stats = Arc::new(DynamicStatsTracking::new(stats_tracking_phases));
         let tokio_handle = Handle::current();
 
-        println!("here");
         let mut txn_generator_creator = create_txn_generator_creator(
             &req.transaction_mix_per_phase,
             num_workers,
@@ -577,7 +588,7 @@ impl TxnEmitter {
             &init_txn_factory,
             stats.get_cur_phase_obj(),
         )
-        .await;
+            .await;
 
         if !req.coordination_delay_between_instances.is_zero() {
             info!(
@@ -661,9 +672,9 @@ impl TxnEmitter {
             let stats = self.peek_job_stats(job);
             let delta = &stats[cur_phase]
                 - prev_stats
-                    .as_ref()
-                    .map(|p| &p[cur_phase])
-                    .unwrap_or(&default_stats);
+                .as_ref()
+                .map(|p| &p[cur_phase])
+                .unwrap_or(&default_stats);
             prev_stats = Some(stats);
             info!("phase {}: {}", cur_phase, delta.rate());
         }
@@ -729,7 +740,7 @@ impl TxnEmitter {
             duration,
             Some(interval_secs),
         )
-        .await
+            .await
     }
 
     pub async fn submit_single_transaction(
@@ -903,8 +914,8 @@ pub async fn query_sequence_numbers<'a, I>(
     client: &RestClient,
     addresses: I,
 ) -> Result<(Vec<(AccountAddress, u64)>, u64)>
-where
-    I: Iterator<Item = &'a AccountAddress>,
+    where
+        I: Iterator<Item = &'a AccountAddress>,
 {
     let (addresses, futures): (Vec<_>, Vec<_>) = addresses
         .map(|address| {
