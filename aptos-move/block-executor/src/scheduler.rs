@@ -590,10 +590,6 @@ impl Scheduler {
         //println!("bla estimates {:?}", self.gas_estimates);
         //println!("bla deps {:?}", self.hint_graph);
 
-        if self.done() {
-            // No more tasks.
-            return Some(SchedulerTask::Done);
-        }
         // let mut end_comp: Vec<usize> = vec![0; self.concurrency_level];
         let mut ui: Task;
         let mut begin_time: usize;
@@ -730,10 +726,6 @@ impl Scheduler {
             return SchedulerTask::NoTask
         }
         else {
-            if self.done() {
-                //profiler.end_timing(&"try_exec".to_string());
-                return SchedulerTask::Done
-            }
             //profiler.end_timing(&"try_exec".to_string());
             // //info!("Channel empty");
             return SchedulerTask::NoTask;
@@ -1099,11 +1091,9 @@ impl Scheduler {
                 Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
 
             if idx_to_validate >= self.num_txns {
-                if !self.done() {
-                    // Avoid pointlessly spinning, and give priority to other threads that may
-                    // be working to finish the remaining tasks.
-                    hint::spin_loop();
-                }
+                // Avoid pointlessly spinning, and give priority to other threads that may
+                // be working to finish the remaining tasks.
+                hint::spin_loop();
                 return None;
             }
 
