@@ -477,7 +477,7 @@ impl Scheduler {
         
         loop {
             // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
-            if self.done() {
+            if *!local_flag && *finished_val_flag && self.done() {
                 return SchedulerTask::Done;
             }
             /* This should only happen once to calculate the bottomlevels */
