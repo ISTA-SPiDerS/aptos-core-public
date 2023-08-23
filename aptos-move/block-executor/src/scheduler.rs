@@ -472,8 +472,7 @@ impl Scheduler {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
-
-        #
+        
         loop {
             // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
             if self.done() {
