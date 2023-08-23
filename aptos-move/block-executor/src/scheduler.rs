@@ -470,7 +470,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, finished_val_flag: &mut bool) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
@@ -500,12 +500,14 @@ impl Scheduler {
                     let (idx_to_validate, _) =
                         Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
 
-                    if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                        // //println!("validate: {:?}", version_to_validate);
-                        let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                        //profiler.end_timing(&"try_val".to_string());
-                        //profiler.end_timing(&"SCHEDULING".to_string());
-                        return val;
+                    if !*finished_val_flag {
+                        if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
+                            // //println!("validate: {:?}", version_to_validate);
+                            let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                            //profiler.end_timing(&"try_val".to_string());
+                            //profiler.end_timing(&"SCHEDULING".to_string());
+                            return val;
+                        }
                     }
 
                     let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
@@ -538,12 +540,14 @@ impl Scheduler {
                 //     };
                 // }
 
-                if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
-                    // //println!("validate: {:?}", version_to_validate);
-                    let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                    //profiler.end_timing(&"SCHEDULING".to_string());
-                    //profiler.end_timing(&"try_val".to_string());
-                    return val;
+                if !*finished_val_flag {
+                    if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
+                        // //println!("validate: {:?}", version_to_validate);
+                        let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                        //profiler.end_timing(&"SCHEDULING".to_string());
+                        //profiler.end_timing(&"try_val".to_string());
+                        return val;
+                    }
                 }
 
                 let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
@@ -1085,7 +1089,7 @@ impl Scheduler {
     /// - If the transaction is ready for validation (EXECUTED state), return the version
     /// to the caller.
     /// - Otherwise, return None.
-    fn try_validate_next_version(&self) -> Option<(Version, Wave)> {
+    fn try_validate_next_version(&self, finished_val_flag: &mut bool) -> Option<(Version, Wave)> {
         if let Ok(ref mut mutex) = self.valock.try_lock() {
             let (mut idx_to_validate, mut wave) =
                 Self::unpack_validation_idx(self.validation_idx.load( Ordering::SeqCst));
@@ -1094,6 +1098,7 @@ impl Scheduler {
                 // Avoid pointlessly spinning, and give priority to other threads that may
                 // be working to finish the remaining tasks.
                 hint::spin_loop();
+                *finished_val_flag = true;
                 return None;
             }
 
