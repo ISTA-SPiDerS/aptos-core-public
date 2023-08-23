@@ -795,24 +795,19 @@ impl Scheduler {
         idx: usize,
         profiler: &mut Profiler,
     ) -> bool {
-        profiler.start_timing(&"add_dep_TIME".to_string());
         let thread_id = idx;
         //info!("Try to acquire txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
         let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
         //info!("acquired txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
 
         if self.is_executed(dep_txn_idx, true).is_some() {
-            profiler.end_timing(&"add_dep_TIME".to_string());
             return false;
         }
         if stored_deps.contains_key(&txn_idx) {
-            profiler.end_timing(&"add_dep_TIME".to_string());
             return true;
         }
         // println!("inserting txn_idx {} as a dependency on {}, at my thread_id {}", txn_idx, dep_txn_idx, thread_id);
-        profiler.count_one("addDep".to_string());
         stored_deps.insert(txn_idx, thread_id);
-        profiler.end_timing(&"add_dep_TIME".to_string());
         true
     }
 
