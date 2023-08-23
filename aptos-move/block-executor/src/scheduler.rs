@@ -399,7 +399,7 @@ impl Scheduler {
 
         if *commit_idx == self.num_txns
         {
-            if self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+            if !matches!(mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
