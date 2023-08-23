@@ -308,7 +308,7 @@ where
                 },
                 SchedulerTask::NoTask => {
                     //profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, mode);
+                    let ret = scheduler.next_task(committing, &mut profiler);
                     //profiler.end_timing(&"scheduling".to_string());
                     ret
                 },
@@ -348,7 +348,7 @@ where
         let num_txns = signature_verified_block.len();
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
-        let scheduler = Scheduler::new(num_txns);
+        let scheduler = Scheduler::new(num_txns, mode);
 
         RAYON_EXEC_POOL.scope(|s| {
             for i in 0..self.concurrency_level {

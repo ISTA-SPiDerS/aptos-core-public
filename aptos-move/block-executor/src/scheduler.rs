@@ -198,11 +198,12 @@ pub struct Scheduler {
     /// An index i maps to the most up-to-date status of transaction i.
     txn_status: Vec<CachePadded<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>>,
     sig_val_idx: AtomicUsize,
+    pub mode: ExecutionMode
 }
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize) -> Self {
+    pub fn new(num_txns: usize, mode: ExecutionMode) -> Self {
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
@@ -221,6 +222,7 @@ impl Scheduler {
                 })
                 .collect(),
             sig_val_idx: AtomicUsize::new(0),
+            mode
         }
     }
 
@@ -233,7 +235,7 @@ impl Scheduler {
 
         if *commit_idx == self.num_txns
         {
-            if !matches!(mode, ExecutionMode::BlockSTM_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+            if !matches!(self.mode, ExecutionMode::BlockSTM_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
@@ -297,7 +299,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, committing: bool, profiler: &mut Profiler, mode: ExecutionMode) -> SchedulerTask {
+    pub fn next_task(&self, committing: bool, profiler: &mut Profiler) -> SchedulerTask {
         loop {
             if self.done() {
                 // No more tasks.
@@ -319,7 +321,7 @@ impl Scheduler {
                         // We don't want to hint on the thread that is committing
                         // because it may have work to do (to commit) even if there
                         // is no more conventional (validation and execution tasks) work.
-                        if matches!(mode, ExecutionMode::BlockSTM_Sig) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
+                        if matches!(self.mode, ExecutionMode::BlockSTM_Sig) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
                         {
                             let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
                             if idx > self.num_txns
