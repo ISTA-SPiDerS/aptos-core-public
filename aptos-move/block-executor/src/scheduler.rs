@@ -246,7 +246,7 @@ impl ValidationStatus {
 
 pub struct Scheduler {
     /// Number of txns to execute, immutable.
-    num_txns: usize,
+    pub(crate) num_txns: usize,
 
     /// A shared index that tracks the minimum of all transaction indices that require execution.
     /// The threads increment the index and attempt to create an execution task for the corresponding
@@ -324,7 +324,7 @@ pub struct Scheduler {
 
     valock: MyMut<bool>,
 
-    sig_val_idx: AtomicUsize,
+    pub(crate) sig_val_idx: AtomicUsize,
 
     pub prologue_map: HashMap<u16, (bool, MyMut<bool>)>,
 
@@ -473,12 +473,7 @@ impl Scheduler {
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
 
-        // let thread_id = crate::executor::RAYON_EXEC_POOL
-        //     .current_thread_index()
-        //     .unwrap();
-        // //println!("My thread_id = {}, commiting = {}, buffer len = {}", thread_id, commiting, self.thread_buffer[thread_id].len());
-        // let idx_to_validate = self.validation_idx.load(Ordering::SeqCst);
-        // let idx_to_execute = self.execution_idx.load(Ordering::SeqCst);
+        #
         loop {
             // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
             if self.done() {
@@ -486,8 +481,7 @@ impl Scheduler {
             }
             /* This should only happen once to calculate the bottomlevels */
             // //println!("SCHED_SETUP");
-            // let my_end_comp = *self.end_comp[thread_id].lock();
-            // let my_len = self.thread_buffer[thread_id].len();
+
             if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
                 *local_flag = false;
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
@@ -504,20 +498,6 @@ impl Scheduler {
 
                     let (idx_to_validate, _) =
                         Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                    // if my_len == 0 && idx_to_validate >= self.num_txns {
-                    //     return if self.done() {
-                    //         SchedulerTask::Done
-                    //     } else {
-                    //         if !commiting {
-                    //             // //println!("STUCK HERE");
-                    //             hint::spin_loop();
-                    //         }
-                    //         SchedulerTask::NoTask
-                    //     };
-                    // }
-                    // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
-                    // btreeset.len()}).max().unwrap();
-                    // *self.max.lock() = max;
 
                     if let Some((version_to_validate, guard)) = self.try_validate_next_version() {
                         // //println!("validate: {:?}", version_to_validate);
@@ -529,20 +509,6 @@ impl Scheduler {
 
                     let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
                     //profiler.end_timing(&"SCHEDULING".to_string());
-                    if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
-                    {
-                        if !matches!(mode, ExecutionMode::Pythia_Sig) {
-                            self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
-                            return ex;
-                        }
-                        let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
-                        if idx > self.num_txns
-                        {
-                            return ex;
-                        }
-                        return SchedulerTask::SigTask(idx);
-                        //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
-                    }
                     return ex;
                 }
             }
@@ -581,20 +547,6 @@ impl Scheduler {
 
                 let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
                 //profiler.end_timing(&"SCHEDULING".to_string());
-                if matches!(ex, NoTask) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
-                {
-                    if !matches!(mode, ExecutionMode::Pythia_Sig) {
-                        self.sig_val_idx.fetch_add(self.num_txns, Ordering::Acquire);
-                        return ex;
-                    }
-                    let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
-                    if idx > self.num_txns
-                    {
-                        return ex;
-                    }
-                    return SchedulerTask::SigTask(idx);
-                    //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
-                }
                 return ex;
             }
         }
