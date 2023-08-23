@@ -357,7 +357,7 @@ where
                                 let idx = scheduler.sig_val_idx.fetch_add(25, Ordering::Acquire);
                                 if idx <= scheduler.num_txns
                                 {
-                                    SchedulerTask::SigTask(idx);
+                                    SchedulerTask::SigTask(idx)
                                 }
                                 else {
                                     hint::spin_loop();
