@@ -349,7 +349,7 @@ where
                 SchedulerTask::NoTask => {
 
                     //profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, mode, &mut local_flag, channel, prioChannel);
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, &mut local_flag, channel, prioChannel);
                     if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
                     {
                         if lastInd >= block.len() as u16 {
@@ -485,7 +485,7 @@ where
 
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
-        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, map);
+        let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, mode, map);
         let barrier = Arc::new(Barrier::new(self.concurrency_level));
         INIT.call_once(|| {Self::setup();
              ()});

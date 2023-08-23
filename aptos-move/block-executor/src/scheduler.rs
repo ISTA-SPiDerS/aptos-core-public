@@ -328,12 +328,13 @@ pub struct Scheduler {
 
     pub prologue_map: HashMap<u16, (bool, MyMut<bool>)>,
 
-    pub prologue_index: AtomicU16
+    pub prologue_index: AtomicU16,
+    pub mode: ExecutionMode
 }
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
+    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, mode: ExecutionMode, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
@@ -385,7 +386,8 @@ impl Scheduler {
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
             prologue_map: map,
-            prologue_index: AtomicU16::new(0)
+            prologue_index: AtomicU16::new(0),
+            mode
         }
     }
 
@@ -399,7 +401,7 @@ impl Scheduler {
 
         if *commit_idx == self.num_txns
         {
-            if !matches!(mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+            if !matches!(self.mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
@@ -468,7 +470,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, mode: ExecutionMode, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
