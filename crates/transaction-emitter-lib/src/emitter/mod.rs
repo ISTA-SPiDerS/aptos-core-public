@@ -161,7 +161,7 @@ impl Default for EmitJobRequest {
             txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
             accounts_per_worker: 100,
-            workers_per_endpoint:  20,
+            workers_per_endpoint:  25,
             init_retry_interval: Duration::from_secs(60),
             max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
