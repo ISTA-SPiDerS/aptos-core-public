@@ -503,14 +503,16 @@ impl Scheduler {
         // //println!("SCHED_SETUP");
 
         if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
-            if defaultChannel.len() < 1 {
+            let mut just_scheduled = false;
+
+            if defaultChannel.len() < 10 {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                     self.sched_next_chunk(profiler);
+                    just_scheduled = true;
                     println!("bla scheduling");
-                    self.sched_lock.store(usize::MAX, Ordering::SeqCst);
                     //profiler.end_timing(&"newScheduler".to_string());
                 }
             }
@@ -524,12 +526,20 @@ impl Scheduler {
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
                     //profiler.end_timing(&"try_val".to_string());
                     //profiler.end_timing(&"SCHEDULING".to_string());
+                    if just_scheduled {
+                        // Release
+                        self.sched_lock.store(usize::MAX, Ordering::SeqCst);
+                    }
                     return val;
                 }
             }
 
             let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
             //profiler.end_timing(&"SCHEDULING".to_string());
+            if just_scheduled {
+                // Release
+                self.sched_lock.store(usize::MAX, Ordering::SeqCst);
+            }
             return ex;
         } else {
             *local_flag = false;
