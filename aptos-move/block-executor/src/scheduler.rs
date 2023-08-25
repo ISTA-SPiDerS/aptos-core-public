@@ -27,7 +27,7 @@ use std::{
     task::{Context,Poll, Waker},
 };
 use std::sync::atomic::AtomicU16;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -40,6 +40,7 @@ use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing_subscriber::fmt::time;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
 
@@ -512,7 +513,12 @@ impl Scheduler {
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                     self.sched_next_chunk(profiler);
                     just_scheduled = true;
-                    println!("bla scheduling");
+                    let start = SystemTime::now();
+                    let since_the_epoch = start
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards");
+                    println!("{:?}", since_the_epoch);
+                    println!("bla scheduling {:?}", since_the_epoch);
                     //profiler.end_timing(&"newScheduler".to_string());
                 }
             }
