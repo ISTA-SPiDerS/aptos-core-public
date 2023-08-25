@@ -541,7 +541,7 @@ impl Scheduler {
             }
 
             let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-            if !matches!(ex, None) {
+            if !matches!(ex, NoTask) {
                 *ever_ran_anything = true;
             }
             //profiler.end_timing(&"SCHEDULING".to_string());
