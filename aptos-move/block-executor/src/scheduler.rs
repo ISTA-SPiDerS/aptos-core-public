@@ -518,7 +518,7 @@ impl Scheduler {
                         .duration_since(UNIX_EPOCH)
                         .expect("Time went backwards");
                     println!("{:?}", since_the_epoch);
-                    println!("bla scheduling {:?}", since_the_epoch);
+                    println!("bla scheduling {:?}", since_the_epoch.as_millis());
                     //profiler.end_timing(&"newScheduler".to_string());
                 }
             }
