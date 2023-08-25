@@ -491,7 +491,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>, finished_val_flag: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>, finished_val_flag: &mut bool, ever_ran_anything: &mut bool) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
@@ -503,10 +503,10 @@ impl Scheduler {
         /* This should only happen once to calculate the bottomlevels */
         // //println!("SCHED_SETUP");
 
-        if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+        if *local_flag && (*ever_ran_anything || thread_id == 0) && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
             let mut just_scheduled = false;
 
-            if defaultChannel.len() < 10 {
+            if defaultChannel.len() < 10  {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
@@ -541,6 +541,9 @@ impl Scheduler {
             }
 
             let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            if !matches!(ex, None) {
+                *ever_ran_anything = true;
+            }
             //profiler.end_timing(&"SCHEDULING".to_string());
             if just_scheduled {
                 // Release
@@ -549,6 +552,7 @@ impl Scheduler {
             return ex;
         } else {
             *local_flag = false;
+            *ever_ran_anything = true;
             //profiler.start_timing(&"SCHEDULING".to_string());
 
             //here subtract 1 so that thread_id == 1 -> thread_buffer[0]

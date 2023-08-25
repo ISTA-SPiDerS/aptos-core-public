@@ -297,6 +297,7 @@ where
         barrier.wait();
         let mut local_flag = true;
         let mut finished_val_flag = false;
+        let mut ever_ran_anything = false;
 
         let mut lastInd : u16 = 0;
 
@@ -351,7 +352,7 @@ where
                 SchedulerTask::NoTask => {
 
                     //profiler.start_timing(&"scheduling".to_string());
-                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, &mut local_flag, channel, prioChannel, &mut finished_val_flag);
+                    let ret = scheduler.next_task(committing, &mut profiler, thread_id, &mut local_flag, channel, prioChannel, &mut finished_val_flag, &mut ever_ran_anything);
                     if (matches!(ret, SchedulerTask::NoTask ) && !local_flag)
                     {
                         if lastInd >= block.len() as u16 {
