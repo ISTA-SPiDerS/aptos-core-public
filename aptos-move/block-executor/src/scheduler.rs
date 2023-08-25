@@ -642,7 +642,7 @@ impl Scheduler {
                         ready = *self.finish_time[dad.idx].lock();
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = *self.finish_time[dad.idx].lock() +  (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = *self.finish_time[dad.idx].lock() +  (self.gas_estimates[dad.idx] as usize / 10);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
