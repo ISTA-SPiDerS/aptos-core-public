@@ -308,13 +308,11 @@ pub struct Scheduler {
 
     incoming: Mutex<Vec<usize>>,
 
-    children: Mutex<Vec<Vec<TxnIndex>>>,
+    children: Vec<Vec<TxnIndex>>,
 
     end_comp:  Mutex<Vec<usize>>,
 
-    bottomlevels: Arc<Mutex<Vec<usize>>>,
-
-    init_lock: Mutex<bool>,
+    bottomlevels: Vec<usize>,
 
     nscheduled:AtomicUsize,
 
@@ -335,6 +333,31 @@ pub struct Scheduler {
 /// Public Interfaces for the Scheduler
 impl Scheduler {
     pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, mode: ExecutionMode, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
+
+        let mut mapping : Vec<usize> = (0..num_txns +1).map(|_| usize::MAX).collect();
+        let mut incoming: Vec<usize> = (0..num_txns).map(|_| 0).collect();
+        let mut children: Vec<Vec<TxnIndex>> = (0..num_txns).map(|_|{Vec::new()}).collect();
+        let mut heap = SkipSet::new();
+        let hint_graph : Vec<CachePadded<Vec<TxnIndex>>>  = (0..num_txns)
+            .map(|idx| CachePadded::new(dependencies[idx].iter().map(|v| *v as TxnIndex).collect()))
+            .collect();
+
+        mapping[0] = 0;
+        let mut bottomlevels: Vec<TxnIndex> = vec![0; num_txns];
+        for i in (0..num_txns).rev() {
+            for node in &*hint_graph[i] {
+
+                incoming[i] += 1;
+                children[*node].push(i);
+                if bottomlevels[*node] < bottomlevels[i] + 1 {
+                    bottomlevels[*node] = bottomlevels[i] + 1;
+                }
+            }
+            if hint_graph[i].is_empty() {
+                heap.insert(Task {bottomlevel: bottomlevels[i], index: i});
+            }
+        }
+
         Self {
             num_txns,
             execution_idx: AtomicUsize::new(0),
@@ -354,9 +377,7 @@ impl Scheduler {
                     ))
                 })
                 .collect(),
-            hint_graph: (0..num_txns)
-                .map(|idx| CachePadded::new(dependencies[idx].iter().map(|v| *v as TxnIndex).collect()))
-                .collect(),
+            hint_graph,
             // use_hints: (x==1),
             use_hints: true,
             //change capacity later
@@ -372,14 +393,13 @@ impl Scheduler {
             condvars: (0..(*concurrency_level))
                 .map(|_| (Mutex::new(false),Condvar::new()))
                 .collect(),
-            heap: SkipSet::new(),
+            heap,
             finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
-            mapping: Mutex::new((0..num_txns +1).map(|_| usize::MAX).collect()),
-            incoming: Mutex::new((0..num_txns).map(|_| 0).collect()),
-            children: Mutex::new((0..num_txns).map(|_|{Vec::new()}).collect()),
+            mapping: Mutex::new(mapping),
+            incoming: Mutex::new(incoming),
+            children,
             end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
-            bottomlevels: Arc::new(Mutex::new((Vec::new()))),
-            init_lock: Mutex::new(true),
+            bottomlevels,
             nscheduled: AtomicUsize::new(0),
             channels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
@@ -488,7 +508,6 @@ impl Scheduler {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
-                    self.sched_setup();
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
                     let x = self.sched_next_chunk(profiler).unwrap();
                     //profiler.end_timing(&"newScheduler".to_string());
@@ -557,39 +576,6 @@ impl Scheduler {
         }
     }
 
-    fn sched_setup(&self) {
-        let mut init = self.init_lock.lock();
-        let mut incoming_lock = self.incoming.lock();
-        let mut children_lock = self.children.lock();
-        let mut mapping_lock= self.mapping.lock();
-        if *init == false {
-            return ()
-        }
-        *init = false;
-        // //println!("SCHED_SETUP");
-        mapping_lock[0] = 0;
-        let mut bottomlevels: Vec<TxnIndex> = vec![0; self.num_txns];
-        for i in (0..self.num_txns).rev() {
-            for node in &*self.hint_graph[i] {
-                // //println!("incoming length = {}", incoming.len());
-                // //println!("self.num_txns = {}", self.num_txns);
-
-                incoming_lock[i] += 1;
-                children_lock[*node].push(i);
-                if bottomlevels[*node] < bottomlevels[i] + 1 {
-                    bottomlevels[*node] = bottomlevels[i] + 1;
-                }
-            }
-            if self.hint_graph[i].is_empty() {
-                self.heap.insert(Task {bottomlevel: bottomlevels[i], index: i});
-            }
-        }
-        *self.bottomlevels.lock() = bottomlevels;
-
-
-    }
-
-
     fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
         //println!("bla estimates {:?}", self.gas_estimates);
         //println!("bla deps {:?}", self.hint_graph);
@@ -605,8 +591,6 @@ impl Scheduler {
         let mut mapping_lock = self.mapping.lock();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
-        let mut children_lock = self.children.lock();
-        let bottomlock = self.bottomlevels.lock();
         while self.heap.len() > 0 {
 
             if counter > usize::MAX {
@@ -672,10 +656,10 @@ impl Scheduler {
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
             finish_time_lock[ui.index] = end_comp_lock[best_proc];
             // let bottomlock = &*self.bottomlevels.lock();
-            for child in &*children_lock[ui.index] {
+            for child in &*self.children[ui.index] {
                 incoming_lock[*child] -= 1;
                 if incoming_lock[*child] == 0 {
-                    self.heap.insert(Task {bottomlevel: bottomlock[*child], index: *child});
+                    self.heap.insert(Task {bottomlevel: self.bottomlevels[*child], index: *child});
                 }
             }
             counter += 1;
