@@ -302,7 +302,7 @@ pub struct Scheduler {
 
     heap: SkipSet<Task>,
 
-    finish_time: Mutex<Vec<usize>>,
+    finish_time: Vec<Mutex<usize>>,
 
     mapping: Mutex<Vec<usize>>,
 
@@ -316,9 +316,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    pub(crate) channels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    pub(crate) channels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
 
-    pub(crate) priochannels: Vec<(mpsc::UnboundedSender<TxnIndex>, Mutex<mpsc::UnboundedReceiver<TxnIndex>>)>,
+    pub(crate) priochannels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -394,15 +394,15 @@ impl Scheduler {
                 .map(|_| (Mutex::new(false),Condvar::new()))
                 .collect(),
             heap,
-            finish_time: Mutex::new((0..num_txns +1).map(|_| 0).collect()),
+            finish_time: (0..num_txns +1).map(|_| Mutex::new(0)).collect(),
             mapping: Mutex::new(mapping),
             incoming: Mutex::new(incoming),
             children,
             end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
             bottomlevels,
             nscheduled: AtomicUsize::new(0),
-            channels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
-            priochannels: (0..*concurrency_level).map(|_| mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            channels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            priochannels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
             prologue_map: map,
@@ -490,93 +490,89 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, prioChannel: &mut mpsc::UnboundedReceiver<TxnIndex>, finished_val_flag: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>, finished_val_flag: &mut bool) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
-        
-        loop {
-            // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
-            if !*local_flag && *finished_val_flag && self.done() {
-                return SchedulerTask::Done;
-            }
-            /* This should only happen once to calculate the bottomlevels */
-            // //println!("SCHED_SETUP");
 
-            if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
-                *local_flag = false;
+        // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
+        if !*local_flag && *finished_val_flag && self.done() {
+            return SchedulerTask::Done;
+        }
+        /* This should only happen once to calculate the bottomlevels */
+        // //println!("SCHED_SETUP");
+
+        if *local_flag && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
+            if defaultChannel.len() < 1 {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
                     // //println!("Thread id {thread_id} scheduling chunk at {:?}", SystemTime::now().duration_since(UNIX_EPOCH).expect("anything").as_millis());
-                    let x = self.sched_next_chunk(profiler).unwrap();
+                    self.sched_next_chunk(profiler);
+                    println!("bla scheduling");
+                    self.sched_lock.store(usize::MAX, Ordering::SeqCst);
                     //profiler.end_timing(&"newScheduler".to_string());
-                    return x;
                 }
-                else {
-                    //profiler.start_timing(&"SCHEDULING".to_string());
+            }
 
-                    let (idx_to_validate, _) =
-                        Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
 
-                    if !*finished_val_flag {
-                        if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
-                            // //println!("validate: {:?}", version_to_validate);
-                            let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                            //profiler.end_timing(&"try_val".to_string());
-                            //profiler.end_timing(&"SCHEDULING".to_string());
-                            return val;
-                        }
-                    }
+            //profiler.start_timing(&"SCHEDULING".to_string());
 
-                    let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            if !*finished_val_flag {
+                if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
+                    // //println!("validate: {:?}", version_to_validate);
+                    let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                    //profiler.end_timing(&"try_val".to_string());
                     //profiler.end_timing(&"SCHEDULING".to_string());
-                    return ex;
+                    return val;
                 }
             }
-            else {
-                *local_flag = false;
-                //profiler.start_timing(&"SCHEDULING".to_string());
 
-                //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
-                // //println!("Stuck here");
-                // profiler.start_timing(&"peek_lock_ex".to_string());
-                // profiler.end_timing(&"peek_lock_ex".to_string());
+            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            //profiler.end_timing(&"SCHEDULING".to_string());
+            return ex;
+        } else {
+            *local_flag = false;
+            //profiler.start_timing(&"SCHEDULING".to_string());
 
-                // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
-                //     btreeset.len()}).max().unwrap();
-                // *self.max.lock() = max;
-                //let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
-                // if my_len == 0 && idx_to_validate >= self.num_txns {
-                //     return if self.done() {
-                //         SchedulerTask::Done
-                //     } else {
-                //         if !commiting {
-                //             //println!("STUCK HERE");
-                //             hint::spin_loop();
-                //         }
-                //         SchedulerTask::NoTask
-                //     };
-                // }
+            //here subtract 1 so that thread_id == 1 -> thread_buffer[0]
+            // //println!("Stuck here");
+            // profiler.start_timing(&"peek_lock_ex".to_string());
+            // profiler.end_timing(&"peek_lock_ex".to_string());
 
-                if !*finished_val_flag {
-                    if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
-                        // //println!("validate: {:?}", version_to_validate);
-                        let val = SchedulerTask::ValidationTask(version_to_validate, guard);
-                        //profiler.end_timing(&"SCHEDULING".to_string());
-                        //profiler.end_timing(&"try_val".to_string());
-                        return val;
-                    }
+            // let max = self.thread_buffer.clone().into_iter().map(|btreeset|{
+            //     btreeset.len()}).max().unwrap();
+            // *self.max.lock() = max;
+            //let (idx_to_validate, _) = Self::unpack_validation_idx(self.validation_idx.load(Ordering::Acquire));
+            // if my_len == 0 && idx_to_validate >= self.num_txns {
+            //     return if self.done() {
+            //         SchedulerTask::Done
+            //     } else {
+            //         if !commiting {
+            //             //println!("STUCK HERE");
+            //             hint::spin_loop();
+            //         }
+            //         SchedulerTask::NoTask
+            //     };
+            // }
+
+            if !*finished_val_flag {
+                if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
+                    // //println!("validate: {:?}", version_to_validate);
+                    let val = SchedulerTask::ValidationTask(version_to_validate, guard);
+                    //profiler.end_timing(&"SCHEDULING".to_string());
+                    //profiler.end_timing(&"try_val".to_string());
+                    return val;
                 }
-
-                let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-                //profiler.end_timing(&"SCHEDULING".to_string());
-                return ex;
             }
+
+            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            //profiler.end_timing(&"SCHEDULING".to_string());
+            return ex;
         }
     }
 
-    fn sched_next_chunk(&self, profiler: &mut Profiler) -> Option<SchedulerTask> {
+    fn sched_next_chunk(&self, profiler: &mut Profiler) {
         //println!("bla estimates {:?}", self.gas_estimates);
         //println!("bla deps {:?}", self.hint_graph);
 
@@ -587,13 +583,12 @@ impl Scheduler {
         let mut ready: usize;
         let mut best_proc: usize = usize::MAX;
         let mut counter: usize = 0;
-        let mut finish_time_lock  = self.finish_time.lock();
         let mut mapping_lock = self.mapping.lock();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
         while self.heap.len() > 0 {
 
-            if counter > usize::MAX {
+            if counter > 1000 {
                 break
             }
             ui = *self.heap.pop_front().unwrap();
@@ -602,7 +597,7 @@ impl Scheduler {
             /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
                 .clone().iter()
-                .map(|i| Parent {idx: *i, finish_time: finish_time_lock[*i]})
+                .map(|i| Parent {idx: *i, finish_time: *self.finish_time[*i].lock()})
                 .collect::<Vec<Parent>>();
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
@@ -624,10 +619,10 @@ impl Scheduler {
                 for dad in &parents {
                     // //println!("parent {}", dad.idx);
                     if mapping_lock[dad.idx] == proc {
-                        ready = finish_time_lock[dad.idx];
+                        ready = *self.finish_time[dad.idx].lock();
                         // //println!("ready = {} if same proc = {}",ready, proc);
                     } else {
-                        ready = finish_time_lock[dad.idx] +  (self.gas_estimates[dad.idx] as usize / 3);
+                        ready = *self.finish_time[dad.idx].lock() +  (self.gas_estimates[dad.idx] as usize / 3);
                         // //println!("ready = {} if not same proc = {}", ready, proc);
                     }
                     begin_time = if begin_time < ready {ready} else {begin_time};
@@ -654,7 +649,7 @@ impl Scheduler {
             /* run time estimation*/
             end_comp_lock[best_proc] = best_begin_time + (self.gas_estimates[ui.index] as usize);
             // //println!("gas estimate = {}", self.gas_estimates[ui.index]);
-            finish_time_lock[ui.index] = end_comp_lock[best_proc];
+            *self.finish_time[ui.index].lock() = end_comp_lock[best_proc];
             // let bottomlock = &*self.bottomlevels.lock();
             for child in &*self.children[ui.index] {
                 incoming_lock[*child] -= 1;
@@ -665,13 +660,10 @@ impl Scheduler {
             counter += 1;
         }
         //reset sched_lock
-        self.sched_lock.store(usize::MAX, Ordering::SeqCst);
-        return Some(SchedulerTask::NoTask);
-
     }
 
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
 
@@ -823,6 +815,14 @@ impl Scheduler {
         //info!("set executed status in finish execution of {}", txn_idx);
 
         let mut stored_deps = self.txn_dependency[txn_idx].lock();
+        {
+            let mut finish_time_lock = self.finish_time[thread_id].lock();
+            let runtimecost = self.gas_estimates[txn_idx] as usize;
+            if *finish_time_lock >= runtimecost
+            {
+                *finish_time_lock = *finish_time_lock - runtimecost;
+            }
+        }
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
