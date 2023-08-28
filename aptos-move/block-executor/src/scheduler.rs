@@ -275,7 +275,7 @@ pub struct Scheduler {
 
     /// An index i maps to indices of other transactions that depend on transaction i, i.e. they
     /// should be re-executed once transaction i's next incarnation finishes.
-    txn_dependency: Vec<CachePadded<Mutex<HashMap<TxnIndex, usize>>>>,
+    txn_dependency: Vec<CachePadded<RwLock<HashMap<TxnIndex, usize>>>>,
     opt_txn_dependency: DashSet<(TxnIndex, TxnIndex)>,
 
     /// An index i maps to the most up-to-date status of transaction i.
@@ -305,7 +305,7 @@ pub struct Scheduler {
 
     finish_time: Vec<Mutex<usize>>,
 
-    mapping: Mutex<Vec<usize>>,
+    mapping: RwLock<Vec<usize>>,
 
     incoming: Mutex<Vec<usize>>,
 
@@ -368,7 +368,7 @@ impl Scheduler {
             opt_txn_dependency: DashSet::with_capacity(num_txns),
 
             txn_dependency: (0..num_txns)
-                .map(|_| CachePadded::new(Mutex::new(HashMap::new())))
+                .map(|_| CachePadded::new(RwLock::new(HashMap::new())))
                 .collect(),
             txn_status: (0..num_txns)
                 .map(|_| {
@@ -396,7 +396,7 @@ impl Scheduler {
                 .collect(),
             heap,
             finish_time: (0..num_txns +1).map(|_| Mutex::new(0)).collect(),
-            mapping: Mutex::new(mapping),
+            mapping: RwLock::new(mapping),
             incoming: Mutex::new(incoming),
             children,
             end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
@@ -597,13 +597,12 @@ impl Scheduler {
         //println!("bla deps {:?}", self.hint_graph);
 
         // let mut end_comp: Vec<usize> = vec![0; self.concurrency_level];
-        let mut ui: Task;
         let mut begin_time: usize;
         let mut best_begin_time: usize;
         let mut ready: usize;
         let mut best_proc: usize = usize::MAX;
         let mut counter: usize = 0;
-        let mut mapping_lock = self.mapping.lock();
+        let mut mapping_lock = self.mapping.write();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
         while let Some(ui) = self.heap.pop_front()
@@ -612,9 +611,17 @@ impl Scheduler {
 
             /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
-                .clone().iter()
-                .map(|i| Parent {idx: *i, finish_time: *self.finish_time[*i].lock()})
+                .iter()
+                .filter_map(|i| {
+                    if self.is_executed(*i, true).is_some() {
+                        return None;
+                    }
+                    else {
+                        return Some(Parent { idx: *i, finish_time: *self.finish_time[*i].lock() });
+                    }
+                })
                 .collect::<Vec<Parent>>();
+
             // parents.sort_by(|a, b| {
             //     if a.finish_time < b.finish_time {
             //         cmpOrdering::Less
@@ -650,13 +657,13 @@ impl Scheduler {
             }
             mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
-            {
+
+
                 let (tx, rx) = &self.channels[best_proc];
                 profiler.count(format!("go-to {}", best_proc.to_string()), 1);
                 tx.send(ui.index).unwrap();
                 // info!("Sent {} to {} ", ui.index, best_proc);
 
-            }
             let (lock,cvar) = &self.condvars[best_proc];
             *lock.lock() = true;
             cvar.notify_one();
@@ -737,7 +744,7 @@ impl Scheduler {
     ) -> bool {
         let thread_id = idx;
         //info!("Try to acquire txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
-        let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
+        let mut stored_deps = self.txn_dependency[dep_txn_idx].write();
         //info!("acquired txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
 
         if self.is_executed(dep_txn_idx, true).is_some() {
@@ -770,7 +777,6 @@ impl Scheduler {
         let thread_id = RAYON_EXEC_POOL.lock().unwrap().current_thread_index().unwrap();
         let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
 
-        let mut stored_deps = self.txn_dependency[dep_txn_idx].lock();
 
         {
             if self.is_executed(dep_txn_idx, true).is_some() {
@@ -789,7 +795,7 @@ impl Scheduler {
 
             // Safe to add dependency here (still holding the lock) - finish_execution of txn
             // dep_txn_idx is guaranteed to acquire the same lock later and clear the dependency.
-            stored_deps.insert(txn_idx, thread_id);
+            self.txn_dependency[dep_txn_idx].write().insert(txn_idx, thread_id);
         }
 
         Some(dep_condvar)
@@ -842,13 +848,36 @@ impl Scheduler {
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
-            let mut stored_deps = self.txn_dependency[txn_idx].lock();
+            let mut stored_deps = self.txn_dependency[txn_idx].read();
             for (txn, target) in stored_deps.iter() {
                 if self.is_executed(*txn, true).is_none() {
                     &self.priochannels[*target].0.send(*txn).unwrap();
                 }
             }
-            stored_deps.clear();
+
+            /*let read_lock = self.txn_dependency[txn_idx].read();
+            for (txn, target) in read_lock.iter() {
+                let mut ready = true;
+                for tx in self.hint_graph[*txn].iter() {
+                    let status = self.txn_status[*tx].0.read();
+                    match *status {
+                        ExecutionStatus::Executed(incarnation) => Some(incarnation),
+                        ExecutionStatus::Executing(incarnation) => Some(incarnation),
+                        ExecutionStatus::Committed(incarnation) => Some(incarnation),
+                        _ =>  {
+                            ready = false;
+                            break;
+                        },
+                    };
+                }
+                if ready {
+                    println!("rdy {}", txn);
+                    &self.priochannels[*target].0.send(*txn).unwrap();
+                }
+                else {
+                    println!("not rdy {}", txn);
+                }
+            }*/
         }
 
         /*
@@ -994,30 +1023,28 @@ impl Scheduler {
         // while unlikely there would be much contention on a specific index lock.
         let mut status = self.txn_status[txn_idx].0.write();
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
-            if self.use_hints {
-                for dependency in &*self.hint_graph[txn_idx] {
-                    // unsafe {
-                    //     count += 1;
-                    //     if count % 100 == 0 {
-                    //         //println!("{}", count);
-                    //     }
-                    // }
+            for dependency in &*self.hint_graph[txn_idx] {
+                // unsafe {
+                //     count += 1;
+                //     if count % 100 == 0 {
+                //         //println!("{}", count);
+                //     }
+                // }
 
-                    if self.is_executed(*dependency,true).is_none() {
-                        if self.add_dependency(txn_idx, *dependency, thread_id, profiler) {
-                            // profiler.count_one("addDep".to_string());
-                            // // //println!("Popping from thread_buffer due to dependency");
-                            // // //println!("before popping {:?}, index {}", self.thread_buffer[thread_id-1], thread_id -1);
-                            // let status = self.txn_status[*dependency].0.read();
-                            // if let ExecutionStatus::Executed(_) = *status {
-                            //     continue;
-                            // }
-                            // profiler.start_timing(&"pop_lock_ex".to_string());
-                            // let value = self.thread_buffer[thread_id-1].lock().remove(&txn_idx);
-                            // profiler.end_timing(&"pop_lock_ex".to_string());
-                            // //println!("Popped {} = {} from thread_buffer [{}] due to dependency from {}", txn_idx, value, thread_id - 1, *dependency);
-                            return None;
-                        }
+                if self.is_executed(*dependency, true).is_none() {
+                    if self.add_dependency(txn_idx, *dependency, thread_id, profiler) {
+                        // profiler.count_one("addDep".to_string());
+                        // // //println!("Popping from thread_buffer due to dependency");
+                        // // //println!("before popping {:?}, index {}", self.thread_buffer[thread_id-1], thread_id -1);
+                        // let status = self.txn_status[*dependency].0.read();
+                        // if let ExecutionStatus::Executed(_) = *status {
+                        //     continue;
+                        // }
+                        // profiler.start_timing(&"pop_lock_ex".to_string());
+                        // let value = self.thread_buffer[thread_id-1].lock().remove(&txn_idx);
+                        // profiler.end_timing(&"pop_lock_ex".to_string());
+                        // //println!("Popped {} = {} from thread_buffer [{}] due to dependency from {}", txn_idx, value, thread_id - 1, *dependency);
+                        return None;
                     }
                 }
             }
