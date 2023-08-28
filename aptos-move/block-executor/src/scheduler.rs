@@ -606,12 +606,8 @@ impl Scheduler {
         let mut mapping_lock = self.mapping.lock();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
-        while self.heap.len() > 0 {
-
-            if counter > 1000 {
-                break
-            }
-            ui = *self.heap.pop_front().unwrap();
+        while let Some(ui) = self.heap.pop_front()
+        {
             // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
 
             /* Sort Pred[ui] in a non-decreasing order of finish times */
@@ -661,7 +657,6 @@ impl Scheduler {
                 // info!("Sent {} to {} ", ui.index, best_proc);
 
             }
-            self.nscheduled.fetch_add(1, Ordering::SeqCst);
             let (lock,cvar) = &self.condvars[best_proc];
             *lock.lock() = true;
             cvar.notify_one();
@@ -678,7 +673,13 @@ impl Scheduler {
                 }
             }
             counter += 1;
-        }
+            if counter >= 1000 {
+                break
+            }
+        }https://dashboard.twitch.tv/u/minecoloniesteam/stream-manager
+        println!("nschedule: {}", counter);
+        self.nscheduled.fetch_add(counter, Ordering::SeqCst);
+
         //reset sched_lock
     }
 
@@ -686,49 +687,43 @@ impl Scheduler {
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
+        if let Ok(txn_to_exec) = prioChannel.try_recv() {
 
-        {
-            if let Ok(txn_to_exec) = prioChannel.try_recv() {
-
-                //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
-
-                if let Some((version_to_execute, maybe_condvar)) =
-                    self.try_execute_next_version(profiler, txn_to_exec, thread_id)
-                {
-                    //profiler.end_timing(&"try_exec".to_string());
-                    //profiler.end_timing(&"exec_crit".to_string());
-                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
-                }
-            }
-        }
-
-        if let Ok(txn_to_exec) = defaultChannel.try_recv() {
-
-            //info!("Received {}", txn_to_exec);
+            //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
             if let Some((version_to_execute, maybe_condvar)) =
                 self.try_execute_next_version(profiler, txn_to_exec, thread_id)
             {
-                // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
-                // if localidx < *my_global_idx_mutex {
-                //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
-                // }
-                // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
-                // drop(my_global_idx_mutex);
                 //profiler.end_timing(&"try_exec".to_string());
                 //profiler.end_timing(&"exec_crit".to_string());
-
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
-
-            //profiler.end_timing(&"try_exec".to_string());
-
-            return SchedulerTask::NoTask
         }
-        else {
-            //profiler.end_timing(&"try_exec".to_string());
-            // //info!("Channel empty");
-            return SchedulerTask::NoTask;
+
+        loop {
+            if let Ok(txn_to_exec) = defaultChannel.try_recv() {
+
+                //info!("Received {}", txn_to_exec);
+
+                if let Some((version_to_execute, maybe_condvar)) =
+                    self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+                {
+                    // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
+                    // if localidx < *my_global_idx_mutex {
+                    //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
+                    // }
+                    // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
+                    // drop(my_global_idx_mutex);
+                    //profiler.end_timing(&"try_exec".to_string());
+                    //profiler.end_timing(&"exec_crit".to_string());
+
+                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+                }
+            } else {
+                //profiler.end_timing(&"try_exec".to_string());
+                // //info!("Channel empty");
+                return SchedulerTask::NoTask;
+            }
         }
     }
 
@@ -830,11 +825,10 @@ impl Scheduler {
         // So even validation status readers have to wait if they somehow end up at the same index.
         //info!("started finish execution of {} on thread_id {}", txn_idx, thread_id);
 
-        let mut validation_status = self.txn_status[txn_idx].1.write();
         self.set_executed_status(txn_idx, incarnation);
         //info!("set executed status in finish execution of {}", txn_idx);
 
-        let mut stored_deps = self.txn_dependency[txn_idx].lock();
+        // Reduce finish time for next scheduler phase.
         {
             let mut finish_time_lock = self.finish_time[thread_id].lock();
             let runtimecost = self.gas_estimates[txn_idx] as usize;
@@ -847,32 +841,15 @@ impl Scheduler {
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
-        for txn in stored_deps.keys() {
-            // //println!("TXN = {}",txn);
-            let target_thread = stored_deps[txn];
-            // //println!("Target thread = {}", target_thread);
-            // self.resume((*txn).clone());
-            // //println!("WTF?");
-            // //println!("Inserting {}. to thread_buffer[{}] after finishing exec of {}", *txn, target_thread, txn_idx);
-            // //println!("before insert after finish {:?}, index {}", self.thread_buffer[target_thread], target_thread);
-            // profiler.start_timing(&"insert_lock_ex".to_string());
-            // self.thread_buffer[target_thread].lock().insert(*txn);
-            // profiler.end_timing(&"insert_lock_ex".to_string());
-            // //println!("Inserted {} after execution of {}",*txn, txn_idx);
-            // self.resume(*txn);
-            //info!("before acquiring prio channel lock in finish execution of {}", txn_idx);
-
-            {
-                let priolock = &self.priochannels[target_thread];
-                priolock.0.send(*txn).unwrap();
+        {
+            let mut stored_deps = self.txn_dependency[txn_idx].lock();
+            for (txn, target) in stored_deps {
+                {
+                    &self.priochannels[target].0.send(*txn).unwrap();
+                }
             }
-            //info!("after acquiring prio channel lock in finish execution of {}", txn_idx);
-
-            // //info!("PRIO Sent {}", *txn);
-            //println!("Acquired lock of tglobalidx {} after execution of {}",target_thread, txn_idx);
-
+            stored_deps.clear();
         }
-        stored_deps.clear();
 
         /*
         // Mark dependencies as resolved and find the minimum index among them.
