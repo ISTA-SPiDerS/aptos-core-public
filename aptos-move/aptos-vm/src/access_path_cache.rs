@@ -52,7 +52,7 @@ impl AccessPathCache for BTreeAccessPathCache {
             },
             btree_map::Entry::Occupied(entry) => entry.get().clone(),
         };
-        AccessPath::new_base(addr, access_vec)
+        AccessPath::new(addr, access_vec, true)
     }
 
     fn get_resource_path(&mut self, address: AccountAddress, struct_tag: StructTag) -> AccessPath {
