@@ -680,7 +680,7 @@ impl Scheduler {
                 }
             }
             counter += 1;
-            if counter >= 1000 {
+            if counter >= 10000 {
                 break
             }
         }
