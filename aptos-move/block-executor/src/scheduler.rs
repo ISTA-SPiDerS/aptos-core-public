@@ -843,7 +843,7 @@ impl Scheduler {
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
             let mut stored_deps = self.txn_dependency[txn_idx].lock();
-            for (txn, target) in stored_deps {
+            for (txn, target) in stored_deps.iter() {
                 {
                     &self.priochannels[target].0.send(*txn).unwrap();
                 }
