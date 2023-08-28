@@ -80,58 +80,12 @@ fn main() {
     }
     seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
-    println!("STARTING WARMUP");
-    for _ in [1, 2, 3] {
-        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
-        let block = get_transaction_register(txn.clone(), &executor)
-            .map_par_txns(Transaction::UserTransaction);
-
-        let mut prex_block_result = executor.execute_transaction_block_parallel(
-            block.clone(),
-            4 as usize,
-            Pythia, &mut Profiler::new(),
-        )
-            .unwrap();
-
-        for result in prex_block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
-                }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
-        }
-    }
-    println!("END WARMUP");
-
-
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,8,12,16,20,24,28,32];
+    let core_set = [8];
     let trial_count = 10;
     let modes = [Pythia, Pythia_Sig];
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
-        }
-        println!("#################################################################################");
-    }
-
+    
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
