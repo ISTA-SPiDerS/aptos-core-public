@@ -198,10 +198,9 @@ pub fn calculate_genesis<V: VMExecutor>(
 
 fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
-        .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
+        .get_state_value_bytes(&StateKey::access_path(AccessPath::new_base(
             CORE_CODE_ADDRESS,
-            TimestampResource::resource_path(),
-            true
+            TimestampResource::resource_path()
         )))?
         .ok_or_else(|| format_err!("TimestampResource missing."))?;
     let rsrc = bcs::from_bytes::<TimestampResource>(rsrc_bytes)?;
@@ -210,10 +209,9 @@ fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
 
 fn get_state_epoch(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
-        .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
+        .get_state_value_bytes(&StateKey::access_path(AccessPath::new_base(
             CORE_CODE_ADDRESS,
-            ConfigurationResource::resource_path(),
-            true
+            ConfigurationResource::resource_path()
         )))?
         .ok_or_else(|| format_err!("ConfigurationResource missing."))?;
     let rsrc = bcs::from_bytes::<ConfigurationResource>(rsrc_bytes)?;

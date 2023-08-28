@@ -552,10 +552,9 @@ impl MoveStorage for &dyn DbReader {
 
     fn fetch_config_by_version(&self, config_id: ConfigID, version: Version) -> Result<Vec<u8>> {
         let config_value_option = self.get_state_value_by_version(
-            &StateKey::access_path(AccessPath::new(
+            &StateKey::access_path(AccessPath::new_base(
                 CORE_CODE_ADDRESS,
-                access_path_for_config(config_id).path,
-                true
+                access_path_for_config(config_id).path
             )),
             version,
         )?;

@@ -226,10 +226,9 @@ fn test_new_genesis() {
                     WriteOp::Modification(bcs::to_bytes(&ValidatorSet::new(vec![])).unwrap()),
                 ),
                 (
-                    StateKey::access_path(AccessPath::new(
+                    StateKey::access_path(AccessPath::new_base(
                         CORE_CODE_ADDRESS,
-                        ConfigurationResource::resource_path(),
-                        true
+                        ConfigurationResource::resource_path()
                     )),
                     WriteOp::Modification(
                         bcs::to_bytes(&configuration.bump_epoch_for_test()).unwrap(),
