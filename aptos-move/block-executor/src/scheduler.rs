@@ -845,7 +845,7 @@ impl Scheduler {
             let mut stored_deps = self.txn_dependency[txn_idx].lock();
             for (txn, target) in stored_deps.iter() {
                 {
-                    &self.priochannels[target].0.send(*txn).unwrap();
+                    &self.priochannels[*target].0.send(*txn).unwrap();
                 }
             }
             stored_deps.clear();
