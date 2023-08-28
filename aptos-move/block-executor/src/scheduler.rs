@@ -676,7 +676,7 @@ impl Scheduler {
             if counter >= 1000 {
                 break
             }
-        }https://dashboard.twitch.tv/u/minecoloniesteam/stream-manager
+        }
         println!("nschedule: {}", counter);
         self.nscheduled.fetch_add(counter, Ordering::SeqCst);
 
