@@ -847,6 +847,7 @@ impl Scheduler {
                 *finish_time_lock = *finish_time_lock - runtimecost;
             }
         }
+        self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
