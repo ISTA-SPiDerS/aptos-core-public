@@ -717,6 +717,9 @@ impl Scheduler {
                 //profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
+            else {
+                self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
+            }
         }
 
         if let Ok(txn_to_exec) = defaultChannel.try_recv() {
@@ -735,6 +738,9 @@ impl Scheduler {
                 //profiler.end_timing(&"exec_crit".to_string());
 
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+            }
+            else {
+                self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
             }
         }
         return SchedulerTask::NoTask;
