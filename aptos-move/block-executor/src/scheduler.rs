@@ -528,8 +528,17 @@ impl Scheduler {
 
 
             //profiler.start_timing(&"SCHEDULING".to_string());
+            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            if !matches!(ex, NoTask) {
+                *ever_ran_anything = true;
+            }
+            //profiler.end_timing(&"SCHEDULING".to_string());
+            if just_scheduled {
+                // Release
+                self.sched_lock.store(usize::MAX, Ordering::SeqCst);
+            }
 
-            if !*finished_val_flag {
+            if matches!(ex, NoTask) && !*finished_val_flag {
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
@@ -543,15 +552,6 @@ impl Scheduler {
                 }
             }
 
-            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-            if !matches!(ex, NoTask) {
-                *ever_ran_anything = true;
-            }
-            //profiler.end_timing(&"SCHEDULING".to_string());
-            if just_scheduled {
-                // Release
-                self.sched_lock.store(usize::MAX, Ordering::SeqCst);
-            }
             return ex;
         } else {
             *local_flag = false;
@@ -579,7 +579,11 @@ impl Scheduler {
             //     };
             // }
 
-            if !*finished_val_flag {
+
+
+            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
+            //profiler.end_timing(&"SCHEDULING".to_string());
+            if matches!(ex, NoTask) && !*finished_val_flag {
                 if let Some((version_to_validate, guard)) = self.try_validate_next_version(finished_val_flag) {
                     // //println!("validate: {:?}", version_to_validate);
                     let val = SchedulerTask::ValidationTask(version_to_validate, guard);
@@ -589,8 +593,6 @@ impl Scheduler {
                 }
             }
 
-            let ex = self.try_exec(thread_id, profiler, commiting, defaultChannel, prioChannel);
-            //profiler.end_timing(&"SCHEDULING".to_string());
             return ex;
         }
     }
