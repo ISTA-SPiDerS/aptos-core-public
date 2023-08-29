@@ -663,7 +663,7 @@ impl Scheduler {
             // self.thread_buffer[best_proc].insert(ui.index);
 
             let (tx, rx) = &self.channels[best_proc];
-            profiler.count(format!("go-to {}", best_proc.to_string()), 1);
+            //profiler.count(format!("go-to {}", best_proc.to_string()), 1);
             tx.send(ui.index);
             chunks[best_proc] += 1;
             // info!("Sent {} to {} ", ui.index, best_proc);
@@ -1027,7 +1027,7 @@ impl Scheduler {
         }
 
         let thread_id = idx;
-        profiler.start_timing(&"schedule#1".to_string());
+        //profiler.start_timing(&"schedule#1".to_string());
 
         // Note: we could upgradable read, then upgrade and write. Similar for other places.
         // However, it is likely an overkill (and overhead to actually upgrade),
@@ -1062,7 +1062,7 @@ impl Scheduler {
 
             let ret = (*incarnation, maybe_condvar.clone());
             *status = ExecutionStatus::Executing(*incarnation);
-            profiler.end_timing(&"schedule#1".to_string());
+            //profiler.end_timing(&"schedule#1".to_string());
 
 
 
