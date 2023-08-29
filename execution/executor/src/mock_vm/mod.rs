@@ -116,7 +116,7 @@ impl VMExecutor for MockVM {
                 );
                 read_state_value_from_storage(
                     state_view,
-                    &AccessPath::new(CORE_CODE_ADDRESS, ConfigurationResource::resource_path()
+                    &AccessPath::new_path(CORE_CODE_ADDRESS, ConfigurationResource::resource_path()
                     true
                     ),
                 );
@@ -258,11 +258,11 @@ fn decode_bytes(bytes: &[u8]) -> u64 {
 }
 
 fn balance_ap(account: AccountAddress) -> AccessPath {
-    AccessPath::new(account, b"balance".to_vec(), false)
+    AccessPath::new_path(account, b"balance".to_vec(), false)
 }
 
 fn seqnum_ap(account: AccountAddress) -> AccessPath {
-    AccessPath::new(account, b"seqnum".to_vec(), false)
+    AccessPath::new_path(account, b"seqnum".to_vec(), false)
 }
 
 fn gen_genesis_writeset() -> WriteSet {
@@ -273,7 +273,7 @@ fn gen_genesis_writeset() -> WriteSet {
         WriteOp::Modification(bcs::to_bytes(&ValidatorSet::new(vec![])).unwrap()),
     ));
     write_set.insert((
-        StateKey::access_path(AccessPath::new(
+        StateKey::access_path(AccessPath::new_path(
             CORE_CODE_ADDRESS,
             ConfigurationResource::resource_path(),
             true

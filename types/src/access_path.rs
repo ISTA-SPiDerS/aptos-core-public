@@ -71,11 +71,11 @@ pub enum PathType {
 }
 
 impl AccessPath {
-    pub fn new(address: AccountAddress, path: Vec<u8>, is_code: bool) -> Self {
+    pub fn new_path(address: AccountAddress, path: Vec<u8>, is_code: bool) -> Self {
         AccessPath { address, path: path.clone(), is_code: matches!(bcs::from_bytes::<Path>(&path).expect("Unexpected serialization error"), Path::Code(_)) }
     }
 
-    pub fn new_base(address: AccountAddress, path: Vec<u8>) -> Self {
+    pub fn new(address: AccountAddress, path: Vec<u8>) -> Self {
         AccessPath { address, path: path.clone(), is_code: matches!(bcs::from_bytes::<Path>(&path).expect("Unexpected serialization error"), Path::Code(_)) }
     }
 

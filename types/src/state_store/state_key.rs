@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_access_path_hash() {
-        let key = StateKey::access_path(AccessPath::new("0x1002".parse().unwrap(), vec![7, 2, 3], false));
+        let key = StateKey::access_path(AccessPath::new_path("0x1002".parse().unwrap(), vec![7, 2, 3], false));
         let expected_hash = "0e0960bcabe04c40e8814ecc0e6de415163573243fb5059e9951f5890e9481ef"
             .parse()
             .unwrap();

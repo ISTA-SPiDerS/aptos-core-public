@@ -198,7 +198,7 @@ pub fn calculate_genesis<V: VMExecutor>(
 
 fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
-        .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
+        .get_state_value_bytes(&StateKey::access_path(AccessPath::new_path(
             CORE_CODE_ADDRESS,
             TimestampResource::resource_path(),
             true
@@ -210,7 +210,7 @@ fn get_state_timestamp(state_view: &CachedStateView) -> Result<u64> {
 
 fn get_state_epoch(state_view: &CachedStateView) -> Result<u64> {
     let rsrc_bytes = &state_view
-        .get_state_value_bytes(&StateKey::access_path(AccessPath::new(
+        .get_state_value_bytes(&StateKey::access_path(AccessPath::new_path(
             CORE_CODE_ADDRESS,
             ConfigurationResource::resource_path(),
             true

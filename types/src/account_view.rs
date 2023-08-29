@@ -63,7 +63,7 @@ pub trait AccountView {
         let account_address = self
             .get_account_address()?
             .ok_or_else(|| anyhow!("Could not fetch account address"))?;
-        Ok(StateKey::access_path(AccessPath::new_base(
+        Ok(StateKey::access_path(AccessPath::new(
             account_address,
             path
         )))

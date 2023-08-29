@@ -48,7 +48,7 @@ impl<'a, T: MoveResolverExt> AptosValueAnnotator<'a, T> {
     pub fn view_account_state(&self, state: &AccountState) -> Result<AnnotatedAccountStateBlob> {
         let mut output = BTreeMap::new();
         for (k, v) in state.iter() {
-            let tag = match AccessPath::new_base(AccountAddress::random(), k.to_vec()).get_struct_tag() {
+            let tag = match AccessPath::new(AccountAddress::random(), k.to_vec()).get_struct_tag() {
                 Some(t) => t,
                 None => {
                     println!("Uncached AccessPath: {:?}", k);

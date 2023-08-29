@@ -345,7 +345,7 @@ impl Context {
             .collect();
 
         let next_key = resource_iter.next().transpose()?.map(|(struct_tag, _v)| {
-            StateKey::access_path(AccessPath::new_base(
+            StateKey::access_path(AccessPath::new(
                 address,
                 AccessPath::resource_path_vec(struct_tag)
             ))
@@ -388,7 +388,7 @@ impl Context {
             .take(limit as usize)
             .collect::<Result<_>>()?;
         let next_key = module_iter.next().transpose()?.map(|(module_id, _v)| {
-            StateKey::access_path(AccessPath::new_base(
+            StateKey::access_path(AccessPath::new(
                 address,
                 AccessPath::code_path_vec(module_id)
             ))

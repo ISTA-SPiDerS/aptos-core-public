@@ -52,7 +52,7 @@ impl AccessPathCache for BTreeAccessPathCache {
             },
             btree_map::Entry::Occupied(entry) => entry.get().clone(),
         };
-        AccessPath::new(addr, access_vec, true)
+        AccessPath::new_path(addr, access_vec, true)
     }
 
     fn get_resource_path(&mut self, address: AccountAddress, struct_tag: StructTag) -> AccessPath {
@@ -65,7 +65,7 @@ impl AccessPathCache for BTreeAccessPathCache {
             },
             btree_map::Entry::Occupied(entry) => entry.get().clone(),
         };
-        AccessPath::new_base(address, access_vec)
+        AccessPath::new(address, access_vec)
     }
 
     fn get_resource_group_path(
@@ -82,7 +82,7 @@ impl AccessPathCache for BTreeAccessPathCache {
             },
             btree_map::Entry::Occupied(entry) => entry.get().clone(),
         };
-        AccessPath::new_base(address, access_vec)
+        AccessPath::new(address, access_vec)
     }
 }
 
