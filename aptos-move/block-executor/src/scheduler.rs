@@ -680,7 +680,7 @@ impl Scheduler {
                 }
             }
             counter += 1;
-            if counter >= 10000 {
+            if counter >= 500 {
                 break
             }
         }
@@ -707,30 +707,28 @@ impl Scheduler {
             }
         }
 
-        loop {
-            if let Ok(txn_to_exec) = defaultChannel.try_recv() {
+        if let Ok(txn_to_exec) = defaultChannel.try_recv() {
 
-                //info!("Received {}", txn_to_exec);
+            //info!("Received {}", txn_to_exec);
 
-                if let Some((version_to_execute, maybe_condvar)) =
-                    self.try_execute_next_version(profiler, txn_to_exec, thread_id)
-                {
-                    // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
-                    // if localidx < *my_global_idx_mutex {
-                    //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
-                    // }
-                    // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
-                    // drop(my_global_idx_mutex);
-                    //profiler.end_timing(&"try_exec".to_string());
-                    //profiler.end_timing(&"exec_crit".to_string());
-
-                    return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
-                }
-            } else {
+            if let Some((version_to_execute, maybe_condvar)) =
+                self.try_execute_next_version(profiler, txn_to_exec, thread_id)
+            {
+                // let my_global_idx_mutex = self.tglobalidx[thread_id -1].lock();
+                // if localidx < *my_global_idx_mutex {
+                //     //println!("AHAHAAHAAHAAHAHAHAHAHAHAHAHAHAHAHAHAHAHAHHAHAHAHAHAAHHAHAHAHAHA {} with local ={} and global = {} and at buffer {}", *txn_to_exec, localidx, my_global_idx_mutex, thread_id -1);
+                // }
+                // //println!("MY LOCAL IDX = {}, MY GLOBAL IDX = {} in buff {}", localidx, *my_global_idx_mutex, thread_id -1);
+                // drop(my_global_idx_mutex);
                 //profiler.end_timing(&"try_exec".to_string());
-                // //info!("Channel empty");
-                return SchedulerTask::NoTask;
+                //profiler.end_timing(&"exec_crit".to_string());
+
+                return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
+        } else {
+            //profiler.end_timing(&"try_exec".to_string());
+            // //info!("Channel empty");
+            return SchedulerTask::NoTask;
         }
     }
 
