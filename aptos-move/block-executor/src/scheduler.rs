@@ -725,11 +725,8 @@ impl Scheduler {
 
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
-        } else {
-            //profiler.end_timing(&"try_exec".to_string());
-            // //info!("Channel empty");
-            return SchedulerTask::NoTask;
         }
+        return SchedulerTask::NoTask;
     }
 
 
