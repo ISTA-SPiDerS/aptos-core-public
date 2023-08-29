@@ -39,7 +39,7 @@ use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, Transac
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver};
+use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver};
 use tokio::sync::mpsc::error::SendError;
 use tracing_subscriber::fmt::time;
 use crate::scheduler::SchedulerTask::NoTask;
@@ -318,9 +318,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    pub(crate) channels: Vec<(Sender<TxnIndex>, Mutex<Receiver<TxnIndex>>)>,
+    pub(crate) channels: Vec<(UnboundedSender<TxnIndex>, Mutex<UnboundedReceiver<TxnIndex>>)>,
 
-    pub(crate) priochannels: Vec<(Sender<TxnIndex>, Mutex<Receiver<TxnIndex>>)>,
+    pub(crate) priochannels: Vec<(UnboundedSender<TxnIndex>, Mutex<UnboundedReceiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -404,8 +404,8 @@ impl Scheduler {
             end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
             bottomlevels,
             nscheduled: AtomicUsize::new(0),
-            channels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::channel(20000)).map(|(a,b)| (a, Mutex::new(b))).collect(),
-            priochannels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::channel(20000)).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            channels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            priochannels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::unbounded_channel()).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
             prologue_map: map,
@@ -494,7 +494,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut Receiver<TxnIndex>, prioChannel: &mut Receiver<TxnIndex>, finished_val_flag: &mut bool, ever_ran_anything: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>, finished_val_flag: &mut bool, ever_ran_anything: &mut bool) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
@@ -700,7 +700,7 @@ impl Scheduler {
     }
 
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut Receiver<TxnIndex>, prioChannel: &mut Receiver<TxnIndex>) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
         if let Ok(txn_to_exec) = prioChannel.try_recv() {
@@ -717,7 +717,6 @@ impl Scheduler {
         }
 
         if let Ok(txn_to_exec) = defaultChannel.try_recv() {
-
             //info!("Received {}", txn_to_exec);
 
             if let Some((version_to_execute, maybe_condvar)) =
@@ -848,6 +847,7 @@ impl Scheduler {
             }
         }
         self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
+
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
