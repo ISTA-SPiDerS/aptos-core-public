@@ -703,6 +703,9 @@ impl Scheduler {
     fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut UnboundedReceiver<TxnIndex>, prioChannel: &mut UnboundedReceiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
+        if self.channel_size[thread_id].load(Ordering::Relaxed) <= 0 {
+            return SchedulerTask::NoTask;
+        }
         if let Ok(txn_to_exec) = prioChannel.try_recv() {
 
             //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
@@ -858,6 +861,7 @@ impl Scheduler {
                 if self.is_executed(*txn, true).is_none() {
                     &self.priochannels[*target].0.send(*txn);
                     profiler.count_one("prio-queue".to_string());
+                    self.channel_size[thread_id].fetch_add(1, Ordering::Relaxed);
                 }
             }
 
