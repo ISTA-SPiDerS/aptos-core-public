@@ -707,6 +707,7 @@ impl Scheduler {
             return SchedulerTask::NoTask;
         }
         if let Ok(txn_to_exec) = prioChannel.try_recv() {
+            self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
 
             //info!("PRIO Received {} on {}", txn_to_exec, thread_id);
 
@@ -717,13 +718,11 @@ impl Scheduler {
                 //profiler.end_timing(&"exec_crit".to_string());
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
             }
-            else {
-                self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
-            }
         }
 
         if let Ok(txn_to_exec) = defaultChannel.try_recv() {
             //info!("Received {}", txn_to_exec);
+            self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
 
             if let Some((version_to_execute, maybe_condvar)) =
                 self.try_execute_next_version(profiler, txn_to_exec, thread_id)
@@ -738,9 +737,6 @@ impl Scheduler {
                 //profiler.end_timing(&"exec_crit".to_string());
 
                 return SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
-            }
-            else {
-                self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
             }
         }
         return SchedulerTask::NoTask;
@@ -855,7 +851,6 @@ impl Scheduler {
                 *finish_time_lock = *finish_time_lock - runtimecost;
             }
         }
-        self.channel_size[thread_id].fetch_sub(1, Ordering::Relaxed);
 
         //info!("acquired txn_dependency_lock in finish execution of {}", txn_idx);
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
@@ -865,9 +860,9 @@ impl Scheduler {
             let mut stored_deps = self.txn_dependency[txn_idx].read();
             for (txn, target) in stored_deps.iter() {
                 if self.is_executed(*txn, true).is_none() {
+                    self.channel_size[*target].fetch_add(1, Ordering::Relaxed);
                     &self.priochannels[*target].0.send(*txn);
                     profiler.count_one("prio-queue".to_string());
-                    self.channel_size[thread_id].fetch_add(1, Ordering::Relaxed);
                 }
             }
 
