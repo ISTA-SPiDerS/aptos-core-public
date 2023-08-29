@@ -226,7 +226,7 @@ fn test_new_genesis() {
                     WriteOp::Modification(bcs::to_bytes(&ValidatorSet::new(vec![])).unwrap()),
                 ),
                 (
-                    StateKey::access_path(AccessPath::new(
+                    StateKey::access_path(AccessPath::new_path(
                         CORE_CODE_ADDRESS,
                         ConfigurationResource::resource_path(),
                         true
@@ -236,7 +236,7 @@ fn test_new_genesis() {
                     ),
                 ),
                 (
-                    StateKey::access_path(AccessPath::new_base(
+                    StateKey::access_path(AccessPath::new(
                         account1,
                         CoinStoreResource::resource_path()
                     )),

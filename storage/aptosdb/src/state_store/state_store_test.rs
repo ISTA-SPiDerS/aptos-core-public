@@ -171,8 +171,8 @@ fn test_get_values_by_key_prefix() {
     let store = &db.state_store;
     let address = AccountAddress::new([12u8; AccountAddress::LENGTH]);
 
-    let key1 = StateKey::access_path(AccessPath::new(address, b"state_key1".to_vec(), false));
-    let key2 = StateKey::access_path(AccessPath::new(address, b"state_key2".to_vec(), false));
+    let key1 = StateKey::access_path(AccessPath::new_path(address, b"state_key1".to_vec(), false));
+    let key2 = StateKey::access_path(AccessPath::new_path(address, b"state_key2".to_vec(), false));
 
     let value1_v0 = StateValue::from(String::from("value1_v0").into_bytes());
     let value2_v0 = StateValue::from(String::from("value2_v0").into_bytes());
@@ -194,7 +194,7 @@ fn test_get_values_by_key_prefix() {
     assert_eq!(*key_value_map.get(&key1).unwrap(), value1_v0);
     assert_eq!(*key_value_map.get(&key2).unwrap(), value2_v0);
 
-    let key4 = StateKey::access_path(AccessPath::new(address, b"state_key4".to_vec(), false));
+    let key4 = StateKey::access_path(AccessPath::new_path(address, b"state_key4".to_vec(), false));
 
     let value2_v1 = StateValue::from(String::from("value2_v1").into_bytes());
     let value4_v1 = StateValue::from(String::from("value4_v1").into_bytes());
@@ -224,7 +224,7 @@ fn test_get_values_by_key_prefix() {
 
     // Add values for one more account and verify the state
     let address1 = AccountAddress::new([22u8; AccountAddress::LENGTH]);
-    let key5 = StateKey::access_path(AccessPath::new(address1, b"state_key5".to_vec(), false));
+    let key5 = StateKey::access_path(AccessPath::new_path(address1, b"state_key5".to_vec(), false));
     let value5_v2 = StateValue::from(String::from("value5_v2").into_bytes());
 
     let account1_key_prefx = StateKeyPrefix::new(StateKeyTag::AccessPath, address1.to_vec());

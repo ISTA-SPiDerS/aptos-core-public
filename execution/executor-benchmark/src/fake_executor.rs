@@ -127,7 +127,7 @@ impl FakeExecutor {
         name: &str,
         type_params: Vec<TypeTag>,
     ) -> StateKey {
-        StateKey::access_path(AccessPath::new(
+        StateKey::access_path(AccessPath::new_path(
             address,
             AccessPath::resource_path_vec(Self::new_struct_tag(
                 resource_address,
