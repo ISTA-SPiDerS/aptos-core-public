@@ -39,7 +39,8 @@ use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, Transac
 use crossbeam_skiplist::SkipSet;
 use rand::prelude::*;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::{Receiver, Sender, UnboundedReceiver};
+use tokio::sync::mpsc::error::SendError;
 use tracing_subscriber::fmt::time;
 use crate::scheduler::SchedulerTask::NoTask;
 // use async_priority_channel::*;
@@ -317,9 +318,9 @@ pub struct Scheduler {
 
     nscheduled:AtomicUsize,
 
-    pub(crate) channels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
+    pub(crate) channels: Vec<(Sender<TxnIndex>, Mutex<Receiver<TxnIndex>>)>,
 
-    pub(crate) priochannels: Vec<(crossbeam::channel::Sender<TxnIndex>, Mutex<crossbeam::channel::Receiver<TxnIndex>>)>,
+    pub(crate) priochannels: Vec<(Sender<TxnIndex>, Mutex<Receiver<TxnIndex>>)>,
 
     valock: MyMut<bool>,
 
@@ -328,7 +329,8 @@ pub struct Scheduler {
     pub prologue_map: HashMap<u16, (bool, MyMut<bool>)>,
 
     pub prologue_index: AtomicU16,
-    pub mode: ExecutionMode
+    pub mode: ExecutionMode,
+    pub channel_size: Vec<AtomicUsize>,
 }
 
 /// Public Interfaces for the Scheduler
@@ -402,13 +404,14 @@ impl Scheduler {
             end_comp: Mutex::new((0..*concurrency_level).map(|_| 0).collect()),
             bottomlevels,
             nscheduled: AtomicUsize::new(0),
-            channels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
-            priochannels: (0..*concurrency_level).map(|_| crossbeam::channel::unbounded()).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            channels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::channel(20000)).map(|(a,b)| (a, Mutex::new(b))).collect(),
+            priochannels: (0..*concurrency_level).map(|_| tokio::sync::mpsc::channel(20000)).map(|(a,b)| (a, Mutex::new(b))).collect(),
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
             prologue_map: map,
             prologue_index: AtomicU16::new(0),
-            mode
+            mode,
+            channel_size: (0..*concurrency_level).map(|_| AtomicUsize::new(0)).collect()
         }
     }
 
@@ -491,7 +494,7 @@ impl Scheduler {
     }
 
     /// Return the next task for the thread.
-    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>, finished_val_flag: &mut bool, ever_ran_anything: &mut bool) -> SchedulerTask {
+    pub fn next_task(&self, commiting: bool, profiler: &mut Profiler, thread_id: usize, local_flag: &mut bool, defaultChannel: &mut Receiver<TxnIndex>, prioChannel: &mut Receiver<TxnIndex>, finished_val_flag: &mut bool, ever_ran_anything: &mut bool) -> SchedulerTask {
         //profiler.start_timing(&"try_exec".to_string());
         //profiler.start_timing(&"exec_crit".to_string());
         //profiler.start_timing(&"try_val".to_string());
@@ -506,7 +509,7 @@ impl Scheduler {
         if *local_flag && (*ever_ran_anything || thread_id == 0) && self.nscheduled.load(Ordering::SeqCst) < self.num_txns {
             let mut just_scheduled = false;
 
-            if defaultChannel.len() < 10  {
+            if self.channel_size[thread_id].load(Ordering::Relaxed) < 10  {
                 if let Ok(_) = self.sched_lock.compare_exchange(usize::MAX, thread_id, Ordering::SeqCst, Ordering::SeqCst) {
                     //profiler.start_timing(&"newScheduler".to_string());
                     // //println!("In here");
@@ -605,10 +608,11 @@ impl Scheduler {
         let mut mapping_lock = self.mapping.write();
         let mut end_comp_lock = self.end_comp.lock();
         let mut incoming_lock = self.incoming.lock();
+        let mut chunks : Vec<usize> = (0..self.concurrency_level).map(|_| 0).collect();
+
         while let Some(ui) = self.heap.pop_front()
         {
             // //println!("bottomlevel = {} for idx {}", bottomlevels[ui.index], ui.index);
-
             /* Sort Pred[ui] in a non-decreasing order of finish times */
             let mut parents: Vec<Parent> = self.hint_graph[ui.index]
                 .iter()
@@ -658,11 +662,11 @@ impl Scheduler {
             mapping_lock[ui.index] = best_proc;
             // self.thread_buffer[best_proc].insert(ui.index);
 
-
-                let (tx, rx) = &self.channels[best_proc];
-                profiler.count(format!("go-to {}", best_proc.to_string()), 1);
-                tx.send(ui.index).unwrap();
-                // info!("Sent {} to {} ", ui.index, best_proc);
+            let (tx, rx) = &self.channels[best_proc];
+            profiler.count(format!("go-to {}", best_proc.to_string()), 1);
+            tx.send(ui.index);
+            chunks[best_proc] += 1;
+            // info!("Sent {} to {} ", ui.index, best_proc);
 
             let (lock,cvar) = &self.condvars[best_proc];
             *lock.lock() = true;
@@ -687,11 +691,16 @@ impl Scheduler {
         println!("nschedule: {}", counter);
         self.nscheduled.fetch_add(counter, Ordering::SeqCst);
 
+        let mut index: usize = 0;
+        for chunk in chunks {
+            self.channel_size[index].fetch_add(chunk, Ordering::Relaxed);
+            index+=1;
+        }
         //reset sched_lock
     }
 
 
-    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut crossbeam::channel::Receiver<TxnIndex>, prioChannel: &mut crossbeam::channel::Receiver<TxnIndex>) -> SchedulerTask {
+    fn try_exec(&self, thread_id: usize, profiler: &mut Profiler, commiting: bool, defaultChannel: &mut Receiver<TxnIndex>, prioChannel: &mut Receiver<TxnIndex>) -> SchedulerTask {
         // info!("{} TRYIN TO EXEC", thread_id);
 
         if let Ok(txn_to_exec) = prioChannel.try_recv() {
@@ -846,7 +855,7 @@ impl Scheduler {
             let mut stored_deps = self.txn_dependency[txn_idx].read();
             for (txn, target) in stored_deps.iter() {
                 if self.is_executed(*txn, true).is_none() {
-                    &self.priochannels[*target].0.send(*txn).unwrap();
+                    &self.priochannels[*target].0.send(*txn);
                     profiler.count_one("prio-queue".to_string());
                 }
             }
@@ -868,7 +877,7 @@ impl Scheduler {
                 }
                 if ready {
                     println!("rdy {}", txn);
-                    &self.priochannels[*target].0.send(*txn).unwrap();
+                    &self.priochannels[*target].0.send(*txn);
                 }
                 else {
                     println!("not rdy {}", txn);
