@@ -546,7 +546,7 @@ impl Scheduler {
             return None;
         }
 
-        profiler.start_timing(&"schedule#1".to_string());
+        //profiler.start_timing(&"schedule#1".to_string());
         // Note: we could upgradable read, then upgrade and write. Similar for other places.
         // However, it is likely an overkill (and overhead to actually upgrade),
         // while unlikely there would be much contention on a specific index lock.
@@ -554,7 +554,7 @@ impl Scheduler {
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             let ret = (*incarnation, maybe_condvar.clone());
             *status = ExecutionStatus::Executing(*incarnation);
-            profiler.end_timing(&"schedule#1".to_string());
+            //profiler.end_timing(&"schedule#1".to_string());
             Some(ret)
         } else {
             None
