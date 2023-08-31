@@ -614,8 +614,9 @@ impl Scheduler {
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
-            for tx in self.critial_path_parent[txn_idx].read().unwrap().iter() {
-                self.priochannels.0.send(*tx);
+            let locked = self.critial_path_parent[txn_idx].read();
+            for tx in locked.unwrap().iter() {
+                let _ = self.priochannels.0.send(*tx);
             }
         }
 
