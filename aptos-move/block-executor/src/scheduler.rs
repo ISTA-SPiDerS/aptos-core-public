@@ -392,7 +392,7 @@ impl Scheduler {
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
         // //println!("commit idx =  {}", *commit_idx);
-
+        println!("commit {}", commit_idx);
         if *commit_idx == self.num_txns
         {
             println!("should commit");
