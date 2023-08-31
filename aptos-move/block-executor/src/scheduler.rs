@@ -707,9 +707,13 @@ impl Scheduler {
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             for dependency in self.hint_graph[txn_idx].iter().rev() {
                 if self.is_executed(*dependency, true).is_none() {
-                    self.critial_path_parent[*dependency].write().unwrap().push(txn_idx);
-                    println!("I failed {}", txn_idx);
-                    return None;
+                    let lock = self.critial_path_parent[*dependency].write();
+                    if self.is_executed(*dependency, true).is_none()
+                    {
+                        lock.unwrap().push(txn_idx);
+                        println!("I failed {}", txn_idx);
+                        return None;
+                    }
                 }
             }
 
