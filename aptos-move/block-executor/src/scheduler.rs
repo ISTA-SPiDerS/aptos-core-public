@@ -631,7 +631,8 @@ impl Scheduler {
         // which is good to have a fixed order to avoid potential deadlocks.
         let mut validation_status = self.txn_status[txn_idx].1.write();
         self.set_aborted_status(txn_idx, incarnation);
-
+        println!("abort2!");
+        
         // Schedule higher txns for validation, could skip txn_idx itself (needs to be
         // re-executed first), but used to couple with the locked validation status -
         // should never attempt to commit until validation status is updated.
