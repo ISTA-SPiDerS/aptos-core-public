@@ -307,6 +307,9 @@ pub struct Scheduler {
     pub path_cost: Vec<u64>,
 
     pub critial_path_parent: Vec<std::sync::RwLock<Vec<usize>>>,
+
+    pub children: Vec<Vec<TxnIndex>>,
+
 }
 
 /// Public Interfaces for the Scheduler
@@ -316,6 +319,7 @@ impl Scheduler {
         let hint_graph : Vec<Vec<TxnIndex>>  = (0..num_txns)
             .map(|idx| dependencies[idx].iter().map(|v| *v as TxnIndex).collect())
             .collect();
+        let mut children: Vec<Vec<TxnIndex>> = (0..num_txns).map(|_|{Vec::new()}).collect();
 
         // Hint graph gives us our parent nodes.
         // I want to know which one is the "slowest parent"
@@ -325,9 +329,12 @@ impl Scheduler {
         // When picking up a transaction we check if all parents are done (should be), if not, add as a child to the one not done (read/write lock)
 
         let channels = crossbeam::channel::unbounded();
+        let priochannels = crossbeam::channel::unbounded();
+
         let mut path_cost: Vec<u64> = gas_estimates.clone();
 
         // Mapping from parent to the children they unlock
+        let mut send_vec = vec![];
         let mut critial_path_parent : Vec<Vec<usize>> = (0..num_txns).map(|_|vec![]).collect();
         for i in (0..num_txns) {
             let mut my_cost = 0;
@@ -337,13 +344,23 @@ impl Scheduler {
                     my_cost = path_cost[*node];
                     parent = *node;
                 }
+                children[*node].push(i);
             }
             path_cost[i] += my_cost;
             if parent == 50000 {
-                let _ = channels.0.send(i);
+                send_vec.push(i);
             }
             else {
                 critial_path_parent[parent].push(i);
+            }
+        }
+
+        for i in send_vec {
+            if children[i].is_empty() {
+                let _ = channels.0.send(i);
+            }
+            else {
+                let _ = priochannels.0.send(i);
             }
         }
 
@@ -370,7 +387,7 @@ impl Scheduler {
             concurrency_level: *concurrency_level,
             gas_estimates: CachePadded::new(gas_estimates.clone()),
             channels,
-            priochannels: crossbeam::channel::unbounded(),
+            priochannels,
             valock: MyMut::new(false),
             sig_val_idx: AtomicUsize::new(0),
             prologue_map: map,
@@ -381,6 +398,7 @@ impl Scheduler {
             condvars: (0..(*concurrency_level))
                 .map(|_| (Mutex::new(false),Condvar::new()))
                 .collect(),
+            children
         };
         scheduler
     }
@@ -616,7 +634,11 @@ impl Scheduler {
         {
             let locked = self.critial_path_parent[txn_idx].read();
             for tx in locked.unwrap().iter() {
-                let _ = self.priochannels.0.send(*tx);
+                if self.children[*tx].is_empty() {
+                    let _ = self.channels.0.send(*tx);
+                } else {
+                    let _ = self.priochannels.0.send(*tx);
+                }
             }
         }
 
