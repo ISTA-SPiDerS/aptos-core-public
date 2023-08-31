@@ -395,6 +395,7 @@ impl Scheduler {
 
         if *commit_idx == self.num_txns
         {
+            println!("should commit");
             if !matches!(self.mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
@@ -454,7 +455,6 @@ impl Scheduler {
         // However, it is likely an overkill (and overhead to actually upgrade),
         // while unlikely there would be much contention on a specific index lock.
         let mut status = self.txn_status[txn_idx].0.write();
-        println!("abort!");
         if *status == ExecutionStatus::Executed(incarnation) {
             *status = ExecutionStatus::Aborting(incarnation);
             true
@@ -631,8 +631,7 @@ impl Scheduler {
         // which is good to have a fixed order to avoid potential deadlocks.
         let mut validation_status = self.txn_status[txn_idx].1.write();
         self.set_aborted_status(txn_idx, incarnation);
-        println!("abort2!");
-        
+
         // Schedule higher txns for validation, could skip txn_idx itself (needs to be
         // re-executed first), but used to couple with the locked validation status -
         // should never attempt to commit until validation status is updated.
