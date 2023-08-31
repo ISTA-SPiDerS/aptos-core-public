@@ -391,7 +391,7 @@ impl Scheduler {
         let mut commit_state_mutex = self.commit_state.lock();
         let commit_state = commit_state_mutex.deref_mut();
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
-        println!("commit idx =  {}", *commit_idx);
+        //println!("commit idx =  {}", *commit_idx);
         if *commit_idx == self.num_txns
         {
             println!("should commit");
@@ -706,7 +706,7 @@ impl Scheduler {
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             for dependency in self.hint_graph[txn_idx].iter().rev() {
                 if self.is_executed(*dependency, true).is_none() {
-                    self.critial_path_parent[txn_idx].write().unwrap().push(*dependency);
+                    self.critial_path_parent[*dependency].write().unwrap().push(txn_idx);
                     println!("I failed {}", txn_idx);
                     return None;
                 }
