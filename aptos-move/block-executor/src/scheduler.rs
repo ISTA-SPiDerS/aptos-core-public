@@ -275,7 +275,7 @@ pub struct Scheduler {
 
     pub path_cost: Vec<u64>,
 
-    pub critical_path_parent: Vec<ArrayQueue<usize>>,
+    pub critical_path_parent: Vec<boxcar::Vec<usize>>,
 
     pub children: Vec<Vec<TxnIndex>>,
 
@@ -304,7 +304,7 @@ impl Scheduler {
 
         // Mapping from parent to the children they unlock
         let mut send_vec = vec![];
-        let critical_path_parent: Vec<ArrayQueue<usize>> = (0..num_txns).map(|_|ArrayQueue::new(num_txns)).collect();
+        let critical_path_parent: Vec<boxcar::Vec<usize>> = (0..num_txns).map(|_|boxcar::Vec::new()).collect();
         for i in (0..num_txns) {
             let mut my_cost = 0;
             let mut parent = 50000;
@@ -539,7 +539,8 @@ impl Scheduler {
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
-            while let Some(tx) = self.critical_path_parent[txn_idx].pop() {
+            for i in 0 ..self.critical_path_parent[txn_idx].count() {
+                let tx = self.critical_path_parent[txn_idx][i];
                 if self.children[tx].is_empty() {
                     let _ = self.channels.0.send(tx);
                 } else {
