@@ -283,8 +283,6 @@ pub struct Scheduler {
 
     gas_estimates: CachePadded<Vec<u64>>,
 
-    condvars:Vec<(Mutex<bool>,Condvar)>,
-
     pub(crate) channels: (crossbeam::channel::Sender<TxnIndex>, crossbeam::channel::Receiver<TxnIndex>),
 
     pub(crate) priochannels: (crossbeam::channel::Sender<TxnIndex>, crossbeam::channel::Receiver<TxnIndex>),
@@ -385,9 +383,6 @@ impl Scheduler {
             mode,
             path_cost,
             critial_path_parent: critial_path_parent.into_iter().map(|i| std::sync::RwLock::new(i)).collect(),
-            condvars: (0..(*concurrency_level))
-                .map(|_| (Mutex::new(false),Condvar::new()))
-                .collect(),
             children
         };
         scheduler
@@ -406,11 +401,6 @@ impl Scheduler {
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
-                for i in 0..self.concurrency_level {
-                    let (lock, cvar) = &self.condvars[i];
-                    *lock.lock() = true;
-                    cvar.notify_one();
-                }
             }
             return None;
         }
