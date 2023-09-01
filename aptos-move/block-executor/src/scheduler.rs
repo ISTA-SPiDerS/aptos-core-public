@@ -301,7 +301,7 @@ pub struct Scheduler {
 
     pub path_cost: Vec<u64>,
 
-    pub critical_path_parent: DashMap<usize, Vec<usize>>,
+    pub critial_path_parent: Vec<std::sync::RwLock<Vec<usize>>>,
 
     pub children: Vec<Vec<TxnIndex>>,
 
@@ -330,7 +330,7 @@ impl Scheduler {
 
         // Mapping from parent to the children they unlock
         let mut send_vec = vec![];
-        let mut critical_path_parent: DashMap<usize, Vec<usize>> = DashMap::new();
+        let mut critial_path_parent : Vec<Vec<usize>> = (0..num_txns).map(|_|vec![]).collect();
         for i in (0..num_txns) {
             let mut my_cost = 0;
             let mut parent = 50000;
@@ -346,7 +346,7 @@ impl Scheduler {
                 send_vec.push(i);
             }
             else {
-                critical_path_parent.entry(parent).or_insert(vec![]).push(i);
+                critial_path_parent[parent].push(i);
             }
         }
 
@@ -384,7 +384,7 @@ impl Scheduler {
             prologue_index: AtomicU16::new(0),
             mode,
             path_cost,
-            critical_path_parent,
+            critial_path_parent: critial_path_parent.into_iter().map(|i| std::sync::RwLock::new(i)).collect(),
             condvars: (0..(*concurrency_level))
                 .map(|_| (Mutex::new(false),Condvar::new()))
                 .collect(),
@@ -573,8 +573,8 @@ impl Scheduler {
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
-            let vars = self.critical_path_parent.entry(txn_idx).or_default();
-            for tx in vars.value() {
+            let locked = self.critial_path_parent[txn_idx].read();
+            for tx in locked.unwrap().iter() {
                 if self.children[*tx].is_empty() {
                     let _ = self.channels.0.send(*tx);
                 } else {
@@ -670,9 +670,10 @@ impl Scheduler {
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             for dependency in self.hint_graph[txn_idx].iter().rev() {
                 if self.is_executed(*dependency, true).is_none() {
-                    self.critical_path_parent.entry(*dependency).or_insert(vec![]).push(txn_idx);
+                    let lock = self.critial_path_parent[*dependency].write();
                     if self.is_executed(*dependency, true).is_none()
                     {
+                        lock.unwrap().push(txn_idx);
                         return None;
                     }
                 }
