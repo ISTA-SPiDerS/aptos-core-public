@@ -265,7 +265,6 @@ where
         base_view: &S,
         committing: bool,
         total_profiler: Arc<Mutex<&mut Profiler>>,
-        barrier: Arc<Barrier>,
         idx: usize,
         mode: ExecutionMode,
     ) {
@@ -281,10 +280,9 @@ where
         drop(init_timer);
 
         let mut scheduler_task = SchedulerTask::NoTask;
-        barrier.wait();
         let mut finished_val_flag = false;
 
-        let mut lastInd : u16 = 0;
+        let mut last_ind: u16 = 0;
 
         loop {
             // Only one thread try_commit to avoid contention.
@@ -337,7 +335,7 @@ where
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, &mut finished_val_flag);
                     if matches!(ret, SchedulerTask::NoTask )
                     {
-                        if lastInd >= block.len() as u16 {
+                        if last_ind >= block.len() as u16 {
                             if matches!(mode, ExecutionMode::Pythia_Sig) {
                                 let idx = scheduler.sig_val_idx.fetch_add(25, Ordering::Acquire);
                                 if idx <= scheduler.num_txns
@@ -397,22 +395,13 @@ where
                     profiler.end_timing(&format!("execution {}", idx.to_string()));
                     ret
                 },
-                SchedulerTask::ExecutionTask(_, Some(condvar)) => {
-                    let (lock, cvar) = &*condvar;
-                    // Mark dependency resolved.
-                    *lock.lock() = true;
-                    // Wake up the process waiting for dependency.
-                    cvar.notify_one();
-
-                    SchedulerTask::NoTask
-                },
                 SchedulerTask::PrologueTask => {
-                    if lastInd >= block.len() as u16 {
+                    if last_ind >= block.len() as u16 {
                         NoTask
                     }
                     else {
                         let ind = scheduler.prologue_index.fetch_add(1, Ordering::SeqCst);
-                        lastInd = ind;
+                        last_ind = ind;
                         let option = scheduler.prologue_map.get(&ind);
                         if let Some(opt) = option {
                             if opt.0
@@ -472,10 +461,8 @@ where
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, mode, map);
 
-        let barrier = Arc::new(Barrier::new(self.concurrency_level));
-
         {
-            (*profiler.lock()).start_timing(&"total time1".to_string());a
+            (*profiler.lock()).start_timing(&"total time1".to_string());
             (*profiler.lock()).start_timing(&"total time2".to_string());
 
             RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
@@ -493,7 +480,6 @@ where
                             base_view,
                             committing.swap(false, Ordering::SeqCst),
                             profiler.clone(),
-                            barrier.clone(),
                             i.0,
                             mode
                         );
