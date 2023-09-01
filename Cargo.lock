@@ -444,6 +444,7 @@ dependencies = [
  "crossbeam-queue",
  "crossbeam-skiplist",
  "dashmap",
+ "flurry",
  "itertools",
  "move-binary-format",
  "num_cpus",
@@ -5254,6 +5255,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "flurry"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e0afc943ef18eebf6bc3335daeb8d338202093d18444a1784ea7f57fe7680f8"
+dependencies = [
+ "ahash",
+ "num_cpus",
+ "parking_lot 0.12.1",
+ "seize",
+]
+
+[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9644,6 +9657,16 @@ checksum = "31c9bb296072e961fcbd8853511dd39c2d8be2deb1e17c6860b1d30732b323b4"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seize"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e5739de653b129b0a59da381599cf17caf24bc586f6a797c52d3d6147c5b85a"
+dependencies = [
+ "num_cpus",
+ "once_cell",
 ]
 
 [[package]]

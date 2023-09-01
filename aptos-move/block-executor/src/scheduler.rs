@@ -26,6 +26,7 @@ use std::{
     pin::Pin,
     task::{Context,Poll, Waker},
 };
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicU16;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::{
@@ -33,6 +34,7 @@ use tokio::{
     net::TcpStream,
 };
 use color_eyre::Report;
+use crossbeam_queue::ArrayQueue;
 use dashmap::{DashMap, DashSet};
 use itertools::equal;
 use aptos_types::transaction::{ExecutionMode, Profiler, RAYON_EXEC_POOL, TransactionStatus};
@@ -59,32 +61,6 @@ type DependencyCondvar = Arc<(Mutex<bool>, Condvar)>;
 /// each contain a version of transaction that must be executed or validated, respectively.
 /// NoTask holds no task (similar None if we wrapped tasks in Option), and Done implies that
 /// there are no more tasks and the scheduler is done.
-
-// pub struct MyFuture {
-//     shared_state: Arc<Mutex<SharedState>>,
-
-// }
-
-// struct SharedState {
-//     completed: bool,
-//     waker: Option<Waker>,
-// }
-// impl Future for MyFuture {
-//     type Output = ();
-
-
-//     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-//         let mut shared_state = self.shared_state.lock();
-//         if shared_state.completed {
-//             Poll::Ready(())
-
-//         }
-//         else {
-//             shared_state.waker = Some(cx.waker().clone());
-//             Poll::Pending
-//         }
-//     }
-
 
 pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
@@ -299,7 +275,7 @@ pub struct Scheduler {
 
     pub path_cost: Vec<u64>,
 
-    pub critial_path_parent: Vec<std::sync::RwLock<Vec<usize>>>,
+    pub critical_path_parent: Vec<ArrayQueue<usize>>,
 
     pub children: Vec<Vec<TxnIndex>>,
 
@@ -328,7 +304,7 @@ impl Scheduler {
 
         // Mapping from parent to the children they unlock
         let mut send_vec = vec![];
-        let mut critial_path_parent : Vec<Vec<usize>> = (0..num_txns).map(|_|vec![]).collect();
+        let critical_path_parent: Vec<ArrayQueue<usize>> = (0..num_txns).map(|_|ArrayQueue::new(num_txns)).collect();
         for i in (0..num_txns) {
             let mut my_cost = 0;
             let mut parent = 50000;
@@ -344,7 +320,7 @@ impl Scheduler {
                 send_vec.push(i);
             }
             else {
-                critial_path_parent[parent].push(i);
+                critical_path_parent[parent].push(i);
             }
         }
 
@@ -382,7 +358,7 @@ impl Scheduler {
             prologue_index: AtomicU16::new(0),
             mode,
             path_cost,
-            critial_path_parent: critial_path_parent.into_iter().map(|i| std::sync::RwLock::new(i)).collect(),
+            critical_path_parent,
             children
         };
         scheduler
@@ -563,12 +539,11 @@ impl Scheduler {
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
         {
-            let locked = self.critial_path_parent[txn_idx].read();
-            for tx in locked.unwrap().iter() {
-                if self.children[*tx].is_empty() {
-                    let _ = self.channels.0.send(*tx);
+            while let Some(tx) = self.critical_path_parent[txn_idx].pop() {
+                if self.children[tx].is_empty() {
+                    let _ = self.channels.0.send(tx);
                 } else {
-                    let _ = self.priochannels.0.send(*tx);
+                    let _ = self.priochannels.0.send(tx);
                 }
             }
         }
@@ -660,10 +635,9 @@ impl Scheduler {
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             for dependency in self.hint_graph[txn_idx].iter().rev() {
                 if self.is_executed(*dependency, true).is_none() {
-                    let lock = self.critial_path_parent[*dependency].write();
+                    self.critical_path_parent[*dependency].push(txn_idx);
                     if self.is_executed(*dependency, true).is_none()
                     {
-                        lock.unwrap().push(txn_idx);
                         return None;
                     }
                 }
