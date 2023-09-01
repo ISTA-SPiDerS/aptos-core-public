@@ -202,19 +202,6 @@ where
         )
     }
 
-    fn setup() -> Result<(), Report> {
-        if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-            std::env::set_var("RUST_LIB_BACKTRACE", "1")
-        }
-        color_eyre::install();
-
-        if std::env::var("RUST_LOG").is_err() {
-            std::env::set_var("RUST_LOG", "info")
-        }
-
-        Ok(())
-    }
-
     fn validate(
         &self,
         version_to_validate: Version,
@@ -484,8 +471,8 @@ where
         let last_input_output = TxnLastInputOutput::new(num_txns);
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, mode, map);
+
         let barrier = Arc::new(Barrier::new(self.concurrency_level));
-        INIT.call_once(|| {Self::setup();()});
 
         {
             (*profiler.lock()).start_timing(&"total time1".to_string());a
