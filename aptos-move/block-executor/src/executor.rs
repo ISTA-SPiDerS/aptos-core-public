@@ -519,7 +519,6 @@ where
         }
 
         (*profiler.lock()).end_timing(&"total time1".to_string());
-        (*profiler.lock()).end_timing(&"total time2".to_string());
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
         if num_txns > 2 {
@@ -585,7 +584,8 @@ where
             drop(scheduler);
         });
 
-        match maybe_err {
+
+        let output = match maybe_err {
             Some(err) => {
                 if matches!(err, Error::SKIP) {
                     final_results.resize_with(num_txns, E::Output::skip_output);
@@ -611,7 +611,9 @@ where
                     .zip(delta_resolver.resolve(base_view, num_txns).into_iter())
                     .collect())
             },
-        }
+        };
+        (*profiler.lock()).end_timing(&"total time2".to_string());
+        output
     }
 
     pub(crate) fn execute_transactions_sequential(

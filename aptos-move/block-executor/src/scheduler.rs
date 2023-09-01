@@ -274,11 +274,6 @@ pub struct Scheduler {
     /// Shared marker that is set when a thread detects that all txns can be committed.
     done_marker: AtomicBool,
 
-    /// An index i maps to indices of other transactions that depend on transaction i, i.e. they
-    /// should be re-executed once transaction i's next incarnation finishes.
-    txn_dependency: Vec<CachePadded<RwLock<HashMap<TxnIndex, usize>>>>,
-    opt_txn_dependency: DashSet<(TxnIndex, TxnIndex)>,
-
     /// An index i maps to the most up-to-date status of transaction i.
     txn_status: Vec<CachePadded<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>>,
 
@@ -370,11 +365,6 @@ impl Scheduler {
             validation_idx: AtomicU64::new(0),
             commit_state: Mutex::new((0, 0)),
             done_marker: AtomicBool::new(false),
-            opt_txn_dependency: DashSet::with_capacity(num_txns),
-
-            txn_dependency: (0..num_txns)
-                .map(|_| CachePadded::new(RwLock::new(HashMap::new())))
-                .collect(),
             txn_status: (0..num_txns)
                 .map(|_| {
                     CachePadded::new((
@@ -412,7 +402,6 @@ impl Scheduler {
         //println!("commit idx =  {}", *commit_idx);
         if *commit_idx == self.num_txns
         {
-            println!("should commit");
             if !matches!(self.mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
@@ -527,30 +516,6 @@ impl Scheduler {
         return NoTask;
     }
 
-
-    fn add_dependency(
-        &self,
-        txn_idx: TxnIndex,
-        dep_txn_idx: TxnIndex,
-        idx: usize,
-        profiler: &mut Profiler,
-    ) -> bool {
-        let thread_id = idx;
-        //info!("Try to acquire txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
-        let mut stored_deps = self.txn_dependency[dep_txn_idx].write();
-        //info!("acquired txn_dependency [{}] lock on thread_id {}",dep_txn_idx,thread_id);
-
-        if self.is_executed(dep_txn_idx, true).is_some() {
-            return false;
-        }
-        if stored_deps.contains_key(&txn_idx) {
-            return true;
-        }
-        // println!("inserting txn_idx {} as a dependency on {}, at my thread_id {}", txn_idx, dep_txn_idx, thread_id);
-        stored_deps.insert(txn_idx, thread_id);
-        true
-    }
-
     /// When a txn depends on another txn, adds it to the dependency list of the other txn.
     /// Returns true if successful, or false, if the dependency got resolved in the meantime.
     /// If true is returned, Scheduler guarantees that later (dep_txn_idx will finish execution)
@@ -567,31 +532,7 @@ impl Scheduler {
 
         // Create a condition variable associated with the dependency.
         panic!("This should not be called");
-        let thread_id = RAYON_EXEC_POOL.lock().unwrap().current_thread_index().unwrap();
-        let dep_condvar = Arc::new((Mutex::new(false), Condvar::new()));
-
-
-        {
-            if self.is_executed(dep_txn_idx, true).is_some() {
-                // Current status of dep_txn_idx is 'executed', so the dependency got resolved.
-                // To avoid zombie dependency (and losing liveness), must return here and
-                // not add a (stale) dependency.
-
-                // Note: acquires (a different, status) mutex, while holding (dependency) mutex.
-                // Only place in scheduler where a thread may hold >1 mutexes, hence, such
-                // acquisitions always happens in the same order (this function), may not deadlock.
-
-                return None;
-            }
-
-            self.suspend(txn_idx, dep_condvar.clone());
-
-            // Safe to add dependency here (still holding the lock) - finish_execution of txn
-            // dep_txn_idx is guaranteed to acquire the same lock later and clear the dependency.
-            self.txn_dependency[dep_txn_idx].write().insert(txn_idx, thread_id);
-        }
-
-        Some(dep_condvar)
+        None
     }
 
     pub fn finish_validation(&self, txn_idx: TxnIndex, wave: Wave) {
@@ -663,7 +604,7 @@ impl Scheduler {
         }
 
         // txn_idx must be re-executed, and if execution_idx is lower, it will be.
-        if self.execution_idx.load(Ordering::Acquire) > txn_idx {
+        {
             // Optimization: execution_idx is higher than txn_idx, but decreasing it may
             // lead to wasted work for all indices between txn_idx and execution_idx.
             // Instead, attempt to create a new incarnation and return the corresponding
