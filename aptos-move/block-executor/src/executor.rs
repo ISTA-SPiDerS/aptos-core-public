@@ -485,16 +485,13 @@ where
         let committing = AtomicBool::new(true);
         let scheduler = Scheduler::new(num_txns, signature_verified_block.dependency_graph(), signature_verified_block.gas_estimates(), &self.concurrency_level, mode, map);
         let barrier = Arc::new(Barrier::new(self.concurrency_level));
-        INIT.call_once(|| {Self::setup();
-             ()});
+        INIT.call_once(|| {Self::setup();()});
 
         {
-            (*profiler.lock()).start_timing(&"total time1".to_string());
-
-            let pool = RAYON_EXEC_POOL.lock().unwrap();
+            (*profiler.lock()).start_timing(&"total time1".to_string());a
             (*profiler.lock()).start_timing(&"total time2".to_string());
 
-            pool.scope(|s| {
+            RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
                 for i in 0..self.concurrency_level {
                     struct NotCopy<T>(T);
                     let i = NotCopy(i);
