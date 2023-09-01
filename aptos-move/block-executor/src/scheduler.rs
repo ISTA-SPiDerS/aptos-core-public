@@ -674,7 +674,6 @@ impl Scheduler {
                     if self.is_executed(*dependency, true).is_none()
                     {
                         lock.unwrap().push(txn_idx);
-                        println!("I failed {}", txn_idx);
                         return None;
                     }
                 }
