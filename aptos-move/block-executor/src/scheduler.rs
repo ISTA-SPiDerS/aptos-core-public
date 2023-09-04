@@ -538,18 +538,30 @@ impl Scheduler {
         //info!("{:?} txn_idx = {}",stored_deps,txn_idx);
 
         //println!("stored_deps of txn_idx {} : {:?}", txn_idx, stored_deps);
+        let mut got_next = false;
+        let mut next = SchedulerTask::NoTask;
         {
-            for i in 0 ..self.critical_path_parent[txn_idx].count() {
+            for i in 0..self.critical_path_parent[txn_idx].count() {
                 let tx = self.critical_path_parent[txn_idx][i];
                 if self.children[tx].is_empty() {
                     let _ = self.channels.0.send(tx);
                 } else {
-                    let _ = self.priochannels.0.send(tx);
+                    if !got_next {
+                        let v = self.critical_path_parent[txn_idx][i];
+                        if let Some((version_to_execute, maybe_condvar)) =
+                            self.try_execute_next_version(profiler, v, thread_id)
+                        {
+                            next = SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+                        }
+                    }
+                    else {
+                        let _ = self.priochannels.0.send(tx);
+                    }
                 }
             }
         }
 
-        SchedulerTask::NoTask
+        next
     }
 
     /// Finalize a validation task of version (txn_idx, incarnation). In some cases,
