@@ -552,6 +552,7 @@ impl Scheduler {
                             self.try_execute_next_version(profiler, v, thread_id)
                         {
                             next = SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
+                            got_next = true;
                         }
                     }
                     else {
