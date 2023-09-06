@@ -160,7 +160,7 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
-            accounts_per_worker: 200,
+            accounts_per_worker: 75,
             workers_per_endpoint:  20,
             init_retry_interval: Duration::from_secs(60),
             max_transactions_per_account: 10,
