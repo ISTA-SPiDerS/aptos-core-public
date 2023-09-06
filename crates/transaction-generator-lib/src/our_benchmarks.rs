@@ -128,10 +128,11 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-        println!("Enter generate");
+
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
         let mut rng: ThreadRng = thread_rng();
+        println!("Generating {:?} {} transactions", load_type, needed);
 
 
         for i in 0..needed {
@@ -202,8 +203,6 @@ impl OurBenchmarkGeneratorCreator {
         account: &mut LocalAccount,
         txn_executor: &dyn TransactionExecutor,
     ) -> Self {
-
-        println!("Generating {:?} {} transactions", self.load_type, needed);
 
         let mut requests = Vec::with_capacity(1);
         let mut package_handler = PackageHandler::new();
