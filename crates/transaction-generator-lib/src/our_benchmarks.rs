@@ -73,8 +73,82 @@ impl TransactionGenerator for OurBenchmark {
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
 
-        let load_type = self.load_type;
-        let mut rng: ThreadRng = thread_rng();
+
+        for i in 0..needed {
+            let mut sender_id: usize = (i as usize) % accounts.len();
+
+            if matches!(load_type, SOLANA)
+            {
+                let cost_sample = self.solana_cost_options[rand::thread_rng().gen_range(0, self.solana_cost_options.len())];
+                let write_len_sample = self.solana_len_options[rand::thread_rng().gen_range(0, self.solana_len_options.len())];
+
+                let mut writes: Vec<u64> = Vec::new();
+                let mut i = 0;
+                while i < write_len_sample {
+                    i+=1;
+                    writes.push(self.general_resource_distribution.sample(&mut rng) as u64);
+                }
+
+                let length = max(1, cost_sample.round() as usize);
+
+                requests.push(self.package.our_spec_transaction(accounts[sender_id],
+                                                                &self.txn_factory,
+                                                                ident_str!("loop_exchange").to_owned(),
+                                                                vec![],
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()]));
+
+            }
+            else if matches!(load_type, P2PTX)
+            {
+                let receiver_id = self.p2p_receiver_distribution.sample(&mut rng) % accounts.len();
+                let sender_id = self.p2p_sender_distribution.sample(&mut rng) % accounts.len();
+
+                requests.push(self.package.our_spec_transaction(accounts[sender_id],
+                                                                &self.txn_factory,
+                                                                ident_str!("exchangetwo").to_owned(),
+                                                                vec![],
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()]));
+            }
+            else
+            {
+                let resource_id = self.general_resource_distribution.sample(&mut rng);
+                if matches!(load_type, NFT)
+                {
+                    sender_id = self.nft_sender_distribution.sample(&mut rng) % accounts.len();
+                }
+
+                requests.push(self.package.our_spec_transaction(accounts[sender_id],
+                                                                &self.txn_factory,
+                                                                ident_str!("exchange").to_owned(),
+                                                                vec![],
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&resource_id).unwrap()]));
+            }
+        }
+        requests
+    }
+}
+
+pub struct OurBenchmarkGeneratorCreator {
+    txn_factory: TransactionFactory,
+    load_type: LoadType,
+    package: Package,
+    owner: AccountAddress,
+    pub general_resource_distribution: WeightedIndex<f64>,
+    pub nft_sender_distribution: WeightedIndex<f64>,
+    pub p2p_receiver_distribution: WeightedIndex<f64>,
+    pub p2p_sender_distribution: WeightedIndex<f64>,
+    pub solana_len_options: Vec<usize>,
+    pub solana_cost_options: Vec<f64>,
+}
+
+impl OurBenchmarkGeneratorCreator {
+    pub async fn new(
+        txn_factory: TransactionFactory,
+        load_type: LoadType,
+        account: &mut LocalAccount,
+        txn_executor: &dyn TransactionExecutor,
+    ) -> Self {
+
         println!("Generating {:?} {} transactions", self.load_type, needed);
 
         let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
@@ -122,75 +196,6 @@ impl TransactionGenerator for OurBenchmark {
         let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
         let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
 
-        for i in 0..needed {
-            let mut sender_id: usize = (i as usize) % accounts.len();
-
-            if matches!(load_type, SOLANA)
-            {
-                let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0, solana_cost_options.len())];
-                let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0, solana_len_options.len())];
-
-                let mut writes: Vec<u64> = Vec::new();
-                let mut i = 0;
-                while i < write_len_sample {
-                    i+=1;
-                    writes.push(general_resource_distribution.sample(&mut rng) as u64);
-                }
-
-                let length = max(1, cost_sample.round() as usize);
-
-                requests.push(self.package.our_spec_transaction(accounts[sender_id],
-                                                                &self.txn_factory,
-                                                                ident_str!("loop_exchange").to_owned(),
-                                                                vec![],
-                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()]));
-
-            }
-            else if matches!(load_type, P2PTX)
-            {
-                let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
-                let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
-
-                requests.push(self.package.our_spec_transaction(accounts[sender_id],
-                                                                &self.txn_factory,
-                                                                ident_str!("exchangetwo").to_owned(),
-                                                                vec![],
-                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()]));
-            }
-            else
-            {
-                let resource_id = general_resource_distribution.sample(&mut rng);
-                if matches!(load_type, NFT)
-                {
-                    sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
-                }
-
-                requests.push(self.package.our_spec_transaction(accounts[sender_id],
-                                                                &self.txn_factory,
-                                                                ident_str!("exchange").to_owned(),
-                                                                vec![],
-                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&resource_id).unwrap()]));
-            }
-        }
-        requests
-    }
-}
-
-pub struct OurBenchmarkGeneratorCreator {
-    txn_factory: TransactionFactory,
-    load_type: LoadType,
-    package: Package,
-    owner: AccountAddress
-}
-
-impl OurBenchmarkGeneratorCreator {
-    pub async fn new(
-        txn_factory: TransactionFactory,
-        load_type: LoadType,
-        account: &mut LocalAccount,
-        txn_executor: &dyn TransactionExecutor,
-    ) -> Self {
-
 
         let mut requests = Vec::with_capacity(1);
         let mut package_handler = PackageHandler::new();
@@ -207,7 +212,13 @@ impl OurBenchmarkGeneratorCreator {
             txn_factory,
             load_type,
             package,
-            owner: account.address()
+            owner: account.address(),
+            general_resource_distribution,
+            nft_sender_distribution,
+            p2p_receiver_distribution,
+            p2p_sender_distribution,
+            solana_len_options,
+            solana_cost_options
         }
     }
 }
