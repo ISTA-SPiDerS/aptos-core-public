@@ -35,7 +35,13 @@ pub struct OurBenchmark {
     txn_factory: TransactionFactory,
     load_type: LoadType,
     package: Package,
-    owner: AccountAddress
+    owner: AccountAddress,
+    pub general_resource_distribution: WeightedIndex<f64>,
+    pub nft_sender_distribution: WeightedIndex<f64>,
+    pub p2p_receiver_distribution: WeightedIndex<f64>,
+    pub p2p_sender_distribution: WeightedIndex<f64>,
+    pub solana_len_options: Vec<usize>,
+    pub solana_cost_options: Vec<f64>,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -52,13 +58,25 @@ impl OurBenchmark {
         txn_factory: TransactionFactory,
         load_type: LoadType,
         package: Package,
-        owner: AccountAddress
+        owner: AccountAddress,
+        general_resource_distribution: WeightedIndex<f64>,
+        nft_sender_distribution: WeightedIndex<f64>,
+        p2p_receiver_distribution: WeightedIndex<f64>,
+        p2p_sender_distribution: WeightedIndex<f64>,
+        solana_len_options: Vec<usize>,
+        solana_cost_options: Vec<f64>,
     ) -> Self {
         Self {
             txn_factory,
             load_type,
             package,
-            owner
+            owner,
+            general_resource_distribution,
+            nft_sender_distribution,
+            p2p_receiver_distribution,
+            p2p_sender_distribution,
+            solana_len_options,
+            solana_cost_options
         }
     }
 }
@@ -232,7 +250,13 @@ impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
                 self.txn_factory.clone(),
                 self.load_type,
                 self.package.clone(),
-                self.owner.clone()
+                self.owner.clone(),
+                general_resource_distribution,
+                nft_sender_distribution,
+                p2p_receiver_distribution,
+                p2p_sender_distribution,
+                solana_len_options,
+                solana_cost_options
             )
             .await,
         )
