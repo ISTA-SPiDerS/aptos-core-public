@@ -58,14 +58,55 @@ impl OurBenchmark {
         txn_factory: TransactionFactory,
         load_type: LoadType,
         package: Package,
-        owner: AccountAddress,
-        general_resource_distribution: WeightedIndex<f64>,
-        nft_sender_distribution: WeightedIndex<f64>,
-        p2p_receiver_distribution: WeightedIndex<f64>,
-        p2p_sender_distribution: WeightedIndex<f64>,
-        solana_len_options: Vec<usize>,
-        solana_cost_options: Vec<f64>,
+        owner: AccountAddress
     ) -> Self {
+
+        let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
+        if matches!(load_type, LoadType::DEXAVG)
+        {
+            for value in AVG {
+                resource_distribution_vec.push(value);
+            }
+        }
+        else if matches!(load_type, LoadType::DEXBURSTY)
+        {
+            for value in BURSTY {
+                resource_distribution_vec.push(value);
+            }
+        }
+        else if matches!(load_type, LoadType::NFT)
+        {
+            for value in TX_NFT_TO {
+                resource_distribution_vec.push(value);
+            }
+        }
+        else if matches!(load_type, LoadType::SOLANA)
+        {
+            for value in RES_DISTR {
+                for _ in 0..20 {
+                    resource_distribution_vec.push(value);
+                }
+            }
+        }
+
+        let mut solana_len_options:Vec<usize> = vec![];
+        let mut solana_cost_options:Vec<f64> = vec![];
+
+        for value in LEN_DISTR {
+            solana_len_options.push(value.round() as usize);
+        }
+
+        for value in COST_DISTR {
+            solana_cost_options.push(value);
+        }
+
+        let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
+
+        let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
+        let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
+        let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
+
+
         Self {
             txn_factory,
             load_type,
@@ -150,13 +191,7 @@ pub struct OurBenchmarkGeneratorCreator {
     txn_factory: TransactionFactory,
     load_type: LoadType,
     package: Package,
-    owner: AccountAddress,
-    pub general_resource_distribution: WeightedIndex<f64>,
-    pub nft_sender_distribution: WeightedIndex<f64>,
-    pub p2p_receiver_distribution: WeightedIndex<f64>,
-    pub p2p_sender_distribution: WeightedIndex<f64>,
-    pub solana_len_options: Vec<usize>,
-    pub solana_cost_options: Vec<f64>,
+    owner: AccountAddress
 }
 
 impl OurBenchmarkGeneratorCreator {
@@ -168,52 +203,6 @@ impl OurBenchmarkGeneratorCreator {
     ) -> Self {
 
         println!("Generating {:?} {} transactions", self.load_type, needed);
-
-        let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
-        if matches!(load_type, LoadType::DEXAVG)
-        {
-            for value in AVG {
-                resource_distribution_vec.push(value);
-            }
-        }
-        else if matches!(load_type, LoadType::DEXBURSTY)
-        {
-            for value in BURSTY {
-                resource_distribution_vec.push(value);
-            }
-        }
-        else if matches!(load_type, LoadType::NFT)
-        {
-            for value in TX_NFT_TO {
-                resource_distribution_vec.push(value);
-            }
-        }
-        else if matches!(load_type, LoadType::SOLANA)
-        {
-            for value in RES_DISTR {
-                for _ in 0..20 {
-                    resource_distribution_vec.push(value);
-                }
-            }
-        }
-
-        let mut solana_len_options:Vec<usize> = vec![];
-        let mut solana_cost_options:Vec<f64> = vec![];
-
-        for value in LEN_DISTR {
-            solana_len_options.push(value.round() as usize);
-        }
-
-        for value in COST_DISTR {
-            solana_cost_options.push(value);
-        }
-
-        let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
-
-        let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
-        let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
-        let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
-
 
         let mut requests = Vec::with_capacity(1);
         let mut package_handler = PackageHandler::new();
@@ -230,13 +219,7 @@ impl OurBenchmarkGeneratorCreator {
             txn_factory,
             load_type,
             package,
-            owner: account.address(),
-            general_resource_distribution,
-            nft_sender_distribution,
-            p2p_receiver_distribution,
-            p2p_sender_distribution,
-            solana_len_options,
-            solana_cost_options
+            owner: account.address()
         }
     }
 }
@@ -250,14 +233,7 @@ impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
                 self.txn_factory.clone(),
                 self.load_type,
                 self.package.clone(),
-                self.owner.clone(),
-                general_resource_distribution,
-                nft_sender_distribution,
-                p2p_receiver_distribution,
-                p2p_sender_distribution,
-                solana_len_options,
-                solana_cost_options
-            )
+                self.owner.clone())
             .await,
         )
     }
