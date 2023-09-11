@@ -274,7 +274,7 @@ where
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
 
-        profiler.start_timing(&format!("thread time {}", idx).to_string());
+        profiler.start_timing(&"thread-time".to_string());
         let thread_id = idx;
 
         drop(init_timer);
@@ -287,14 +287,12 @@ where
         loop {
             // Only one thread try_commit to avoid contention.
             if committing {
-                profiler.start_timing(&"committing".to_string());
                 // Keep committing txns until there is no more that can be committed now.
                 loop {
                     if scheduler.try_commit().is_none() {
                         break;
                     }
                 }
-                profiler.end_timing(&"committing".to_string());
             }
 
             scheduler_task = match scheduler_task {
@@ -366,7 +364,7 @@ where
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
-                    profiler.end_timing(&format!("thread time {}", idx.to_string()));
+                    profiler.end_timing(&"thread-time".to_string());
                     (*total_profiler.lock()).add_from(&profiler);
 
                     break;
@@ -463,7 +461,6 @@ where
 
         {
             (*profiler.lock()).start_timing(&"total time1".to_string());
-            (*profiler.lock()).start_timing(&"total time2".to_string());
 
             RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
                 for i in 0..self.concurrency_level {
@@ -582,7 +579,6 @@ where
                     .collect())
             },
         };
-        (*profiler.lock()).end_timing(&"total time2".to_string());
         output
     }
 
