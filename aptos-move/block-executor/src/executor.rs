@@ -103,7 +103,7 @@ where
             txn,
             idx_to_execute,
             false,
-            scheduler.prologue_map.get(&(idx_to_execute as u16)).unwrap()
+            &scheduler.prologue_map[idx_to_execute]
         );
         //profiler.end_timing(&"execute#1".to_string());
 
@@ -400,14 +400,15 @@ where
                     else {
                         let ind = scheduler.prologue_index.fetch_add(1, Ordering::SeqCst);
                         last_ind = ind;
-                        let option = scheduler.prologue_map.get(&ind);
-                        if let Some(opt) = option {
-                            if opt.0
+                        if last_ind < block.len() as u16 {
+                            let option = &scheduler.prologue_map[ind as usize];
+                            if option.0
                             {
-                                let resource = opt.1.try_lock();
+                                let resource = option.1.try_lock();
                                 if let Ok(mut res) = resource {
                                     if !*res
                                     {
+                                        profiler.count_one("prologue".to_string());
                                         *res = self.execute_prologue(
                                             ind as usize,
                                             block,
@@ -436,7 +437,7 @@ where
         base_view: &S,
         mode: ExecutionMode,
         input_profiler: &mut Profiler,
-        map: HashMap<u16, (bool, MyMut<bool>)>
+        map: Vec<(bool, MyMut<bool>)>
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         assert!(self.concurrency_level > 1, "Must use sequential execution");
 
@@ -639,7 +640,7 @@ where
         base_view: &S,
         mode: ExecutionMode,
         profiler: &mut Profiler,
-        map: HashMap<u16, (bool, MyMut<bool>)>
+        map: Vec<(bool, MyMut<bool>)>
     ) -> Result<Vec<(E::Output, Vec<(T::Key, WriteOp)>)>, E::Error> {
         let mut ret = if self.concurrency_level > 1 {
             self.execute_transactions_parallel(

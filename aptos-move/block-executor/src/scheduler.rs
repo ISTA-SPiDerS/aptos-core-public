@@ -267,7 +267,7 @@ pub struct Scheduler {
 
     pub(crate) sig_val_idx: AtomicUsize,
 
-    pub prologue_map: HashMap<u16, (bool, MyMut<bool>)>,
+    pub prologue_map: Vec<(bool, MyMut<bool>)>,
 
     pub prologue_index: AtomicU16,
 
@@ -283,7 +283,7 @@ pub struct Scheduler {
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, mode: ExecutionMode, map: HashMap<u16, (bool, MyMut<bool>)>) -> Self {
+    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, mode: ExecutionMode, map: Vec<(bool, MyMut<bool>)>) -> Self {
 
         let hint_graph : Vec<Vec<TxnIndex>>  = (0..num_txns)
             .map(|idx| dependencies[idx].iter().map(|v| *v as TxnIndex).collect())

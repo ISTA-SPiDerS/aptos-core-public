@@ -720,9 +720,9 @@ impl AptosVM {
                 };
             }
             else {
-                let mut res = *prologue.1.lock().unwrap();
-                if !res {
-                    res = true;
+                let mut res = prologue.1.lock().unwrap();
+                if !*res {
+                    *res = true;
                     if let Err(err) = self.validate_signature_checked_transaction(
                         &mut session,
                         storage,

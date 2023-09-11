@@ -81,13 +81,13 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
         txn: &PreprocessedTransaction,
         txn_idx: usize,
         materialize_deltas: bool,
-        prologue: &(bool, Mutex<bool>)
+        prologue_map: &(bool, Mutex<bool>)
     ) -> ExecutionStatus<AptosTransactionOutput, VMStatus> {
         let log_context = AdapterLogSchema::new(self.base_view.id(), txn_idx);
 
         match self
             .vm
-            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context, false, prologue)
+            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context, false, prologue_map)
         {
             Ok((vm_status, mut output_ext, sender)) => {
                 if materialize_deltas {

@@ -423,7 +423,7 @@ where
         txn: &Self::Txn,
         txn_idx: TxnIndex,
         _materialize_deltas: bool,
-        prologue: &(bool, Mutex<bool>)
+        prologue_map: &(bool, Mutex<bool>)
     ) -> ExecutionStatus<Self::Output, Self::Error> {
         match txn {
             Transaction::Write {

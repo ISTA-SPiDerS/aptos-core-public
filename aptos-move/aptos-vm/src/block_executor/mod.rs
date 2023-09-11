@@ -100,17 +100,17 @@ impl BlockAptosVM {
 
         let mut check_set : HashSet<Vec<u8>> = HashSet::new();
 
-        let mut map : HashMap<u16, (bool, MyMut<bool>)> = HashMap::new();
+        let mut map : Vec<(bool, MyMut<bool>)> = Vec::with_capacity(signature_verified_block.len());
 
-        let mut ind : u16 = 0;
+        let mut ind : usize = 0;
         for tx in transactions.txns().to_vec() {
             let (mut res, ve) = preprocess_transaction::<AptosVM>(tx);
             if check_set.insert(ve)
             {
-                map.insert(ind, (true, MyMut::new(false)));
+                map.push((true, MyMut::new(false)));
             }
             else {
-                map.insert(ind, (false, MyMut::new(false)));
+                map.push((false, MyMut::new(false)));
             }
 
             signature_verified_block.push(res);
