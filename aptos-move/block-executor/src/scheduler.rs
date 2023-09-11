@@ -547,9 +547,8 @@ impl Scheduler {
                     let _ = self.channels.0.send(tx);
                 } else {
                     if !got_next {
-                        let v = self.critical_path_parent[txn_idx][i];
                         if let Some((version_to_execute, maybe_condvar)) =
-                            self.try_execute_next_version(profiler, v, thread_id)
+                            self.try_execute_next_version(profiler, tx, thread_id)
                         {
                             next = SchedulerTask::ExecutionTask(version_to_execute, maybe_condvar);
                             got_next = true;
