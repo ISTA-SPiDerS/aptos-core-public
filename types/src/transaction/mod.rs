@@ -1688,7 +1688,7 @@ impl<T: Send + Sync + Clone> Into<TransactionRegister<T>> for Vec<T> {
 
 pub static RAYON_EXEC_POOL: Lazy<Mutex<rayon::ThreadPool>> = Lazy::new(|| Mutex::new({
     rayon::ThreadPoolBuilder::new()
-        .num_threads(cmp::min(32, num_cpus::get()))
+        .num_threads(cmp::min(16, num_cpus::get()))
         .thread_name(|index| format!("par_exec_{}", index))
         .build()
         .unwrap()
