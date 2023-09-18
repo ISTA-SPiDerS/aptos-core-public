@@ -26,6 +26,7 @@ use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
 use std::ptr::null;
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
 use itertools::Itertools;
@@ -55,6 +56,7 @@ use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use aptos_mempool::shared_mempool::types::{CACHE};
+use aptos_vm::data_cache::StorageAdapter;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -83,7 +85,7 @@ fn main() {
     println!("STARTING WARMUP");
     for _ in [1, 2, 3] {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
-        let block = get_transaction_register(txn.clone(), &executor)
+        let block = get_transaction_register(txn.clone(), &executor, 4)
             .map_par_txns(Transaction::UserTransaction);
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
@@ -166,7 +168,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut profiler = Profiler::new();
 
         let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
-        let block = get_transaction_register(block.clone(), &executor)
+        let block = get_transaction_register(block.clone(), &executor, c)
             .map_par_txns(Transaction::UserTransaction);
 
         println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, mode, load_type);
@@ -237,9 +239,8 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     println!("#-------------------------------------------------------------------------");
 }
 
-fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor, cores: usize) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
-
     let (tx, rx):(mpsc::SyncSender<(u64, SignedTransaction)>, mpsc::Receiver<(u64, SignedTransaction)>) = mpsc::sync_channel(100000);
 
     let mut filler: DependencyFiller = DependencyFiller::new(
@@ -252,46 +253,63 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
     let len = txns.len();
 
     let th = rayon::spawn(move || {
-        let val = transaction_validation.clone();
-        let mut count = 0;
 
         let mut input = vec![];
         loop
         {
+            let start = Instant::now();
+            let mut count = 0;
             loop
             {
                 if let Ok((index, tx)) = rx.try_recv() {
                     input.push((index, tx));
                     count += 1;
                 }
-                else {
+                else if count >= len {
+                    //println!("xxx thread end xxx");
                     break;
                 }
             }
 
-            let failures = DashMap::new();
-            if !input.is_empty()
+            if input.is_empty()
             {
-                RAYON_EXEC_POOL.lock().unwrap().install(|| {
-                    input.par_drain(..)
-                        .for_each(|(index, tx)| {
-                            let result = val.speculate_transaction(&tx);
-                            let (a, b) = result.unwrap();
+                continue;
+            }
 
-                            match b {
-                                VMStatus::Executed => {
-                                    CACHE.insert(index, (a, b, tx));
+            let exec_counter = AtomicUsize::new(0);
+
+            let failures = DashMap::new();
+            {
+                RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
+                    for _ in 0..cores {
+                        s.spawn(|_| {
+
+                            let mut current_index = exec_counter.fetch_add(1, Ordering::SeqCst);
+                            while current_index < count {
+                                let (index, tx) = &input[current_index];
+                                let result = transaction_validation.speculate_transaction(&tx);
+                                let (a, b) = result.unwrap();
+                                match b {
+                                    VMStatus::Executed => {
+                                        CACHE.insert(index.clone(), (a, b, tx.clone()));
+                                    }
+                                    _ => {
+                                        failures.insert(index.clone(), tx.clone());
+                                    }
                                 }
-                                _ => {
-                                    failures.insert(index, tx);
-                                }
+                                current_index = exec_counter.fetch_add(1, Ordering::SeqCst);
                             }
                         });
+                    }
                 });
             }
 
-            if input.is_empty() && count >= len {
-                println!("xxx thread end xxx");
+            input.clear();
+
+            if count >= len {
+                println!("xxx thread end xxx {}", failures.len());
+                println!("Total time: {:?}", start.elapsed().as_millis());
+
                 return;
             }
 
@@ -302,12 +320,13 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
     });
 
 
-    let mut _simple_filler = SimpleFiller::new(100_000_000, 100_000);
-    filler.add_all(txns, &mut VecDeque::new(), &mut u64::MAX, &mut 0, &mut HashSet::new());
+    filler.add_all(txns, &mut VecDeque::with_capacity(10000), &mut u64::MAX, &mut 0, &mut HashSet::new());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
+
+    drop(th);
 
     println!("---Start---");
 

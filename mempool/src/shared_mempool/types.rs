@@ -33,7 +33,8 @@ use std::{
     time::{Instant, SystemTime},
 };
 use std::ptr::null;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, AtomicUsize};
+use std::sync::atomic::Ordering::{Relaxed, SeqCst};
 use std::sync::mpsc;
 use std::time::Duration;
 use dashmap::DashMap;
@@ -88,11 +89,12 @@ impl<
             let mut input = vec![];
             loop
             {
+                let start = Instant::now();
                 loop
                 {
-                    if input.len() >= 512 {
+                    /*if input.len() >= 512 {
                         break;
-                    }
+                    }*/
                     if let Ok((index, tx)) = rx.try_recv() {
                         input.push((index, tx));
                     }
@@ -101,27 +103,41 @@ impl<
                     }
                 }
 
+                let count = input.len();
+                let start2 = Instant::now();
+                let exec_counter = AtomicUsize::new(0);
+                let mut start3 = Instant::now();
                 let failures = DashMap::new();
-
                 {
-                    let val = locked_val.write();
-                    RAYON_EXEC_POOL.lock().unwrap().install(|| {
-                        input.par_drain(..)
-                            .for_each(|(index, tx)| {
-                                let result = val.speculate_transaction(&tx);
-                                let (a, b) = result.unwrap();
+                    let transaction_validation = locked_val.write();
+                    RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
+                        start3 = Instant::now();
+                        for _ in 0..16 {
+                            s.spawn(|_| {
 
-                                match b {
-                                    VMStatus::Executed => {
-                                        CACHE.insert(index, (a, b, tx));
+                                let mut current_index = exec_counter.fetch_add(1, SeqCst);
+                                while current_index < count {
+                                    let (index, tx) = &input[current_index];
+                                    let result = transaction_validation.speculate_transaction(&tx);
+                                    let (a, b) = result.unwrap();
+                                    match b {
+                                        VMStatus::Executed => {
+                                            CACHE.insert(index.clone(), (a, b, tx.clone()));
+                                        }
+                                        _ => {
+                                            failures.insert(index.clone(), tx.clone());
+                                        }
                                     }
-                                    _ => {
-                                        failures.insert(index, tx);
-                                    }
+                                    current_index = exec_counter.fetch_add(1, SeqCst);
                                 }
                             });
+                        }
                     });
+
+                    println!("bla end {} {} {} {}", start.elapsed().as_millis(), start2.elapsed().as_millis(), start3.elapsed().as_millis(), count);
                 }
+
+                input.clear();
 
                 for value in failures {
                     input.push(value);

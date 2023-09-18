@@ -49,6 +49,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+crossbeam = { workspace = true }
 
 [dev-dependencies]
 aptos-compression = { workspace = true }
