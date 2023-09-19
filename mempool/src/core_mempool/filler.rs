@@ -340,12 +340,14 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 cache.push_back((speculation, status, tx));
+                println!("bla too long");
                 continue;
             }
 
             if self.total_estimated_gas + gas_used > self.gas_per_core_init * self.cores {
                 self.full = true;
                 cache.push_back((speculation, status, tx));
+                println!("bla too much");
                 break;
             }
 
