@@ -128,7 +128,7 @@ impl BlockAptosVM {
             .execute_block(state_view, register, state_view, mode, profiler, map)
             .map(|results| {
                 // Process the outputs in parallel, combining delta writes with other writes.
-                RAYON_EXEC_POOL.lock().unwrap().install(|| {
+                RAYON_EXEC_POOL.install(|| {
                     results
                         .into_par_iter()
                         .map(|(output, delta_writes)| {

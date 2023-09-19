@@ -188,8 +188,8 @@ impl DependencyFiller {
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
-            last_touched: HashMap::with_capacity(10000),
-            writes: HashMap::with_capacity(10000),
+            last_touched: HashMap::new(),
+            writes: HashMap::new(),
             dependency_graph: vec![],
             block: vec![],
             estimated_gas: vec![],
@@ -239,6 +239,7 @@ impl BlockFiller for DependencyFiller {
         pending: &mut HashSet<TxnPointer>
     ) -> Vec<SignedTransaction> {
 
+        let start = Instant::now();
         let mut force = false;
         if *total == u64::MAX {
             force = true;
@@ -429,6 +430,8 @@ impl BlockFiller for DependencyFiller {
             println!("bla clear cache {}", cache.len());
             previous.extend(cache);
         }
+
+        println!("bla endx {}", start.elapsed().as_millis());
 
         //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];

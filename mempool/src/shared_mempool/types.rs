@@ -110,7 +110,7 @@ impl<
                 let failures = DashMap::new();
                 {
                     let transaction_validation = locked_val.write();
-                    RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
+                    RAYON_EXEC_POOL.scope(|s| {
                         start3 = Instant::now();
                         for _ in 0..16 {
                             s.spawn(|_| {

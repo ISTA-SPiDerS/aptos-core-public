@@ -476,11 +476,10 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                     mempool.gc_by_expiration_time(curr_time);
                 }
 
-                const GAS_PER_CORE: u64 = 200_000_000_000;
                 let mut block_filler: DependencyFiller = DependencyFiller::new(
-                    GAS_PER_CORE,
+                    200_000_000_000,
                     max_bytes,
-                    10000, RAYON_EXEC_POOL.lock().unwrap().current_num_threads() as u64, smp.channel.clone());
+                    10000, RAYON_EXEC_POOL.current_num_threads() as u64, smp.channel.clone());
                 mempool.get_full_batch(exclude_transactions, &mut block_filler, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();

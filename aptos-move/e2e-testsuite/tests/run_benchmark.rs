@@ -280,7 +280,7 @@ fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeEx
 
             let failures = DashMap::new();
             {
-                RAYON_EXEC_POOL.lock().unwrap().scope(|s| {
+                RAYON_EXEC_POOL.scope(|s| {
                     for _ in 0..cores {
                         s.spawn(|_| {
 
