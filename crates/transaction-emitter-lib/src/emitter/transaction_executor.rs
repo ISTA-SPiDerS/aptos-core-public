@@ -49,7 +49,7 @@ impl RestApiTransactionExecutor {
             let seed = [
                 run_seed.to_le_bytes().to_vec(),
                 txn.sender().to_vec(),
-                i
+                vec![i as u8]
             ].concat();
 
             let mut seeded_rng = StdRng::from_seed(*aptos_crypto::HashValue::sha3_256_of(&seed));
