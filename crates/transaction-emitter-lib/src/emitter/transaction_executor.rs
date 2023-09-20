@@ -50,7 +50,7 @@ impl RestApiTransactionExecutor {
                 run_seed.to_le_bytes().to_vec(),
                 txn.sender().to_vec(),
             ].concat();
-            
+
             let mut seeded_rng = StdRng::from_seed(*aptos_crypto::HashValue::sha3_256_of(&seed));
             let rest_client = self.random_rest_client_from_rng(&mut seeded_rng);
 
@@ -135,6 +135,11 @@ async fn submit_and_check(
 ) -> Result<()> {
     let start = Instant::now();
     if let Err(err) = rest_client.submit_bcs(txn).await {
+        if err.to_string().contains("sharded") {
+            *failed_wait = true;
+            return Err(err)?;
+        }
+
         sample!(
             SampleRate::Duration(Duration::from_secs(60)),
             warn!(
@@ -143,8 +148,7 @@ async fn submit_and_check(
                 err,
             )
         );
-        *failed_submit = true;
-        return Err(err)?;
+
         // even if txn fails submitting, it might get committed, so wait to see if that is the case.
     }
     if let Err(err) = rest_client
