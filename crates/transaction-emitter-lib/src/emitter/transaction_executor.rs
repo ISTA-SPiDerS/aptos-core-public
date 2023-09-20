@@ -44,15 +44,16 @@ impl RestApiTransactionExecutor {
         counters: &CounterState,
         run_seed: u64,
     ) -> Result<()> {
-        let seed = [
-            run_seed.to_le_bytes().to_vec(),
-            txn.sender().to_vec(),
-        ].concat();
-
-        let mut seeded_rng = StdRng::from_seed(*aptos_crypto::HashValue::sha3_256_of(&seed));
-        let rest_client = self.random_rest_client_from_rng(&mut seeded_rng);
 
         for i in 0..self.max_retries {
+            let seed = [
+                run_seed.to_le_bytes().to_vec(),
+                txn.sender().to_vec(),
+            ].concat();
+            
+            let mut seeded_rng = StdRng::from_seed(*aptos_crypto::HashValue::sha3_256_of(&seed));
+            let rest_client = self.random_rest_client_from_rng(&mut seeded_rng);
+
             sample!(
                 SampleRate::Duration(Duration::from_secs(60)),
                 debug!(
