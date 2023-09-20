@@ -143,6 +143,7 @@ async fn submit_and_check(
             )
         );
         *failed_submit = true;
+        return Err(err)?;
         // even if txn fails submitting, it might get committed, so wait to see if that is the case.
     }
     if let Err(err) = rest_client
