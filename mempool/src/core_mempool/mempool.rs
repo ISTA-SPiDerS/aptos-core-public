@@ -174,9 +174,12 @@ impl Mempool {
 
         let shard = txn.sender()[txn.sender().len()-1] as u32;
         if shard < my_space_start || shard >= my_space_end {
-            return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
-                "sharded out this tx".to_string());
+            println!("bla shard deny");
+            return MempoolStatus::new(MempoolStatusCode::Accepted);
+            /*return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
+                "sharded out this tx".to_string());*/
         }
+        println!("bla shard accept");
 
         let now = SystemTime::now();
         let expiration_time =
