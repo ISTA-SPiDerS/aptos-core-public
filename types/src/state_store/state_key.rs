@@ -96,14 +96,6 @@ impl StateKey {
         }
     }
 
-    pub fn get_val(&self) -> &Vec<u8> {
-        match &self.inner {
-            StateKeyInner::AccessPath(k) => {&k.path}
-            StateKeyInner::TableItem { handle, key } => key,
-            StateKeyInner::Raw(k) => {k}
-        }
-    }
-
     pub fn size(&self) -> usize {
         match &self.inner {
             StateKeyInner::AccessPath(access_path) => access_path.size(),

@@ -92,9 +92,9 @@ impl<
                 let start = Instant::now();
                 loop
                 {
-                    /*if input.len() >= 512 {
+                    if input.len() >= 512 {
                         break;
-                    }*/
+                    }
                     if let Ok((index, tx)) = rx.try_recv() {
                         input.push((index, tx));
                     }

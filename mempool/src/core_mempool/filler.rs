@@ -163,8 +163,8 @@ pub struct DependencyFiller {
     total_estimated_gas: u64,
     full: bool,
 
-    last_touched: HashMap<Vec<u8>, u64>,
-    writes: HashMap<Vec<u8>, Vec<TransactionIdx>>,
+    last_touched: BTreeMap<StateKey, u64>,
+    writes: BTreeMap<StateKey, Vec<TransactionIdx>>,
     dependency_graph: Vec<HashSet<TransactionIdx>>,
     block: Vec<SignedTransaction>,
     estimated_gas: Vec<u64>,
@@ -188,8 +188,8 @@ impl DependencyFiller {
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
-            last_touched: HashMap::new(),
-            writes: HashMap::new(),
+            last_touched: BTreeMap::new(),
+            writes: BTreeMap::new(),
             dependency_graph: vec![],
             block: vec![],
             estimated_gas: vec![],
@@ -321,7 +321,7 @@ impl BlockFiller for DependencyFiller {
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
             for read in read_set {
-                if let Some(val) = self.last_touched.get(read.get_val()) {
+                if let Some(val) = self.last_touched.get(&read) {
                     arrival_time = max(arrival_time, *val);
                 }
             }
@@ -353,16 +353,16 @@ impl BlockFiller for DependencyFiller {
 
             let mut dependencies = HashSet::new();
             for read in read_set {
-                if let Some(val) = self.writes.get(read.get_val()) {
+                if let Some(val) = self.writes.get(&read) {
                     for parent_txn in val {
                         dependencies.insert(*parent_txn);
                     }
                 }
             }
 
-            let user_state_key = tx.sender().to_vec();
-            if let Some(val) = self.writes.get(&user_state_key) {
-                for parent_txn in val {
+            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            if self.writes.contains_key(&user_state_key) {
+                for parent_txn in self.writes.get(&user_state_key).unwrap() {
                     dependencies.insert(*parent_txn);
                 }
             }
@@ -386,34 +386,34 @@ impl BlockFiller for DependencyFiller {
 
             // Update last touched time for used resources.
             for (delta, _op) in delta_set {
-                let mx = max(finish_time, *self.last_touched.get(delta.get_val()).unwrap_or(&0u64));
-                self.last_touched.insert(delta.get_val().clone(), mx.into());
+                let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&0u64));
+                self.last_touched.insert(delta.clone(), mx.into());
 
-                if !self.writes.contains_key(delta.get_val()) {
-                    self.writes.insert(delta.get_val().clone(), vec![]);
+                if !self.writes.contains_key(delta) {
+                    self.writes.insert(delta.clone(), vec![]);
                 }
 
-                if read_set.contains(delta) {
-                    self.writes.insert(delta.get_val().clone(), vec![]);
+                if read_set.contains(&delta) {
+                    self.writes.insert(delta.clone(), vec![]);
                 }
-                self.writes.get_mut(delta.get_val()).unwrap().push(current_idx);
+                self.writes.get_mut(delta).unwrap().push(current_idx);
             }
             
             for write in write_set {
-                let mx = max(finish_time, *self.last_touched.get(write.0.get_val()).unwrap_or(&0u64));
-                self.last_touched.insert(write.0.get_val().clone(), mx.into());
+                let mx = max(finish_time, *self.last_touched.get(write.0).unwrap_or(&0u64));
+                self.last_touched.insert(write.0.clone(), mx.into());
 
-                if !self.writes.contains_key(write.0.get_val()) {
-                    self.writes.insert(write.0.get_val().clone(), vec![]);
+                if !self.writes.contains_key(write.0) {
+                    self.writes.insert(write.0.clone(), vec![]);
                 }
 
-                self.writes.insert(write.0.get_val().clone(), vec![current_idx]);
+                self.writes.insert(write.0.clone(), vec![current_idx]);
             }
 
             let mx = max(finish_time, *self.last_touched.get(&user_state_key).unwrap_or(&0u64));
             self.last_touched.insert(user_state_key.clone(), mx.into());
 
-            self.writes.insert(user_state_key.clone(), vec![current_idx]);
+            self.writes.insert(user_state_key, vec![current_idx]);
 
 
             self.block.push(tx);

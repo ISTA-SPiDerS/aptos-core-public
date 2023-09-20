@@ -64,7 +64,7 @@ impl Mempool {
                 config.mempool.system_transaction_timeout_secs,
             ),
             last_max_gas: 100_000_000_000,
-            cached_ex: VecDeque::with_capacity(10000),
+            cached_ex: VecDeque::new(),
             total: 0,
             current: 0,
             pending: HashSet::new()
