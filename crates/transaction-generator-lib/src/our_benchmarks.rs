@@ -83,7 +83,7 @@ impl OurBenchmark {
         else if matches!(load_type, LoadType::SOLANA)
         {
             for value in RES_DISTR {
-                for _ in 0..20 {
+                for _ in 0..10 {
                     resource_distribution_vec.push(value);
                 }
             }
