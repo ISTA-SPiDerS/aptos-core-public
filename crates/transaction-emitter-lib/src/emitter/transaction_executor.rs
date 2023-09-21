@@ -65,14 +65,20 @@ impl RestApiTransactionExecutor {
 
             let mut failed_submit = false;
             let mut failed_wait = false;
+            let mut rejected = false;
             let result = submit_and_check(
                 rest_client,
                 txn,
                 self.retry_after,
                 &mut failed_submit,
                 &mut failed_wait,
+                &mut rejected,
             )
             .await;
+
+            if rejected {
+                continue
+            }
 
             if failed_submit {
                 counters.submit_failures[i.min(counters.submit_failures.len() - 1)]
@@ -133,11 +139,12 @@ async fn submit_and_check(
     wait_duration: Duration,
     failed_submit: &mut bool,
     failed_wait: &mut bool,
+    rejected: &mut bool,
 ) -> Result<()> {
     let start = Instant::now();
     if let Err(err) = rest_client.submit_bcs(txn).await {
         if err.to_string().contains("sharded") {
-            *failed_wait = true;
+            *rejected = true;
             return Err(err)?;
         }
 
