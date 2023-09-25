@@ -561,7 +561,7 @@ impl TxnEmitter {
             StdRng::from_seed(seed),
         );
         let init_retries: usize =
-            usize::try_from(init_expiration_time / req.init_retry_interval.as_secs()).unwrap();
+            usize::try_from(init_expiration_time / req.init_retry_interval.as_secs()).unwrap() * 10;
         info!(
             "Using reliable/retriable init transaction executor with {} retries, every {}s",
             init_retries,
