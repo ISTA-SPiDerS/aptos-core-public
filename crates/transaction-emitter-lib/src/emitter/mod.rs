@@ -160,8 +160,8 @@ impl Default for EmitJobRequest {
             mint_to_root: false,
             txn_expiration_time_secs: 270,
             init_expiration_multiplier: 3.0,
-            accounts_per_worker: 100,
-            workers_per_endpoint:  22,
+            accounts_per_worker: 4,
+            workers_per_endpoint:  40,
             init_retry_interval: Duration::from_secs(10),
             max_transactions_per_account: 10,
             expected_max_txns: MAX_TXNS,
@@ -573,16 +573,25 @@ impl TxnEmitter {
             retry_after: req.init_retry_interval,
         };
         let mut all_accounts = account_minter
-            .create_accounts(&txn_executor, &req, &mode_params, num_accounts)
+            .create_accounts(&txn_executor, &req, &mode_params, num_accounts, req.rest_clients.len())
             .await?;
         let stop = Arc::new(AtomicBool::new(false));
         let stats = Arc::new(DynamicStatsTracking::new(stats_tracking_phases));
         let tokio_handle = Handle::current();
 
+        let mut all_accounts_flat = Vec::new();
+        for mut acc_vec in all_accounts.iter()
+        {
+            for acc in acc_vec.into_iter() {
+                all_accounts_flat.push(acc.clone());
+            }
+        }
+
+
         let mut txn_generator_creator = create_txn_generator_creator(
             &req.transaction_mix_per_phase,
             num_workers,
-            &mut all_accounts,
+            &mut all_accounts_flat,
             &txn_executor,
             &txn_factory,
             &init_txn_factory,
@@ -616,13 +625,18 @@ impl TxnEmitter {
         );
 
         let all_start_sleep_durations = mode_params.get_all_start_sleep_durations(self.from_rng());
-        let mut all_accounts_iter = all_accounts.into_iter();
         let mut workers = vec![];
         for _ in 0..workers_per_endpoint {
             for client in &req.rest_clients {
-                let accounts = (&mut all_accounts_iter)
-                    .take(mode_params.accounts_per_worker)
-                    .collect::<Vec<_>>();
+                let mut accounts = Vec::new();
+
+                for mut acc_vec in all_accounts.iter_mut()
+                {
+                    accounts.push(acc_vec.pop().unwrap());
+                }
+
+                println!("giving to submitter: {}", accounts.len());
+
                 let stop = stop.clone();
                 let stats = Arc::clone(&stats);
                 let txn_generator = txn_generator_creator.create_transaction_generator().await;

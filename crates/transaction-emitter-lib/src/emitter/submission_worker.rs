@@ -72,6 +72,7 @@ impl SubmissionWorker {
     pub(crate) async fn run(mut self) -> Vec<LocalAccount> {
         let start_time = Instant::now() + self.start_sleep_duration;
         self.sleep_check_done(self.start_sleep_duration).await;
+        let copy = self.accounts.clone();
 
         let wait_duration = Duration::from_millis(self.params.wait_millis);
         let mut wait_until = start_time;
@@ -93,6 +94,12 @@ impl SubmissionWorker {
                     )
                 );
             }
+
+            if self.accounts.len() <= 0
+            {
+                return copy;
+            }
+
             // always add expected cycle duration, to not drift from expected pace.
             wait_until += wait_duration;
             let requests = self.gen_requests();
@@ -121,20 +128,19 @@ impl SubmissionWorker {
 
             let txn_offset_time = Arc::new(AtomicU64::new(0));
 
-            join_all(
-                requests
-                    .chunks(self.params.max_submit_batch_size)
-                    .map(|reqs| {
-                        submit_transactions(
-                            &self.client,
-                            reqs,
-                            loop_start_time.clone(),
-                            txn_offset_time.clone(),
-                            loop_stats,
-                        )
-                    }),
-            )
-            .await;
+            let success = submit_transactions(
+                &self.client,
+                &requests,
+                loop_start_time.clone(),
+                txn_offset_time.clone(),
+                loop_stats,
+            ).await;
+
+            if !success {
+                self.accounts.retain(|x| x.address().to_vec() != requests[0].sender().to_vec());
+                println!("Retain: {}", self.accounts.len());
+                continue;
+            }
 
             if self.skip_latency_stats {
                 // we also don't want to be stuck waiting for txn_expiration_time_secs
@@ -171,7 +177,7 @@ impl SubmissionWorker {
             }
         }
 
-        self.accounts
+        copy
     }
 
     // returns true if it returned early
@@ -265,7 +271,7 @@ impl SubmissionWorker {
         let accounts = self
             .accounts
             .iter_mut()
-            .choose_multiple(&mut self.rng, self.params.accounts_per_worker);
+            .choose_multiple(&mut self.rng, 1);
         self.txn_generator
             .generate_transactions(accounts, self.params.transactions_per_account)
     }
@@ -277,7 +283,7 @@ pub async fn submit_transactions(
     loop_start_time: Arc<Instant>,
     txn_offset_time: Arc<AtomicU64>,
     stats: &StatsAccumulator,
-) {
+) -> bool {
     let cur_time = Instant::now();
     let offset = cur_time - *loop_start_time;
     txn_offset_time.fetch_add(
@@ -304,6 +310,13 @@ pub async fn submit_transactions(
         },
         Ok(v) => {
             let failures = v.into_inner().transaction_failures;
+            if !failures.is_empty() && failures[0].error.to_string().contains("sharded") {
+
+                stats
+                    .submitted
+                    .fetch_sub(txns.len() as u64, Ordering::Relaxed);
+                return false;
+            }
 
             stats
                 .failed_submission
@@ -356,4 +369,5 @@ pub async fn submit_transactions(
             });
         },
     };
+    true
 }

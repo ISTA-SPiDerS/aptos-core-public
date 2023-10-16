@@ -60,8 +60,7 @@ impl OurBenchmark {
         package: Package,
         owner: AccountAddress
     ) -> Self {
-
-        let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
+        let mut resource_distribution_vec:Vec<f64> = vec![];
         if matches!(load_type, LoadType::DEXAVG)
         {
             for value in AVG {
@@ -88,6 +87,11 @@ impl OurBenchmark {
                 }
             }
         }
+        else {
+            resource_distribution_vec = vec![1.0,1.0,1.0,1.0];
+        }
+
+        println!("Start Creator for {:?} {}", load_type, resource_distribution_vec.len());
 
         let mut solana_len_options:Vec<usize> = vec![];
         let mut solana_cost_options:Vec<f64> = vec![];
@@ -105,7 +109,6 @@ impl OurBenchmark {
         let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
         let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
         let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
-
 
         Self {
             txn_factory,
@@ -128,7 +131,6 @@ impl TransactionGenerator for OurBenchmark {
         mut accounts: Vec<&mut LocalAccount>,
         transactions_per_account: usize,
     ) -> Vec<SignedTransaction> {
-
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
         let mut rng: ThreadRng = thread_rng();
@@ -137,8 +139,7 @@ impl TransactionGenerator for OurBenchmark {
 
         for i in 0..needed {
             let mut sender_id: usize = (i as usize) % accounts.len();
-
-            if matches!(self.load_type, SOLANA)
+            if matches!(self.load_type, LoadType::SOLANA)
             {
                 let cost_sample = self.solana_cost_options[rand::thread_rng().gen_range(0, self.solana_cost_options.len())];
                 let write_len_sample = self.solana_len_options[rand::thread_rng().gen_range(0, self.solana_len_options.len())];
@@ -159,12 +160,14 @@ impl TransactionGenerator for OurBenchmark {
                                                                 vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()]));
 
             }
-            else if matches!(self.load_type, P2PTX)
+            else if matches!(self.load_type, LoadType::P2PTX)
             {
-                let receiver_id = self.p2p_receiver_distribution.sample(&mut rng) % accounts.len();
-                let sender_id = self.p2p_sender_distribution.sample(&mut rng) % accounts.len();
+                let receiver_id = self.p2p_receiver_distribution.sample(&mut rng);
+                let sender_id = self.p2p_sender_distribution.sample(&mut rng);
 
-                requests.push(self.package.our_spec_transaction(accounts[sender_id],
+                let actual_sender = sender_id % accounts.len();
+
+                requests.push(self.package.our_spec_transaction(accounts[actual_sender],
                                                                 &self.txn_factory,
                                                                 ident_str!("exchangetwo").to_owned(),
                                                                 vec![],
@@ -173,7 +176,7 @@ impl TransactionGenerator for OurBenchmark {
             else
             {
                 let resource_id = self.general_resource_distribution.sample(&mut rng);
-                if matches!(self.load_type, NFT)
+                if matches!(self.load_type, LoadType::NFT)
                 {
                     sender_id = self.nft_sender_distribution.sample(&mut rng) % accounts.len();
                 }

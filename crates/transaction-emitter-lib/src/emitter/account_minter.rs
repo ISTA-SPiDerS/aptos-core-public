@@ -24,6 +24,8 @@ use core::{
 use futures::StreamExt;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{path::Path, time::Instant};
+use std::mem::uninitialized;
+use std::num::Wrapping;
 
 #[derive(Debug)]
 pub struct AccountMinter<'t> {
@@ -61,7 +63,8 @@ impl<'t> AccountMinter<'t> {
         req: &EmitJobRequest,
         mode_params: &EmitModeParams,
         total_requested_accounts: usize,
-    ) -> Result<Vec<LocalAccount>> {
+        num_shards: usize,
+    ) -> Result<Vec<Vec<LocalAccount>>> {
         let mut accounts = vec![];
         let expected_num_seed_accounts = (total_requested_accounts / 50)
             .clamp(1, (total_requested_accounts as f32).sqrt() as usize + 1);
@@ -170,12 +173,12 @@ impl<'t> AccountMinter<'t> {
 
         // Create seed accounts with which we can create actual accounts concurrently. Adding
         // additional fund for paying gas fees later.
-        let seed_accounts = self
+        let mut seed_accounts = self
             .create_and_fund_seed_accounts(
                 new_source_account,
                 txn_executor,
                 expected_num_seed_accounts,
-                coins_per_seed_account,
+                coins_per_seed_account * 10,
                 mode_params.max_submit_batch_size,
                 &request_counters,
             )
@@ -195,9 +198,15 @@ impl<'t> AccountMinter<'t> {
             num_accounts, coins_per_account
         );
 
+        let dif:u32 = (256 as u32 / num_shards as u32);
+
         let seed_rngs = gen_rng_for_reusable_account(actual_num_seed_accounts);
-        let start = Instant::now();
         let request_counters = txn_executor.create_counter_state();
+
+        let mut sharded_vec: Vec<Vec<LocalAccount>> = Vec::new();
+        for _ in 0..num_shards {
+            sharded_vec.push(Vec::new());
+        }
 
         // For each seed account, create a future and transfer coins from that seed account to new accounts
         let account_futures = seed_accounts
@@ -222,33 +231,83 @@ impl<'t> AccountMinter<'t> {
                 )
             });
 
+        let mut new_seed_accounts = Vec::new();
+
         // Each future creates 10 accounts, limit concurrency to 1000.
         let stream = futures::stream::iter(account_futures).buffer_unordered(CREATION_PARALLELISM);
         // wait for all futures to complete
-        let mut created_accounts = stream
+        stream
             .collect::<Vec<_>>()
             .await
             .into_iter()
             .collect::<Result<Vec<_>>>()
             .map_err(|e| format_err!("Failed to create accounts: {:?}", e))?
             .into_iter()
-            .flatten()
-            .collect();
+            .for_each(|f| {
+                f.0.into_iter().for_each(|k| accounts.push(k));
+                new_seed_accounts.push(f.1);
+            });
 
-        accounts.append(&mut created_accounts);
-        assert!(
-            accounts.len() >= num_accounts,
-            "Something wrong in create_accounts, wanted to create {}, only have {}",
-            total_requested_accounts,
-            accounts.len()
-        );
-        info!(
-            "Successfully completed creating {} accounts in {}s, request stats: {}",
-            actual_num_seed_accounts * num_new_child_accounts,
-            start.elapsed().as_secs(),
-            request_counters.show_simple(),
-        );
-        Ok(accounts)
+        let mut not_finished = true;
+
+        while not_finished {
+
+            for i in 0..num_shards {
+                let my_space_start = i as u32 * dif;
+                let my_space_end = my_space_start + dif;
+                for acc in accounts.iter() {
+                    let mut shard = Wrapping(1 as u8);
+                    for el in acc.address().iter() {
+                        shard = shard + Wrapping(*el);
+                    }
+
+                    if (shard.0 as u32) >= my_space_start && (shard.0 as u32) < my_space_end {
+                        sharded_vec[i].push(acc.clone());
+                    }
+                }
+            }
+
+            not_finished = false;
+            for i in 0..num_shards {
+                if sharded_vec[i].len() < total_requested_accounts/num_shards {
+                    not_finished = true;
+                    break;
+                }
+            }
+
+            accounts.clear();
+
+            info!("Not enough diversity, creating some more accounts",);
+
+            let new_account_futures =
+                    // Spawn new threads
+                    create_and_fund_new_accounts(
+                        new_seed_accounts.pop().unwrap(),
+                        num_new_child_accounts,
+                        coins_per_account,
+                        mode_params.max_submit_batch_size,
+                        txn_executor,
+                        &txn_factory,
+                        false,
+                        StdRng::from_rng(self.rng()).unwrap(),
+                        &request_counters,
+                    );
+
+            // Each future creates 10 accounts, limit concurrency to 1000.
+            // wait for all futures to complete
+           let result = new_account_futures
+                .await
+                .map_err(|e| format_err!("Failed to create accounts: {:?}", e))?;
+
+
+            result.0.into_iter().for_each(|k| accounts.push(k));
+                    new_seed_accounts.push(result.1);
+
+        }
+
+        info!("finished minting");
+
+        Ok(sharded_vec)
     }
 
     pub async fn mint_to_root(
@@ -401,7 +460,7 @@ async fn create_and_fund_new_accounts<R>(
     reuse_account: bool,
     mut rng: R,
     counters: &CounterState,
-) -> Result<Vec<LocalAccount>>
+) -> Result<(Vec<LocalAccount>, LocalAccount)>
 where
     R: ::rand_core::RngCore + ::rand_core::CryptoRng,
 {
@@ -420,7 +479,7 @@ where
                 .iter()
                 .map(|account| {
                     create_and_fund_account_request(
-                        &mut source_account,
+                         &mut source_account,
                         coins_per_new_account,
                         account.public_key(),
                         txn_factory,
@@ -439,7 +498,7 @@ where
         i += batch.len();
         accounts.append(&mut batch);
     }
-    Ok(accounts)
+    Ok((accounts, source_account))
 }
 
 async fn gen_reusable_accounts<R>(

@@ -35,6 +35,7 @@ use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::future::pending;
 use std::hash::Hash;
+use std::num::Wrapping;
 use std::time::Instant;
 use anyhow;
 use dashmap::{DashMap, DashSet};
@@ -162,7 +163,7 @@ impl Mempool {
             ));
         }
 
-        let dif:u32 = 256 as u32 / peer_count as u32;
+        let dif:u32 = (256 as u32 / peer_count as u32);
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
 
@@ -172,14 +173,17 @@ impl Mempool {
             my_space_end = my_space_start + dif;
         }
 
-        let shard = txn.sender()[txn.sender().len()-1] as u32;
-        if shard < my_space_start || shard >= my_space_end {
-            println!("bla shard deny");
+        let mut shard = Wrapping(1 as u8);
+        for el in txn.sender().iter() {
+            shard = shard + Wrapping(*el);
+        }
+
+        if (shard.0 as u32) < my_space_start || (shard.0 as u32) >= my_space_end {
+            //println!("bla shard deny {} {} {} {} {}", shard, my_space_start, my_space_end, peer_id, peer_count);
             //return MempoolStatus::new(MempoolStatusCode::Accepted);
             return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
                 "sharded out this tx".to_string());
         }
-        println!("bla shard accept");
 
         let now = SystemTime::now();
         let expiration_time =
@@ -280,14 +284,6 @@ impl Mempool {
                     continue;
                 }
 
-                let shard = txn.address[txn.address.len()-1] as u32;
-                if shard < my_space_start || shard >= my_space_end {
-                    shardedOutCounter+=1;
-                    //forLater.push(txn.clone());
-                    //println!("bla sharded: {} {} {} {}", txn.address, my_space_start, my_space_end, shard);
-                    continue
-                }
-
                 let tx_seq = txn.sequence_number.transaction_sequence_number;
                 let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
                 let seen_previous = tx_seq > 0 && seen.contains(&(txn.address, tx_seq - 1));
@@ -335,7 +331,7 @@ impl Mempool {
 
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
-            if block_filler.get_blockx().len() > 500 {
+            if block_filler.get_blockx().len() >= 500 {
                 let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
                 //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
