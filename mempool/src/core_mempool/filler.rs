@@ -336,11 +336,10 @@ impl BlockFiller for DependencyFiller {
                 longestChain = finish_time;
             }
 
-            if finish_time > self.gas_per_core as u64 {
+            if finish_time > (self.gas_per_core * 2) as u64 {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 cache.push_back((speculation, status, tx));
-                println!("bla too long");
                 continue;
             }
 

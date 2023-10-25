@@ -392,7 +392,6 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
     TransactionValidator: TransactionValidation,
 {
     let mut mempool = smp.mempool.lock();
-    println!("bla incoming {}", transactions.len());
     for (transaction, sequence_info) in transactions.into_iter() {
         let mempool_status = mempool.add_sharded_txn(transaction.clone(), 0, sequence_info, timeline_state, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
         statuses.push((transaction, (mempool_status, None)));

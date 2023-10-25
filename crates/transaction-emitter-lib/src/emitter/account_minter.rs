@@ -24,6 +24,7 @@ use core::{
 use futures::StreamExt;
 use rand::{rngs::StdRng, SeedableRng};
 use std::{path::Path, time::Instant};
+use std::collections::VecDeque;
 use std::mem::uninitialized;
 use std::num::Wrapping;
 
@@ -183,70 +184,79 @@ impl<'t> AccountMinter<'t> {
                 &request_counters,
             )
             .await?;
+
+
         let actual_num_seed_accounts = seed_accounts.len();
-        let num_new_child_accounts =
-            (num_accounts + actual_num_seed_accounts - 1) / actual_num_seed_accounts;
-        info!(
-            "Completed creating {} seed accounts in {}s, each with {} coins, request stats: {}",
-            seed_accounts.len(),
-            start.elapsed().as_secs(),
-            coins_per_seed_account,
-            request_counters.show_simple(),
-        );
-        info!(
-            "Creating additional {} accounts with {} coins each",
-            num_accounts, coins_per_account
-        );
-
-        let dif:u32 = (256 as u32 / num_shards as u32);
-
-        let seed_rngs = gen_rng_for_reusable_account(actual_num_seed_accounts);
-        let request_counters = txn_executor.create_counter_state();
+        let dif: u32 = (256 as u32 / num_shards as u32);
 
         let mut sharded_vec: Vec<Vec<LocalAccount>> = Vec::new();
         for _ in 0..num_shards {
             sharded_vec.push(Vec::new());
         }
 
-        // For each seed account, create a future and transfer coins from that seed account to new accounts
-        let account_futures = seed_accounts
-            .into_iter()
-            .enumerate()
-            .map(|(i, seed_account)| {
-                // Spawn new threads
-                create_and_fund_new_accounts(
-                    seed_account,
-                    num_new_child_accounts,
-                    coins_per_account,
-                    mode_params.max_submit_batch_size,
-                    txn_executor,
-                    &txn_factory,
-                    req.reuse_accounts,
-                    if req.reuse_accounts {
-                        seed_rngs[i].clone()
-                    } else {
-                        StdRng::from_rng(self.rng()).unwrap()
-                    },
-                    &request_counters,
-                )
-            });
+        let mut new_seed_accounts = VecDeque::new();
+        seed_accounts.into_iter().for_each(|f| new_seed_accounts.push_back(f));
+        let lower_limit_accounts = min(num_accounts, 10000);
+        let num_new_child_accounts =
+            (lower_limit_accounts + actual_num_seed_accounts - 1) / actual_num_seed_accounts;
+        let seed_rngs = gen_rng_for_reusable_account(actual_num_seed_accounts);
 
-        let mut new_seed_accounts = Vec::new();
+        info!(
+            "Completed creating {} seed accounts in {}s, each with {} coins, request stats: {}",
+            new_seed_accounts.len(),
+            start.elapsed().as_secs(),
+            coins_per_seed_account,
+            request_counters.show_simple());
 
-        // Each future creates 10 accounts, limit concurrency to 1000.
-        let stream = futures::stream::iter(account_futures).buffer_unordered(CREATION_PARALLELISM);
-        // wait for all futures to complete
-        stream
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>>>()
-            .map_err(|e| format_err!("Failed to create accounts: {:?}", e))?
-            .into_iter()
-            .for_each(|f| {
-                f.0.into_iter().for_each(|k| accounts.push(k));
-                new_seed_accounts.push(f.1);
-            });
+        while accounts.len() < num_accounts {
+
+            let request_counters = txn_executor.create_counter_state();
+
+            info!(
+            "Creating additional {} accounts with {} coins each",
+            lower_limit_accounts, coins_per_account);
+
+            let mut index = 0;
+            let mut account_futures = Vec::new();
+            while let Some(acc) = new_seed_accounts.pop_front() {
+                // For each seed account, create a future and transfer coins from that seed account to new accounts
+                account_futures.push(
+                    create_and_fund_new_accounts(
+                        acc,
+                        num_new_child_accounts,
+                        coins_per_account,
+                        mode_params.max_submit_batch_size,
+                        txn_executor,
+                        &txn_factory,
+                        req.reuse_accounts,
+                        if req.reuse_accounts {
+                            seed_rngs[index].clone()
+                        } else {
+                            StdRng::from_rng(self.rng()).unwrap()
+                        },
+                        &request_counters,
+                    ));
+                index += 1;
+            }
+
+            info!("Finished an submitting");
+
+            // Each future creates 10 accounts, limit concurrency to 1000.
+            let stream = futures::stream::iter(account_futures).buffer_unordered(CREATION_PARALLELISM);
+            // wait for all futures to complete
+            stream
+                .collect::<Vec<_>>()
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>>>()
+                .map_err(|e| format_err!("Failed to create accounts: {:?}", e))?
+                .into_iter()
+                .for_each(|f| {
+                    f.0.into_iter().for_each(|k| accounts.push(k));
+                    new_seed_accounts.push_back(f.1);
+                });
+        }
+
 
         let mut not_finished = true;
 
@@ -282,7 +292,7 @@ impl<'t> AccountMinter<'t> {
             let new_account_futures =
                     // Spawn new threads
                     create_and_fund_new_accounts(
-                        new_seed_accounts.pop().unwrap(),
+                        new_seed_accounts.pop_front().unwrap(),
                         num_new_child_accounts,
                         coins_per_account,
                         mode_params.max_submit_batch_size,
@@ -301,7 +311,7 @@ impl<'t> AccountMinter<'t> {
 
 
             result.0.into_iter().for_each(|k| accounts.push(k));
-                    new_seed_accounts.push(result.1);
+                    new_seed_accounts.push_back(result.1);
 
         }
 
