@@ -32,6 +32,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use std::collections::VecDeque;
+use std::num::Wrapping;
 use dashmap::DashMap;
 
 pub struct Mempool {
@@ -117,12 +118,14 @@ impl Mempool {
 
     /// Used to add a transaction to the Mempool.
     /// Performs basic validation: checks account's sequence number.
-    pub(crate) fn add_txn(
+    pub(crate) fn add_sharded_txn(
         &mut self,
         txn: SignedTransaction,
         ranking_score: u64,
         sequence_info: AccountSequenceInfo,
         timeline_state: TimelineState,
+        peer_count: u8,
+        peer_id: u8
     ) -> MempoolStatus {
         let db_sequence_number = sequence_info.min_seq();
         trace!(
@@ -138,6 +141,28 @@ impl Mempool {
                 txn.sequence_number(),
                 db_sequence_number,
             ));
+        }
+
+        let dif:u32 = (256 as u32 / peer_count as u32);
+        let mut my_space_start= 0 as u32;
+        let mut my_space_end = u8::MAX as u32;
+
+        if peer_count > 1
+        {
+            my_space_start = peer_id as u32 * dif;
+            my_space_end = my_space_start + dif;
+        }
+
+        let mut shard = Wrapping(1 as u8);
+        for el in txn.sender().iter() {
+            shard = shard + Wrapping(*el);
+        }
+
+        if (shard.0 as u32) < my_space_start || (shard.0 as u32) >= my_space_end {
+            //println!("bla shard deny {} {} {} {} {}", shard, my_space_start, my_space_end, peer_id, peer_count);
+            //return MempoolStatus::new(MempoolStatusCode::Accepted);
+            return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
+                "sharded out this tx".to_string());
         }
 
         let now = SystemTime::now();
@@ -161,6 +186,18 @@ impl Mempool {
             ranking_score,
         );
         status
+    }
+
+    /// Used to add a transaction to the Mempool.
+    /// Performs basic validation: checks account's sequence number.
+    pub(crate) fn add_txn(
+        &mut self,
+        txn: SignedTransaction,
+        ranking_score: u64,
+        sequence_info: AccountSequenceInfo,
+        timeline_state: TimelineState
+    ) -> MempoolStatus {
+        self.add_sharded_txn(txn, ranking_score, sequence_info, timeline_state, 1, 0)
     }
 
     /// Fetches next block of transactions for consensus.

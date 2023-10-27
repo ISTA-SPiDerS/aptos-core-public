@@ -316,6 +316,7 @@ where
     statuses
 }
 
+
 /// Perfoms VM validation on the transactions and inserts those that passes
 /// validation into the mempool.
 #[cfg(not(feature = "consensus-only-perf-test"))]
@@ -338,18 +339,16 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
         .collect::<Vec<_>>();
     vm_validation_timer.stop_and_record();
     {
+        let num_peers = smp.network_interface.get_peer_count() as u8 + 1;
+        let peer_id = smp.network_interface.get_peer_position() as u8;
+
         let mut mempool = smp.mempool.lock();
         for (idx, (transaction, sequence_info)) in transactions.into_iter().enumerate() {
             if let Ok(validation_result) = &validation_results[idx] {
                 match validation_result.status() {
                     None => {
                         let ranking_score = validation_result.score();
-                        let mempool_status = mempool.add_txn(
-                            transaction.clone(),
-                            ranking_score,
-                            sequence_info,
-                            timeline_state,
-                        );
+                        let mempool_status = mempool.add_sharded_txn(transaction.clone(), ranking_score, sequence_info, timeline_state, num_peers, peer_id);
                         statuses.push((transaction, (mempool_status, None)));
                     },
                     Some(validation_status) => {
@@ -394,7 +393,7 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
 {
     let mut mempool = smp.mempool.lock();
     for (transaction, sequence_info) in transactions.into_iter() {
-        let mempool_status = mempool.add_txn(transaction.clone(), 0, sequence_info, timeline_state);
+        let mempool_status = mempool.add_sharded_txn(transaction.clone(), 0, sequence_info, timeline_state, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
         statuses.push((transaction, (mempool_status, None)));
     }
 }
