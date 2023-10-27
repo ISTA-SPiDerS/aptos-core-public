@@ -92,7 +92,7 @@ impl<
                 let start = Instant::now();
                 loop
                 {
-                    if input.len() >= 1024 {
+                    if input.len() >= 64 {
                         break;
                     }
                     if let Ok((index, tx)) = rx.try_recv() {
@@ -112,7 +112,7 @@ impl<
                     let transaction_validation = locked_val.write();
                     RAYON_EXEC_POOL.scope(|s| {
                         start3 = Instant::now();
-                        for _ in 0..16 {
+                        for _ in 0..4 {
                             s.spawn(|_| {
 
                                 let mut current_index = exec_counter.fetch_add(1, SeqCst);
