@@ -441,6 +441,11 @@ impl PartialEq for SignedTransaction {
 pub struct SignatureCheckedTransaction(SignedTransaction);
 
 impl SignatureCheckedTransaction {
+
+    pub fn new(tx: SignedTransaction) -> SignatureCheckedTransaction {
+        SignatureCheckedTransaction(tx)
+    }
+
     /// Returns the `SignedTransaction` within.
     pub fn into_inner(self) -> SignedTransaction {
         self.0
@@ -576,7 +581,7 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns `Ok(SignatureCheckedTransaction)` if
     /// the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        //self.authenticator.verify(&self.raw_txn)?;
+        self.authenticator.verify(&self.raw_txn)?;
         Ok(SignatureCheckedTransaction(self))
     }
 

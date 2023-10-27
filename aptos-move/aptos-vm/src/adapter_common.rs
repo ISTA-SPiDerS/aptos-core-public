@@ -122,15 +122,8 @@ pub fn preprocess_transaction<A: VMAdapter>(txn: Transaction) -> (PreprocessedTr
         Transaction::BlockMetadata(b) => (PreprocessedTransaction::BlockMetadata(b), vec![]),
         Transaction::GenesisTransaction(ws) => (PreprocessedTransaction::WaypointWriteSet(ws), vec![]),
         Transaction::UserTransaction(txn) => {
-            let checked_txn = match A::check_signature(txn) {
-                Ok(checked_txn) => checked_txn,
-                _ => {
-                    return (PreprocessedTransaction::InvalidSignature, vec![]);
-                },
-            };
-
-            let senderclone = checked_txn.sender().to_vec().clone();
-            (PreprocessedTransaction::UserTransaction(Box::new(checked_txn)), senderclone)
+            let senderclone = txn.sender().to_vec().clone();
+            (PreprocessedTransaction::UserTransaction(Box::new(SignatureCheckedTransaction::new(txn))), senderclone)
         },
         Transaction::StateCheckpoint(_) => (PreprocessedTransaction::StateCheckpoint, vec![]),
     }
