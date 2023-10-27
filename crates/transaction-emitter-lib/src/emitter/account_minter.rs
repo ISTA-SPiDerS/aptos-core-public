@@ -208,7 +208,8 @@ impl<'t> AccountMinter<'t> {
             coins_per_seed_account,
             request_counters.show_simple());
 
-        while accounts.len() < num_accounts {
+        let mut not_finished = true;
+        while not_finished {
 
             let request_counters = txn_executor.create_counter_state();
 
@@ -255,12 +256,6 @@ impl<'t> AccountMinter<'t> {
                     f.0.into_iter().for_each(|k| accounts.push(k));
                     new_seed_accounts.push_back(f.1);
                 });
-        }
-
-
-        let mut not_finished = true;
-
-        while not_finished {
 
             for i in 0..num_shards {
                 let my_space_start = i as u32 * dif;
@@ -276,6 +271,7 @@ impl<'t> AccountMinter<'t> {
                     }
                 }
             }
+            accounts.clear();
 
             not_finished = false;
             for i in 0..num_shards {
@@ -284,38 +280,7 @@ impl<'t> AccountMinter<'t> {
                     break;
                 }
             }
-
-            accounts.clear();
-
-            info!("Not enough diversity, creating some more accounts",);
-
-            let new_account_futures =
-                    // Spawn new threads
-                    create_and_fund_new_accounts(
-                        new_seed_accounts.pop_front().unwrap(),
-                        num_new_child_accounts,
-                        coins_per_account,
-                        mode_params.max_submit_batch_size,
-                        txn_executor,
-                        &txn_factory,
-                        false,
-                        StdRng::from_rng(self.rng()).unwrap(),
-                        &request_counters,
-                    );
-
-            // Each future creates 10 accounts, limit concurrency to 1000.
-            // wait for all futures to complete
-           let result = new_account_futures
-                .await
-                .map_err(|e| format_err!("Failed to create accounts: {:?}", e))?;
-
-
-            result.0.into_iter().for_each(|k| accounts.push(k));
-                    new_seed_accounts.push_back(result.1);
-
         }
-
-        info!("finished minting");
 
         Ok(sharded_vec)
     }
