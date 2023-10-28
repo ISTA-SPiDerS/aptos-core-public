@@ -143,7 +143,7 @@ impl Mempool {
             ));
         }
 
-        let dif:u32 = (256 as u32 / peer_count as u32);
+        let dif:u32 = (256.0 / peer_count as f32).ceil() as u32;
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
 
