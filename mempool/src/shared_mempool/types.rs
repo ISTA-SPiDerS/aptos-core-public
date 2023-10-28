@@ -112,7 +112,7 @@ impl<
                     let transaction_validation = locked_val.write();
                     RAYON_EXEC_POOL.scope(|s| {
                         start3 = Instant::now();
-                        for _ in 0..4 {
+                        for _ in 0..8 {
                             s.spawn(|_| {
 
                                 let mut current_index = exec_counter.fetch_add(1, SeqCst);
