@@ -28,11 +28,7 @@ pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        txn: VecDeque<SignedTransaction>,
         previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
-        total: &mut u64,
-        current: &mut u64,
-        pending: &mut HashSet<TxnPointer>
     ) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
@@ -93,31 +89,9 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        txn: VecDeque<SignedTransaction>,
         previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
-        mut total: &mut u64,
-        mut current: &mut u64,
-        pending: &mut HashSet<TxnPointer>
     ) -> Vec<SignedTransaction> {
-        for tx in txn
-        {
-            /*if self.full {
-                rejected.push(tx);
-                continue;
-            }
 
-            if self.current_bytes + tx.raw_txn_bytes_len() as u64 > self.max_bytes {
-                self.full = true;
-                rejected.push(tx);
-                continue;
-            }*/
-
-            self.block.push(tx);
-
-            if self.block.len() as u64 == self.max_txns {
-                self.full = true;
-            }
-        }
         vec![]
     }
 
@@ -168,7 +142,6 @@ pub struct DependencyFiller {
     dependency_graph: Vec<HashSet<TransactionIdx>>,
     block: Vec<SignedTransaction>,
     estimated_gas: Vec<u64>,
-    pub sender: SyncSender<(u64, SignedTransaction)>,
 }
 
 impl DependencyFiller {
@@ -176,8 +149,7 @@ impl DependencyFiller {
         gas_per_core: u64,
         max_bytes: u64,
         max_txns: u64,
-        cores: u64,
-        sender: SyncSender<(u64, SignedTransaction)>)
+        cores: u64)
         -> DependencyFiller {
         Self {
             gas_per_core,
@@ -192,8 +164,7 @@ impl DependencyFiller {
             writes: BTreeMap::new(),
             dependency_graph: vec![],
             block: vec![],
-            estimated_gas: vec![],
-            sender
+            estimated_gas: vec![]
         }
     }
 
@@ -232,60 +203,13 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        mut txn: VecDeque<SignedTransaction>,
         previous: &mut VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
-        total: &mut u64,
-        current: &mut u64,
-        pending: &mut HashSet<TxnPointer>
     ) -> Vec<SignedTransaction> {
 
         let start = Instant::now();
-        let mut force = false;
-        if *total == u64::MAX {
-            force = true;
-            *total = 0
-        }
-
-        {
-            while let Some(tx) = txn.pop_front() {
-                pending.insert((tx.sender(), tx.sequence_number()));
-                self.sender.send((total.clone(), tx));
-                *total += 1;
-            }
-
-            if force {
-                while *current < *total
-                {
-                    while CACHE.contains_key(current)
-                    {
-                        let out = CACHE.remove(current).unwrap().1;
-                        previous.push_back(out);
-
-                        *current += 1;
-                    }
-                    if *current < *total
-                    {
-                        thread::sleep(Duration::from_millis(10));
-                        //println!("waiting.... {} {}", *current, *total);
-                    }
-                }
-            } else {
-                while CACHE.contains_key(current)
-                {
-                    let out = CACHE.remove(current).unwrap().1;
-                    previous.push_back(out);
-
-                    *current += 1;
-                }
-            }
-            //println!("bla cache len other side {}", CACHE.len());
-
-        }
-
-        //println!("bla prev len: {}", previous.len());
         let mut cache : VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)> = VecDeque::new();
 
-        let mut longestChain = 0;
+        let mut longest_chain = 0;
         while let Some((speculation, status, tx)) = previous.pop_front()
         {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
@@ -332,8 +256,8 @@ impl BlockFiller for DependencyFiller {
             {
                 //println!("bla Wat a long chain: {}", finish_time);
             }
-            if finish_time > longestChain {
-                longestChain = finish_time;
+            if finish_time > longest_chain {
+                longest_chain = finish_time;
             }
 
             if finish_time > (self.gas_per_core * 2) as u64 {
@@ -421,10 +345,6 @@ impl BlockFiller for DependencyFiller {
                 self.full = true;
                 //println!("bla final gas6: {}", self.total_estimated_gas);
             }
-        }
-
-        for tx in &self.block {
-            pending.remove(&(tx.sender(), tx.sequence_number()));
         }
 
         if !cache.is_empty() {

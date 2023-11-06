@@ -32,6 +32,8 @@ use std::{
     task::Waker,
     time::{Instant, SystemTime},
 };
+use std::cmp::max;
+use std::collections::VecDeque;
 use std::ptr::null;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::atomic::Ordering::{Relaxed, SeqCst};
@@ -46,6 +48,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
+use crate::core_mempool::{BlockFiller, DependencyFiller};
 
 pub static CACHE: Lazy<DashMap<u64, (VMSpeculationResult, VMStatus, SignedTransaction)>> = Lazy::new(|| {
     DashMap::new()
@@ -61,7 +64,8 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
-    pub channel: mpsc::SyncSender<(u64, SignedTransaction)>
+    pub tx_channel: kanal::Sender<(u64, SignedTransaction)>,
+    pub block_channel: kanal::Receiver<DependencyFiller>
 }
 
 impl<
@@ -80,23 +84,30 @@ impl<
         peer_id: PeerId
     ) -> Self {
         let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone(), peer_id);
-        let (tx, rx):(mpsc::SyncSender<(u64, SignedTransaction)>, mpsc::Receiver<(u64, SignedTransaction)>) = mpsc::sync_channel(100000);
-        let tem_locked_val = validator.clone();
 
+        let (tx_sender, tx_receiver) = kanal::unbounded();
+        let (block_sender, block_receiver) = kanal::unbounded();
+
+        let tem_locked_val = validator.clone();
         rayon::spawn(move || {
             let locked_val = tem_locked_val.clone();
 
-            let mut input = vec![];
+            let mut input : Vec<(u64, SignedTransaction)> = vec![];
+            let mut last_max_gas = 100_000_000_000;
+            let mut current : u64 = 0;
+            let mut cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)> = VecDeque::new();
+            let mut attempts = 3;
+            //todo add time eval
             loop
             {
-                let start = Instant::now();
                 loop
                 {
                     if input.len() >= 64 {
+                        attempts = 0;
                         break;
                     }
-                    if let Ok((index, tx)) = rx.try_recv() {
-                        input.push((index, tx));
+                    if let Ok(Some(x)) = tx_receiver.try_recv() {
+                        input.push(x);
                     }
                     else {
                         break;
@@ -104,48 +115,81 @@ impl<
                 }
 
                 let count = input.len();
-                let start2 = Instant::now();
-                let exec_counter = AtomicUsize::new(0);
-                let mut start3 = Instant::now();
-                let failures = DashMap::new();
-                {
-                    let transaction_validation = locked_val.write();
-                    RAYON_EXEC_POOL.scope(|s| {
-                        start3 = Instant::now();
-                        for _ in 0..8 {
-                            s.spawn(|_| {
+                if count > 0 {
+                    let exec_counter = AtomicUsize::new(0);
+                    let failures = DashMap::new();
+                    let cache = DashMap::new();
+                    {
+                        let transaction_validation = locked_val.write();
 
-                                let mut current_index = exec_counter.fetch_add(1, SeqCst);
-                                while current_index < count {
-                                    let (index, tx) = &input[current_index];
-                                    let result = transaction_validation.speculate_transaction(&tx);
-                                    let (a, b) = result.unwrap();
-                                    match b {
-                                        VMStatus::Executed => {
-                                            CACHE.insert(index.clone(), (a, b, tx.clone()));
+                        RAYON_EXEC_POOL.scope(|s| {
+                            for _ in 0..RAYON_EXEC_POOL.current_num_threads() {
+                                s.spawn(|_| {
+
+                                    let mut current_index = exec_counter.fetch_add(1, SeqCst);
+                                    while current_index < count {
+                                        let (index, tx) = &input[current_index];
+                                        let result = transaction_validation.speculate_transaction(&tx);
+                                        let (a, b) = result.unwrap();
+                                        match b {
+                                            VMStatus::Executed => {
+                                                cache.insert(index.clone(), (a, b, tx.clone()));
+                                            }
+                                            _ => {
+                                                failures.insert(index.clone(), tx.clone());
+                                            }
                                         }
-                                        _ => {
-                                            failures.insert(index.clone(), tx.clone());
-                                        }
+                                        current_index = exec_counter.fetch_add(1, SeqCst);
                                     }
-                                    current_index = exec_counter.fetch_add(1, SeqCst);
-                                }
-                            });
-                        }
-                    });
+                                });
+                            }
+                        });
+                    }
 
-                    println!("bla end {} {} {} {}", start.elapsed().as_millis(), start2.elapsed().as_millis(), start3.elapsed().as_millis(), count);
+                    input.clear();
+
+                    for value in failures {
+                        input.push(value);
+                        println!("bla tx failure");
+                    }
+
+                    while cache.contains_key(&current)
+                    {
+                        let out = cache.remove(&current).unwrap().1;
+                        cached_ex.push_back(out);
+                        current += 1;
+                    }
+
+                    let cached_len = cached_ex.len();
+                    if cached_len < 10000 && attempts < 3 {
+                        attempts+=1;
+                        continue
+                    }
                 }
 
-                input.clear();
-
-                for value in failures {
-                    input.push(value);
+                attempts = 0;
+                if cached_ex.is_empty() {
+                    let output = tx_receiver.recv();
+                    if let Ok(res) = output {
+                        input.push(res);
+                    }
+                    continue
                 }
 
-                if input.is_empty() {
-                    input.push(rx.recv().unwrap());
+                let mut block_filler: DependencyFiller = DependencyFiller::new(
+                    200_000_000_000,
+                    1_000_000,
+                    10000, RAYON_EXEC_POOL.current_num_threads() as u64);
+
+                block_filler.set_gas_per_core(last_max_gas);
+                block_filler.add_all(&mut cached_ex);
+
+                if block_filler.get_blockx().len() >= 500 {
+                    let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
+                    //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
+                   last_max_gas = block_filler.get_current_gas() * dif as u64;
                 }
+                block_sender.send(block_filler);
             }
         });
 
@@ -157,7 +201,8 @@ impl<
             validator,
             subscribers,
             broadcast_within_validator_network: Arc::new(RwLock::new(true)),
-            channel: tx
+            tx_channel: tx_sender,
+            block_channel: block_receiver
         }
     }
 

@@ -134,7 +134,7 @@ impl TransactionGenerator for OurBenchmark {
         let needed = accounts.len();
         let mut requests = Vec::with_capacity(needed);
         let mut rng: ThreadRng = thread_rng();
-        println!("Generating {:?} {} transactions", self.load_type, needed);
+        //println!("Generating {:?} {} transactions", self.load_type, needed);
 
 
         for i in 0..needed {

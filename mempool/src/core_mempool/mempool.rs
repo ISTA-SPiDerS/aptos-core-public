@@ -36,11 +36,15 @@ use std::collections::{HashMap, VecDeque};
 use std::future::pending;
 use std::hash::Hash;
 use std::num::Wrapping;
+use std::sync::mpsc::SyncSender;
 use std::time::Instant;
 use anyhow;
 use dashmap::{DashMap, DashSet};
 use futures::pending;
+use kanal::{Receiver, Sender};
 use aptos_crypto::hash::TestOnlyHash;
+use aptos_types::transaction::RAYON_EXEC_POOL;
+use crate::core_mempool::DependencyFiller;
 use crate::core_mempool::index::OrderedQueueKey;
 use crate::shared_mempool::types::CACHE;
 
@@ -225,11 +229,20 @@ impl Mempool {
     /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
-    pub(crate) fn get_batch<F: BlockFiller>( &mut self,
-                                             mut seen: HashSet<TxnPointer>,
-                                             block_filler: &mut F)
-    {
-        self.get_full_batch(seen, block_filler, 1, 0)
+    //pub(crate) fn get_batch<F: BlockFiller>(
+    //    &mut self,
+    //    mut seen: HashSet<TxnPointer>,
+    //    block_filler: &mut F
+    //) -> &mut F {
+    //    block_filler
+    //}
+
+    #[allow(clippy::explicit_counter_loop)]
+    pub(crate) fn get_batch<'a, F: BlockFiller>(
+       &'a mut self,
+        mut seen: HashSet<TxnPointer>,
+        block_filler: &'a mut F ) -> &mut F {
+        block_filler
     }
 
     /// Fetches next block of transactions for consensus.
@@ -237,13 +250,12 @@ impl Mempool {
     /// `seen_txns` - transactions that were sent to Consensus but were not committed yet,
     ///  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
-    pub(crate) fn get_full_batch<F: BlockFiller>(
+    pub(crate) fn get_full_batch(
         &mut self,
         mut seen: HashSet<TxnPointer>,
-        block_filler: &mut F,
-        peer_count: u8,
-        peer_id: u8
-    ) {
+        sender: &kanal::Sender<(u64, SignedTransaction)>,
+        receiver: &kanal::Receiver<DependencyFiller>
+    ) -> DependencyFiller {
 
         let mut time = Instant::now();
         let mut result = VecDeque::new();
@@ -257,87 +269,77 @@ impl Mempool {
         let mut total_bytes = 0;
         let seen_size = seen.len();
 
-
         let mut txn_walked = 0usize;
-        let currentTotal = self.pending.len();
-        seen.extend(&self.pending);
 
-        let dif:u32 = 256 as u32 / peer_count as u32;
-        let mut my_space_start= 0 as u32;
-        let mut my_space_end = u8::MAX as u32;
+        //todo its prob cheaper to maintain this in two sets. We check seen the aptos way, and then we check pending separately.
+        //todo removing and adding to this set is a pain though.
 
-        //println!("bla peers: {} {}", peer_id, peer_count);
-        if peer_count > 1
-        {
-            my_space_start = peer_id as u32 * dif;
-            my_space_end = my_space_start + dif;
-        }
+        // iterate over the queue of transactions based on gas price
+        'main: for txn in self.transactions.iter_queue() {
+            txn_walked += 1;
+            if seen.contains(&TxnPointer::from(txn)) || self.pending.contains(&TxnPointer::from(txn)) {
+                continue;
+            }
 
-        let mut shardedOutCounter = 0;
+            let tx_seq = txn.sequence_number.transaction_sequence_number;
+            let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
+            let seen_previous = tx_seq > 0 && (seen.contains(&(txn.address, tx_seq - 1)) || self.pending.contains(&(txn.address, tx_seq - 1)));
+            // include transaction if it's "next" for given account or
+            // we've already sent its ancestor to Consensus.
+            if seen_previous || account_sequence_number == Some(&tx_seq) {
+                let ptr = TxnPointer::from(txn);
 
-        if currentTotal < block_filler.get_max_txn() as usize
-        {
-            // iterate over the queue of transactions based on gas price
-            'main: for txn in self.transactions.iter_queue() {
-                txn_walked += 1;
-                if seen.contains(&TxnPointer::from(txn)) {
-                    continue;
+                //if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
+                //    break;
+                //}
+
+                let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
+                //if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
+                //    break;
+                //}
+                self.pending.insert(ptr);
+
+                total_bytes += full_tx.raw_txn_bytes_len() as u64;
+
+                result.push_back(full_tx);
+
+                // check if we can now include some transactions
+                // that were skipped before for given account
+                let mut skipped_txn = (txn.address, tx_seq + 1);
+                while skipped.contains(&skipped_txn) {
+                    //if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
+                    //    break 'main;
+                    //}
+                    self.pending.insert(skipped_txn);
+                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
-
-                let tx_seq = txn.sequence_number.transaction_sequence_number;
-                let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
-                let seen_previous = tx_seq > 0 && seen.contains(&(txn.address, tx_seq - 1));
-                // include transaction if it's "next" for given account or
-                // we've already sent its ancestor to Consensus.
-                if seen_previous || account_sequence_number == Some(&tx_seq) {
-                    let ptr = TxnPointer::from(txn);
-
-                    if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
-                        break;
-                    }
-
-                    let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
-                    if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
-                        break;
-                    }
-                    seen.insert(ptr);
-                    total_bytes+= full_tx.raw_txn_bytes_len() as u64;
-
-                    result.push_back(full_tx);
-
-                    // check if we can now include some transactions
-                    // that were skipped before for given account
-                    let mut skipped_txn = (txn.address, tx_seq + 1);
-                    while skipped.contains(&skipped_txn) {
-                        if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
-                            break 'main;
-                        }
-                        seen.insert(skipped_txn);
-                        result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
-                        skipped_txn = (txn.address, skipped_txn.1 + 1);
-                    }
-                } else {
-                    skipped.insert(TxnPointer::from(txn));
-                }
+            } else {
+                skipped.insert(TxnPointer::from(txn));
             }
         }
+        //self.transactions.clear();
+
 
         //result.append(&mut self.alreadyprex.drain(..).collect());
 
         let result_size = result.len();
-        if result_size > 0 || CACHE.len() > 0 || self.cached_ex.len() > 0
+        if result_size > 0
         {
-            println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
-
-            block_filler.set_gas_per_core(self.last_max_gas);
-            block_filler.add_all(result, &mut self.cached_ex, &mut self.total, &mut self.current, &mut self.pending);
-            if block_filler.get_blockx().len() >= 500 {
-                let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
-                //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
-                self.last_max_gas = block_filler.get_current_gas() * dif as u64;
+            while let Some(tx) = result.pop_front() {
+                sender.send((self.total.clone(), tx));
+                self.total+=1;
             }
-
-            println!("bla blocklen: {}", block_filler.get_blockx().len());
+        }
+        let mut block_filler;
+            //println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
+        if let Ok(Some(blk)) = (*receiver).try_recv() {
+            block_filler = blk;
+            let len =  block_filler.get_blockx().len();
+            println!("bla blocklen: {}", len);
+            for tx in block_filler.get_blockx() {
+                self.pending.remove(&(tx.sender(), tx.sequence_number()));
+            }
 
             debug!(
             LogSchema::new(LogEntry::GetBlock),
@@ -345,10 +347,10 @@ impl Mempool {
             walked = txn_walked,
             seen_after = seen.len(),
             result_size = result_size,
-            block_size = block_filler.get_blockx().len(),
+            block_size = len,
             byte_size = total_bytes,);
 
-            counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, block_filler.get_blockx().len());
+            counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, len);
             counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
         }
         else {
@@ -361,16 +363,22 @@ impl Mempool {
             block_size = 0,
             byte_size = 0,
         );
+            block_filler = DependencyFiller::new(
+                200_000_000_000,
+                1_000_000,
+                10000, RAYON_EXEC_POOL.current_num_threads() as u64);
         }
 
         //for later in forLater {
         //    let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
         //    self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &tx.unwrap().committed_hash());
         //}
+        // todo check how much time is spent in this
         let elapsed = time.elapsed().as_millis();
         if elapsed > 0 {
-            //println!("bla total: {}", elapsed);
+            println!("bla total: {}", elapsed);
         }
+        block_filler
     }
 
     /// Periodic core mempool garbage collection.

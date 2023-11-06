@@ -719,6 +719,10 @@ impl TransactionStore {
         self.priority_index.iter()
     }
 
+    pub(crate) fn clear(&mut self) {
+        self.priority_index.clear()
+    }
+
     pub(crate) fn gen_snapshot(&self) -> TxnsLog {
         let mut txns_log = TxnsLog::new();
         for (account, txns) in self.transactions.iter() {

@@ -66,6 +66,10 @@ impl PriorityIndex {
         self.data.iter().rev()
     }
 
+    pub(crate) fn clear(&mut self) {
+        self.data.clear()
+    }
+
     pub(crate) fn size(&self) -> usize {
         self.data.len()
     }
