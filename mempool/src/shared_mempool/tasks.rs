@@ -348,7 +348,7 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                 match validation_result.status() {
                     None => {
                         let ranking_score = validation_result.score();
-                        let mempool_status = mempool.add_sharded_txn(transaction.clone(), ranking_score, sequence_info, timeline_state, num_peers, peer_id);
+                        let mempool_status = mempool.add_sharded_txn(transaction.clone(), ranking_score, sequence_info, timeline_state, num_peers, peer_id, &smp.tx_channel);
                         statuses.push((transaction, (mempool_status, None)));
                     },
                     Some(validation_status) => {
@@ -393,7 +393,7 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
 {
     let mut mempool = smp.mempool.lock();
     for (transaction, sequence_info) in transactions.into_iter() {
-        let mempool_status = mempool.add_sharded_txn(transaction.clone(), 0, sequence_info, timeline_state, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8);
+        let mempool_status = mempool.add_sharded_txn(transaction.clone(), 0, sequence_info, timeline_state, smp.network_interface.get_peer_count() as u8 + 1, smp.network_interface.get_peer_position() as u8, &smp.tx_channel);
         statuses.push((transaction, (mempool_status, None)));
     }
 }
@@ -474,7 +474,7 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
                     mempool.gc_by_expiration_time(curr_time);
                 }
 
-                let mut block_filler: DependencyFiller = mempool.get_full_batch(exclude_transactions, &smp.tx_channel, &smp.block_channel);
+                let mut block_filler: DependencyFiller = mempool.get_full_batch(exclude_transactions, &smp.block_channel);
                 gas_estimates = block_filler.get_gas_estimates();
                 dependency_graph = block_filler.get_dependency_graph();
                 txns = block_filler.get_block();

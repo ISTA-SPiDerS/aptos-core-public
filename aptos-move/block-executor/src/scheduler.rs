@@ -257,7 +257,7 @@ pub struct Scheduler {
 
     concurrency_level: usize,
 
-    gas_estimates: CachePadded<Vec<u64>>,
+    gas_estimates: CachePadded<Vec<u32>>,
 
     pub(crate) channels: (crossbeam::channel::Sender<TxnIndex>, crossbeam::channel::Receiver<TxnIndex>),
 
@@ -273,7 +273,7 @@ pub struct Scheduler {
 
     pub mode: ExecutionMode,
 
-    pub path_cost: Vec<u64>,
+    pub path_cost: Vec<u32>,
 
     pub critical_path_parent: Vec<boxcar::Vec<usize>>,
 
@@ -283,7 +283,7 @@ pub struct Scheduler {
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u64>>, gas_estimates: &Vec<u64>, concurrency_level: &usize, mode: ExecutionMode, map: Vec<(bool, MyMut<bool>)>) -> Self {
+    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u16>>, gas_estimates: &Vec<u32>, concurrency_level: &usize, mode: ExecutionMode, map: Vec<(bool, MyMut<bool>)>) -> Self {
 
         let hint_graph : Vec<Vec<TxnIndex>>  = (0..num_txns)
             .map(|idx| dependencies[idx].iter().map(|v| *v as TxnIndex).collect())
@@ -300,7 +300,7 @@ impl Scheduler {
         let channels = crossbeam::channel::unbounded();
         let priochannels = crossbeam::channel::unbounded();
 
-        let mut path_cost: Vec<u64> = gas_estimates.clone();
+        let mut path_cost: Vec<u32> = gas_estimates.clone();
 
         // Mapping from parent to the children they unlock
         let mut send_vec = vec![];

@@ -33,13 +33,13 @@ use std::{
     time::{Instant, SystemTime},
 };
 use std::cmp::max;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::ptr::null;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::atomic::Ordering::{Relaxed, SeqCst};
 use std::sync::mpsc;
 use std::time::Duration;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use tokio::runtime::Handle;
 use aptos_types::transaction::authenticator::TransactionAuthenticator;
 use aptos_types::transaction::RAYON_EXEC_POOL;
@@ -48,11 +48,11 @@ use once_cell::sync::{Lazy, OnceCell};
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
-use crate::core_mempool::{BlockFiller, DependencyFiller};
+use crate::core_mempool::{BlockFiller, DependencyFiller, TxnPointer};
 
-pub static CACHE: Lazy<DashMap<u64, (VMSpeculationResult, VMStatus, SignedTransaction)>> = Lazy::new(|| {
-    DashMap::new()
-});
+pub static SYNC_CACHE: Lazy<std::sync::Mutex<HashMap<TxnPointer, (VMSpeculationResult, VMStatus, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
+    HashMap::new()
+)});
 
 /// Struct that owns all dependencies required by shared mempool routines.
 #[derive(Clone)]
@@ -64,7 +64,7 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
-    pub tx_channel: kanal::Sender<(u64, SignedTransaction)>,
+    pub tx_channel: kanal::Sender<SignedTransaction>,
     pub block_channel: kanal::Receiver<DependencyFiller>
 }
 
@@ -92,104 +92,83 @@ impl<
         rayon::spawn(move || {
             let locked_val = tem_locked_val.clone();
 
-            let mut input : Vec<(u64, SignedTransaction)> = vec![];
-            let mut last_max_gas = 100_000_000_000;
-            let mut current : u64 = 0;
-            let mut cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)> = VecDeque::new();
-            let mut attempts = 3;
-            //todo add time eval
+            let mut input : Vec<SignedTransaction> = vec![];
+            let num_threads = RAYON_EXEC_POOL.current_num_threads();
+
+            let mut thread_local_cache: DashMap<TxnPointer, (VMSpeculationResult, VMStatus, SignedTransaction)> = DashMap::new();
             loop
             {
+                let mut time = Instant::now();
                 loop
                 {
-                    if input.len() >= 64 {
-                        attempts = 0;
+                    if input.len() >= num_threads * 8 {
                         break;
                     }
                     if let Ok(Some(x)) = tx_receiver.try_recv() {
                         input.push(x);
                     }
                     else {
-                        break;
+                        let elapsed = time.elapsed().as_millis();
+                        if elapsed > 100 {
+                            break;
+                        }
                     }
                 }
 
                 let count = input.len();
                 if count > 0 {
+                    println!("bla count: {} {} {}", count, thread_local_cache.len(), cache.len());
                     let exec_counter = AtomicUsize::new(0);
                     let failures = DashMap::new();
-                    let cache = DashMap::new();
                     {
                         let transaction_validation = locked_val.write();
 
                         RAYON_EXEC_POOL.scope(|s| {
-                            for _ in 0..RAYON_EXEC_POOL.current_num_threads() {
+                            for _ in 0..num_threads {
                                 s.spawn(|_| {
 
-                                    let mut current_index = exec_counter.fetch_add(1, SeqCst);
+                                    let mut current_index = exec_counter.fetch_add(1, Relaxed);
                                     while current_index < count {
-                                        let (index, tx) = &input[current_index];
+                                        let  tx = &input[current_index];
                                         let result = transaction_validation.speculate_transaction(&tx);
                                         let (a, b) = result.unwrap();
                                         match b {
                                             VMStatus::Executed => {
-                                                cache.insert(index.clone(), (a, b, tx.clone()));
+                                                thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a, b, tx.clone()));
                                             }
                                             _ => {
-                                                failures.insert(index.clone(), tx.clone());
+                                                failures.insert((tx.sender(), tx.sequence_number()), tx.clone());
                                             }
                                         }
-                                        current_index = exec_counter.fetch_add(1, SeqCst);
+                                        current_index = exec_counter.fetch_add(1, Relaxed);
                                     }
                                 });
                             }
-                        });
+                        });;
                     }
 
                     input.clear();
 
-                    for value in failures {
+                    for (key, value) in failures {
                         input.push(value);
                         println!("bla tx failure");
                     }
 
-                    while cache.contains_key(&current)
                     {
-                        let out = cache.remove(&current).unwrap().1;
-                        cached_ex.push_back(out);
-                        current += 1;
+                        if let Ok(mut cache) = SYNC_CACHE.try_lock() {
+                            cache.extend(thread_local_cache);
+                            thread_local_cache = DashMap::new();
+                        }
                     }
 
-                    let cached_len = cached_ex.len();
-                    if cached_len < 10000 && attempts < 3 {
-                        attempts+=1;
+                    if input.is_empty() {
+                        let output = tx_receiver.recv();
+                        if let Ok(res) = output {
+                            input.push(res);
+                        }
                         continue
                     }
                 }
-
-                attempts = 0;
-                if cached_ex.is_empty() {
-                    let output = tx_receiver.recv();
-                    if let Ok(res) = output {
-                        input.push(res);
-                    }
-                    continue
-                }
-
-                let mut block_filler: DependencyFiller = DependencyFiller::new(
-                    200_000_000_000,
-                    1_000_000,
-                    10000, RAYON_EXEC_POOL.current_num_threads() as u64);
-
-                block_filler.set_gas_per_core(last_max_gas);
-                block_filler.add_all(&mut cached_ex);
-
-                if block_filler.get_blockx().len() >= 500 {
-                    let dif = max(block_filler.get_max_txn() as usize / block_filler.get_blockx().len(), 1);
-                    //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
-                   last_max_gas = block_filler.get_current_gas() * dif as u64;
-                }
-                block_sender.send(block_filler);
             }
         });
 
@@ -334,7 +313,7 @@ impl fmt::Display for QuorumStoreRequest {
 #[derive(Debug)]
 pub enum QuorumStoreResponse {
     /// Block to submit to consensus
-    GetBatchResponse(Vec<SignedTransaction>, Vec<u64>, Vec<Vec<u64>>),
+    GetBatchResponse(Vec<SignedTransaction>, Vec<u32>, Vec<Vec<u16>>),
     CommitResponse(),
 }
 

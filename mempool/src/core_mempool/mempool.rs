@@ -46,19 +46,16 @@ use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::transaction::RAYON_EXEC_POOL;
 use crate::core_mempool::DependencyFiller;
 use crate::core_mempool::index::OrderedQueueKey;
-use crate::shared_mempool::types::CACHE;
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
-    last_max_gas: u64,
+    last_max_gas: u32,
     cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
     total: u64,
-    current: u64,
-    pending: HashSet<TxnPointer>
-
+    current: u64
 }
 
 impl Mempool {
@@ -68,11 +65,10 @@ impl Mempool {
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
-            last_max_gas: 100_000_000_000,
+            last_max_gas: 100_000_000,
             cached_ex: VecDeque::new(),
             total: 0,
             current: 0,
-            pending: HashSet::new()
         }
     }
 
@@ -149,7 +145,8 @@ impl Mempool {
         sequence_info: AccountSequenceInfo,
         timeline_state: TimelineState,
         peer_count: u8,
-        peer_id: u8
+        peer_id: u8,
+        sender: &kanal::Sender<SignedTransaction>
     ) -> MempoolStatus {
         let db_sequence_number = sequence_info.min_seq();
         trace!(
@@ -189,6 +186,8 @@ impl Mempool {
                 "sharded out this tx".to_string());
         }
 
+        sender.send(txn.clone());
+
         let now = SystemTime::now();
         let expiration_time =
             aptos_infallible::duration_since_epoch_at(&now) + self.system_transaction_timeout;
@@ -221,7 +220,8 @@ impl Mempool {
         sequence_info: AccountSequenceInfo,
         timeline_state: TimelineState
     ) -> MempoolStatus {
-       self.add_sharded_txn(txn, ranking_score, sequence_info, timeline_state, 1, 0)
+       let (tx_sender, tx_receiver): (kanal::Sender<SignedTransaction>,  kanal::Receiver<SignedTransaction>) = kanal::unbounded();
+       self.add_sharded_txn(txn, ranking_score, sequence_info, timeline_state, 1, 0, &tx_sender)
     }
 
     /// Fetches next block of transactions for consensus.
@@ -253,7 +253,6 @@ impl Mempool {
     pub(crate) fn get_full_batch(
         &mut self,
         mut seen: HashSet<TxnPointer>,
-        sender: &kanal::Sender<(u64, SignedTransaction)>,
         receiver: &kanal::Receiver<DependencyFiller>
     ) -> DependencyFiller {
 
@@ -271,33 +270,35 @@ impl Mempool {
 
         let mut txn_walked = 0usize;
 
-        //todo its prob cheaper to maintain this in two sets. We check seen the aptos way, and then we check pending separately.
-        //todo removing and adding to this set is a pain though.
+        let mut block_filler: DependencyFiller = DependencyFiller::new(
+            200_000_000,
+            1_000_000,
+            10000, RAYON_EXEC_POOL.current_num_threads() as u32);
 
         // iterate over the queue of transactions based on gas price
         'main: for txn in self.transactions.iter_queue() {
             txn_walked += 1;
-            if seen.contains(&TxnPointer::from(txn)) || self.pending.contains(&TxnPointer::from(txn)) {
+            if seen.contains(&TxnPointer::from(txn)) {
                 continue;
             }
 
             let tx_seq = txn.sequence_number.transaction_sequence_number;
             let account_sequence_number = self.transactions.get_sequence_number(&txn.address);
-            let seen_previous = tx_seq > 0 && (seen.contains(&(txn.address, tx_seq - 1)) || self.pending.contains(&(txn.address, tx_seq - 1)));
+            let seen_previous = tx_seq > 0 && (seen.contains(&(txn.address, tx_seq - 1)));
             // include transaction if it's "next" for given account or
             // we've already sent its ancestor to Consensus.
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
 
-                //if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
-                //    break;
-                //}
+                if result.len() as u64 >= block_filler.get_max_txn() {
+                   break;
+                }
 
                 let full_tx = self.transactions.get(&ptr.0, ptr.1).unwrap();
-                //if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
-                //    break;
-                //}
-                self.pending.insert(ptr);
+                if total_bytes + full_tx.raw_txn_bytes_len() as u64 > block_filler.get_max_bytes() {
+                    break;
+                }
+                seen.insert(ptr);
 
                 total_bytes += full_tx.raw_txn_bytes_len() as u64;
 
@@ -307,10 +308,10 @@ impl Mempool {
                 // that were skipped before for given account
                 let mut skipped_txn = (txn.address, tx_seq + 1);
                 while skipped.contains(&skipped_txn) {
-                    //if (result.len() as u64 + (currentTotal) as u64) >= block_filler.get_max_txn() {
-                    //    break 'main;
-                    //}
-                    self.pending.insert(skipped_txn);
+                    if result.len() as u64 >= block_filler.get_max_txn() {
+                        break 'main;
+                    }
+                    seen.insert(skipped_txn);
                     result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
@@ -318,27 +319,19 @@ impl Mempool {
                 skipped.insert(TxnPointer::from(txn));
             }
         }
-        //self.transactions.clear();
 
+        if !result.is_empty() {
+            let result_size = result.len();
+            block_filler.set_gas_per_core(self.last_max_gas);
+            block_filler.add_all(&mut result);
 
-        //result.append(&mut self.alreadyprex.drain(..).collect());
-
-        let result_size = result.len();
-        if result_size > 0
-        {
-            while let Some(tx) = result.pop_front() {
-                sender.send((self.total.clone(), tx));
-                self.total+=1;
-            }
-        }
-        let mut block_filler;
-            //println!("bla result: {} {} {} {} {}", result_size, CACHE.len(), self.cached_ex.len(), self.pending.len(), shardedOutCounter);
-        if let Ok(Some(blk)) = (*receiver).try_recv() {
-            block_filler = blk;
             let len =  block_filler.get_blockx().len();
             println!("bla blocklen: {}", len);
-            for tx in block_filler.get_blockx() {
-                self.pending.remove(&(tx.sender(), tx.sequence_number()));
+
+            if len >= 500 {
+                let dif = max(block_filler.get_max_txn() as usize / len, 1);
+                //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
+                self.last_max_gas = block_filler.get_current_gas() * dif as u32;
             }
 
             debug!(
@@ -352,6 +345,11 @@ impl Mempool {
 
             counters::mempool_service_transactions(counters::GET_BLOCK_LABEL, len);
             counters::MEMPOOL_SERVICE_BYTES_GET_BLOCK.observe(total_bytes as f64);
+
+            let elapsed = time.elapsed().as_millis();
+            if elapsed > 0 {
+                println!("bla total: {} {} {}", elapsed, len, result_size);
+            }
         }
         else {
             debug!(
@@ -363,21 +361,9 @@ impl Mempool {
             block_size = 0,
             byte_size = 0,
         );
-            block_filler = DependencyFiller::new(
-                200_000_000_000,
-                1_000_000,
-                10000, RAYON_EXEC_POOL.current_num_threads() as u64);
+            return block_filler;
         }
 
-        //for later in forLater {
-        //    let tx = self.transactions.get(&later.address, later.sequence_number.transaction_sequence_number);
-        //    self.transactions.reject_transaction(&later.address, later.sequence_number.transaction_sequence_number, &tx.unwrap().committed_hash());
-        //}
-        // todo check how much time is spent in this
-        let elapsed = time.elapsed().as_millis();
-        if elapsed > 0 {
-            println!("bla total: {}", elapsed);
-        }
         block_filler
     }
 
