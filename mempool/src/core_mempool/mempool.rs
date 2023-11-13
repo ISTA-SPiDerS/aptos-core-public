@@ -52,7 +52,7 @@ pub struct Mempool {
     transactions: TransactionStore,
 
     pub system_transaction_timeout: Duration,
-    last_max_gas: u32,
+    last_max_gas: u64,
     cached_ex: VecDeque<(VMSpeculationResult, VMStatus, SignedTransaction)>,
     total: u64,
     current: u64
@@ -186,7 +186,10 @@ impl Mempool {
                 "sharded out this tx".to_string());
         }
 
-        sender.send(txn.clone());
+        let sendresult = sender.send(txn.clone());
+        if sendresult.is_err() {
+            panic!("sendresult is error {:?}", sendresult.err())
+        }
 
         let now = SystemTime::now();
         let expiration_time =
@@ -257,7 +260,7 @@ impl Mempool {
     ) -> DependencyFiller {
 
         let mut time = Instant::now();
-        let mut result = VecDeque::new();
+        let mut result = Vec::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
         // and gas_price 1, 10 respectively)
@@ -271,7 +274,7 @@ impl Mempool {
         let mut txn_walked = 0usize;
 
         let mut block_filler: DependencyFiller = DependencyFiller::new(
-            200_000_000,
+            2_000_000_000,
             1_000_000,
             10000, RAYON_EXEC_POOL.current_num_threads() as u32);
 
@@ -302,7 +305,7 @@ impl Mempool {
 
                 total_bytes += full_tx.raw_txn_bytes_len() as u64;
 
-                result.push_back(full_tx);
+                result.push(full_tx);
 
                 // check if we can now include some transactions
                 // that were skipped before for given account
@@ -312,7 +315,7 @@ impl Mempool {
                         break 'main;
                     }
                     seen.insert(skipped_txn);
-                    result.push_back(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    result.push(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
             } else {
@@ -321,6 +324,7 @@ impl Mempool {
         }
 
         if !result.is_empty() {
+            let elapsed1 = time.elapsed().as_millis();
             let result_size = result.len();
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(&mut result);
@@ -331,7 +335,7 @@ impl Mempool {
             if len >= 500 {
                 let dif = max(block_filler.get_max_txn() as usize / len, 1);
                 //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
-                self.last_max_gas = block_filler.get_current_gas() * dif as u32;
+                self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 
             debug!(
@@ -348,7 +352,7 @@ impl Mempool {
 
             let elapsed = time.elapsed().as_millis();
             if elapsed > 0 {
-                println!("bla total: {} {} {}", elapsed, len, result_size);
+                println!("bla total: {} {} {} {}", elapsed1, elapsed, len, result_size);
             }
         }
         else {
@@ -359,9 +363,7 @@ impl Mempool {
             seen_after = seen.len(),
             result_size = 0,
             block_size = 0,
-            byte_size = 0,
-        );
-            return block_filler;
+            byte_size = 0);
         }
 
         block_filler

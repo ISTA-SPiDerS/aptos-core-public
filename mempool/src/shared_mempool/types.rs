@@ -94,7 +94,7 @@ impl<
 
             let mut input : Vec<SignedTransaction> = vec![];
             let num_threads = RAYON_EXEC_POOL.current_num_threads();
-
+            let mut cache_len = 0;
             let mut thread_local_cache: DashMap<TxnPointer, (VMSpeculationResult, VMStatus, SignedTransaction)> = DashMap::new();
             loop
             {
@@ -117,7 +117,7 @@ impl<
 
                 let count = input.len();
                 if count > 0 {
-                    println!("bla count: {} {} {}", count, thread_local_cache.len(), cache.len());
+                    println!("bla count: {} {} {}", count, thread_local_cache.len(), cache_len);
                     let exec_counter = AtomicUsize::new(0);
                     let failures = DashMap::new();
                     {
@@ -157,17 +157,18 @@ impl<
                     {
                         if let Ok(mut cache) = SYNC_CACHE.try_lock() {
                             cache.extend(thread_local_cache);
+                            cache_len = cache.len();
                             thread_local_cache = DashMap::new();
                         }
                     }
+                }
 
-                    if input.is_empty() {
-                        let output = tx_receiver.recv();
-                        if let Ok(res) = output {
-                            input.push(res);
-                        }
-                        continue
+                if input.is_empty() && thread_local_cache.is_empty() {
+                    let output = tx_receiver.recv();
+                    if let Ok(res) = output {
+                        input.push(res);
                     }
+                    continue
                 }
             }
         });
