@@ -50,6 +50,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 kanal = "0.1.0-pre8"
+crossbeam = { workspace = true }
 
 [dev-dependencies]
 aptos-compression = { workspace = true }

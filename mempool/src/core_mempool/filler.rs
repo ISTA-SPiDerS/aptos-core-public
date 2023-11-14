@@ -227,11 +227,7 @@ impl BlockFiller for DependencyFiller {
                     break;
                 }
 
-                if let Some((speculation, status, tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
-                    let mut read_set = &speculation.input;
-                    let write_set = speculation.output.txn_output().write_set();
-                    let delta_set = speculation.output.delta_change_set();
-                    let gas_used = speculation.output.txn_output().gas_used() as u32;
+                if let Some((write_set, read_set, gas_used , tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
                     if gas_used > 100000
                     {
                         //println!("bla Wat a big tx: {}", gas_used);
@@ -245,8 +241,8 @@ impl BlockFiller for DependencyFiller {
 
                     // When transaction can start assuming unlimited resources.
                     let mut arrival_time = 0;
-                    for read in read_set {
-                        if let Some(val) = self.last_touched.get(&read) {
+                    for read in &read_set {
+                        if let Some(val) = self.last_touched.get(read) {
                             arrival_time = max(arrival_time, *val);
                         }
                     }
@@ -264,20 +260,19 @@ impl BlockFiller for DependencyFiller {
                     if finish_time > (self.gas_per_core * 2) as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
-                        map.insert((txinput.sender(), txinput.sequence_number()), (speculation, status, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
                         continue;
                     }
 
                     if self.total_estimated_gas + gas_used as u64 > self.gas_per_core_init as u64 * self.cores as u64 {
                         self.full = true;
-                        println!("bla too much");
-                        map.insert((txinput.sender(), txinput.sequence_number()), (speculation, status, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
                         break;
                     }
 
                     let mut dependencies = HashSet::new();
-                    for read in read_set {
-                        if let Some(val) = self.writes.get(&read) {
+                    for read in &read_set {
+                        if let Some(val) = self.writes.get(read) {
                             for parent_txn in val {
                                 dependencies.insert(*parent_txn);
                             }
@@ -293,7 +288,7 @@ impl BlockFiller for DependencyFiller {
 
                     if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                         self.full = true;
-                        map.insert((txinput.sender(), txinput.sequence_number()), (speculation, status, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
                         break;
                     }
 
@@ -324,10 +319,10 @@ impl BlockFiller for DependencyFiller {
                     }*/
 
                     for write in write_set {
-                        let mx = max(finish_time, *self.last_touched.get(write.0).unwrap_or(&0u32));
+                        let mx = max(finish_time, *self.last_touched.get(&write.0).unwrap_or(&0u32));
                         self.last_touched.insert(write.0.clone(), mx.into());
 
-                        if !self.writes.contains_key(write.0) {
+                        if !self.writes.contains_key(&write.0) {
                             self.writes.insert(write.0.clone(), vec![]);
                         }
 
@@ -346,10 +341,14 @@ impl BlockFiller for DependencyFiller {
                         self.full = true;
                         //println!("bla final gas6: {}", self.total_estimated_gas);
                     }
-                } else { return vec![]; }
+                } else {
+                    return vec![];
+                }
             }
             println!("bla endx {} {} {}", lock_time, start.elapsed().as_millis(), self.block.len());
         }
+
+
         //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];
 

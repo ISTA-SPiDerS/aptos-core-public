@@ -48,9 +48,11 @@ use once_cell::sync::{Lazy, OnceCell};
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
+use aptos_types::state_store::state_key::StateKey;
+use aptos_types::write_set::{WriteOp, WriteSet};
 use crate::core_mempool::{BlockFiller, DependencyFiller, TxnPointer};
 
-pub static SYNC_CACHE: Lazy<std::sync::Mutex<HashMap<TxnPointer, (VMSpeculationResult, VMStatus, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
+pub static SYNC_CACHE: Lazy<std::sync::Mutex<HashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
     HashMap::new()
 )});
 
@@ -64,7 +66,7 @@ pub(crate) struct SharedMempool<NetworkClient, TransactionValidator> {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
     pub broadcast_within_validator_network: Arc<RwLock<bool>>,
-    pub tx_channel: kanal::Sender<SignedTransaction>,
+    pub tx_channel: std::sync::mpsc::Sender<SignedTransaction>,
     pub block_channel: kanal::Receiver<DependencyFiller>
 }
 
@@ -85,92 +87,77 @@ impl<
     ) -> Self {
         let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone(), peer_id);
 
-        let (tx_sender, tx_receiver) = kanal::unbounded();
+        let (tx_sender, tx_receiver) =  std::sync::mpsc::channel();
         let (block_sender, block_receiver) = kanal::unbounded();
 
         let tem_locked_val = validator.clone();
-        rayon::spawn(move || {
-            let locked_val = tem_locked_val.clone();
+        std::thread::spawn(move ||  {
+                let locked_val = tem_locked_val.clone();
 
-            let mut input : Vec<SignedTransaction> = vec![];
-            let num_threads = RAYON_EXEC_POOL.current_num_threads();
-            let mut cache_len = 0;
-            let mut thread_local_cache: DashMap<TxnPointer, (VMSpeculationResult, VMStatus, SignedTransaction)> = DashMap::new();
-            loop
-            {
-                let mut time = Instant::now();
+                let mut input: Vec<SignedTransaction> = vec![];
+                let num_threads = RAYON_EXEC_POOL.current_num_threads();
+                let mut cache_len = 0;
+                let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
                 loop
                 {
-                    if input.len() >= num_threads * 8 {
-                        break;
-                    }
-                    if let Ok(Some(x)) = tx_receiver.try_recv() {
-                        input.push(x);
-                    }
-                    else {
-                        let elapsed = time.elapsed().as_millis();
-                        if elapsed > 100 {
+                    let mut time = Instant::now();
+                    loop
+                    {
+                        if input.len() >= num_threads * 8 {
                             break;
                         }
-                    }
-                }
-
-                let count = input.len();
-                if count > 0 {
-                    println!("bla count: {} {} {}", count, thread_local_cache.len(), cache_len);
-                    let exec_counter = AtomicUsize::new(0);
-                    let failures = DashMap::new();
-                    {
-                        let transaction_validation = locked_val.write();
-
-                        RAYON_EXEC_POOL.scope(|s| {
-                            for _ in 0..num_threads {
-                                s.spawn(|_| {
-
-                                    let mut current_index = exec_counter.fetch_add(1, Relaxed);
-                                    while current_index < count {
-                                        let  tx = &input[current_index];
-                                        let result = transaction_validation.speculate_transaction(&tx);
-                                        let (a, b) = result.unwrap();
-                                        match b {
-                                            VMStatus::Executed => {
-                                                thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a, b, tx.clone()));
-                                            }
-                                            _ => {
-                                                failures.insert((tx.sender(), tx.sequence_number()), tx.clone());
-                                            }
-                                        }
-                                        current_index = exec_counter.fetch_add(1, Relaxed);
-                                    }
-                                });
+                        if let Ok(x) = tx_receiver.try_recv() {
+                            input.push(x);
+                        } else {
+                            let elapsed = time.elapsed().as_millis();
+                            if elapsed > 50 {
+                                break;
                             }
-                        });;
-                    }
-
-                    input.clear();
-
-                    for (key, value) in failures {
-                        input.push(value);
-                        println!("bla tx failure");
-                    }
-
-                    {
-                        if let Ok(mut cache) = SYNC_CACHE.try_lock() {
-                            cache.extend(thread_local_cache);
-                            cache_len = cache.len();
-                            thread_local_cache = DashMap::new();
                         }
                     }
-                }
 
-                if input.is_empty() && thread_local_cache.is_empty() {
-                    let output = tx_receiver.recv();
-                    if let Ok(res) = output {
-                        input.push(res);
+                    let count = input.len();
+                    if count > 0 {
+                        println!("bla count: {} {} {}", count, thread_local_cache.len(), cache_len);
+                        //let exec_counter = AtomicUsize::new(0);
+                        {
+                            let transaction_validation = locked_val.write();
+
+                            //RAYON_EXEC_POOL.scope(|s| {
+                                //for _ in 0..num_threads {
+                                    //s.spawn(|_| {
+                                        for tx in &input {
+                                            let mut write_set = WriteSet::default().into_mut();
+                                            write_set.insert((StateKey::raw(Vec::from([0,1,2,3])), WriteOp::Deletion));
+                                            let mut read_set = BTreeSet::new();
+                                            read_set.insert(StateKey::raw(Vec::from([0,1,2,3])));
+                                            let cost = 100;
+                                            thread_local_cache.insert((tx.sender(), tx.sequence_number()), (write_set.freeze().unwrap(), read_set, cost, tx.clone()));
+                                        }
+                                    //});
+                                //}
+                            //});
+                        }
+
+                        input.clear();
+
+
+                        if thread_local_cache.len() > 0 {
+                            if let Ok(mut cache) = SYNC_CACHE.try_lock() {
+                                cache.extend(thread_local_cache);
+                                cache_len = cache.len();
+                                thread_local_cache = DashMap::new();
+                            }
+                        }
                     }
-                    continue
+
+                    if input.is_empty() && thread_local_cache.is_empty() {
+                        if let Ok(res) = tx_receiver.recv() {
+                            input.push(res);
+                        }
+                        continue
+                    }
                 }
-            }
         });
 
         SharedMempool {

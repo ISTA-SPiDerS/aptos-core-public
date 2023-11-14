@@ -36,6 +36,7 @@ use std::collections::{HashMap, VecDeque};
 use std::future::pending;
 use std::hash::Hash;
 use std::num::Wrapping;
+use std::sync::LockResult;
 use std::sync::mpsc::SyncSender;
 use std::time::Instant;
 use anyhow;
@@ -46,6 +47,7 @@ use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::transaction::RAYON_EXEC_POOL;
 use crate::core_mempool::DependencyFiller;
 use crate::core_mempool::index::OrderedQueueKey;
+use crate::shared_mempool::types::SYNC_CACHE;
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
@@ -65,7 +67,7 @@ impl Mempool {
             system_transaction_timeout: Duration::from_secs(
                 config.mempool.system_transaction_timeout_secs,
             ),
-            last_max_gas: 100_000_000,
+            last_max_gas: 2_000_000_000,
             cached_ex: VecDeque::new(),
             total: 0,
             current: 0,
@@ -146,7 +148,7 @@ impl Mempool {
         timeline_state: TimelineState,
         peer_count: u8,
         peer_id: u8,
-        sender: &kanal::Sender<SignedTransaction>
+        sender: &std::sync::mpsc::Sender<SignedTransaction>
     ) -> MempoolStatus {
         let db_sequence_number = sequence_info.min_seq();
         trace!(
@@ -186,10 +188,7 @@ impl Mempool {
                 "sharded out this tx".to_string());
         }
 
-        let sendresult = sender.send(txn.clone());
-        if sendresult.is_err() {
-            panic!("sendresult is error {:?}", sendresult.err())
-        }
+        sender.send(txn.clone()).unwrap();
 
         let now = SystemTime::now();
         let expiration_time =
@@ -223,7 +222,7 @@ impl Mempool {
         sequence_info: AccountSequenceInfo,
         timeline_state: TimelineState
     ) -> MempoolStatus {
-       let (tx_sender, tx_receiver): (kanal::Sender<SignedTransaction>,  kanal::Receiver<SignedTransaction>) = kanal::unbounded();
+       let (tx_sender, tx_receiver): (std::sync::mpsc::Sender<SignedTransaction>, std::sync::mpsc::Receiver<SignedTransaction>) = std::sync::mpsc::channel();
        self.add_sharded_txn(txn, ranking_score, sequence_info, timeline_state, 1, 0, &tx_sender)
     }
 
@@ -330,11 +329,13 @@ impl Mempool {
             block_filler.add_all(&mut result);
 
             let len =  block_filler.get_blockx().len();
-            println!("bla blocklen: {}", len);
+            if (len > 0) {
+                println!("bla blocklen: {}", len);
+            }
+
 
             if len >= 500 {
                 let dif = max(block_filler.get_max_txn() as usize / len, 1);
-                //println!("bla ugh: {} {} {} {}", block_filler.get_current_gas(), block_filler.get_blockx().len(), self.last_max_gas, dif);
                 self.last_max_gas = block_filler.get_current_gas() * dif as u64;
             }
 

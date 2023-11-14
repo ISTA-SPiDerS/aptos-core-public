@@ -23,7 +23,7 @@ class Aptos < Formula
 
   def install
     system "#{Formula["rustup-init"].bin}/rustup-init",
-      "-qy", "--no-modify-path", "--default-toolchain", "1.64"
+      "-qy", "--no-modify-path", "--default-toolchain", "1.73"
     ENV.prepend_path "PATH", HOMEBREW_CACHE/"cargo_cache/bin"
     system "./scripts/cli/build_cli_release.sh", "homebrew"
     bin.install "target/cli/aptos"
