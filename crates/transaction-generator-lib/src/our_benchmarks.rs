@@ -125,7 +125,7 @@ impl TransactionGenerator for OurBenchmark {
         for i in 0..needed {
             let mut sender_id: usize = (i as usize) % accounts.len();
 
-            if matches!(load_type, SOLANA)
+            if matches!(load_type, LoadType::SOLANA)
             {
                 let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0, solana_cost_options.len())];
                 let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0, solana_len_options.len())];
@@ -146,7 +146,7 @@ impl TransactionGenerator for OurBenchmark {
                                                                 vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()]));
 
             }
-            else if matches!(load_type, P2PTX)
+            else if matches!(load_type, LoadType::P2PTX)
             {
                 let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
                 let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
@@ -160,7 +160,7 @@ impl TransactionGenerator for OurBenchmark {
             else
             {
                 let resource_id = general_resource_distribution.sample(&mut rng);
-                if matches!(load_type, NFT)
+                if matches!(load_type, LoadType::NFT)
                 {
                     sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
                 }
