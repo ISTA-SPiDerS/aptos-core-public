@@ -181,12 +181,11 @@ impl TransactionGenerator for OurBenchmark {
                     sender_id = self.nft_sender_distribution.sample(&mut rng) % accounts.len();
                 }
 
-                // todo: Sequential workload. Undo later.
                 requests.push(self.package.our_spec_transaction(accounts[sender_id],
                                                                 &self.txn_factory,
                                                                 ident_str!("exchange").to_owned(),
                                                                 vec![],
-                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&1).unwrap()]));
+                                                                vec![bcs::to_bytes(&self.owner).unwrap(), bcs::to_bytes(&resource_id).unwrap()]));
             }
         }
         requests

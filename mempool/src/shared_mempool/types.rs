@@ -119,24 +119,33 @@ impl<
                     let count = input.len();
                     if count > 0 {
                         println!("bla count: {} {} {}", count, thread_local_cache.len(), cache_len);
-                        //let exec_counter = AtomicUsize::new(0);
+                        let exec_counter = AtomicUsize::new(0);
+                        let failures = DashMap::new();
                         {
                             let transaction_validation = locked_val.write();
 
-                            //RAYON_EXEC_POOL.scope(|s| {
-                                //for _ in 0..num_threads {
-                                    //s.spawn(|_| {
-                                        for tx in &input {
-                                            let mut write_set = WriteSet::default().into_mut();
-                                            write_set.insert((StateKey::raw(Vec::from([0,1,2,3])), WriteOp::Deletion));
-                                            let mut read_set = BTreeSet::new();
-                                            read_set.insert(StateKey::raw(Vec::from([0,1,2,3])));
-                                            let cost = 100;
-                                            thread_local_cache.insert((tx.sender(), tx.sequence_number()), (write_set.freeze().unwrap(), read_set, cost, tx.clone()));
+                            RAYON_EXEC_POOL.scope(|s| {
+                                for _ in 0..num_threads {
+                                    s.spawn(|_| {
+
+                                        let mut current_index = exec_counter.fetch_add(1, Relaxed);
+                                        while current_index < count {
+                                            let  tx = &input[current_index];
+                                            let result = transaction_validation.speculate_transaction(&tx);
+                                            let (a, b) = result.unwrap();
+                                            match b {
+                                                VMStatus::Executed => {
+                                                    thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
+                                                }
+                                                _ => {
+                                                    failures.insert((tx.sender(), tx.sequence_number()), tx.clone());
+                                                }
+                                            }
+                                            current_index = exec_counter.fetch_add(1, Relaxed);
                                         }
-                                    //});
-                                //}
-                            //});
+                                    });
+                                }
+                            });;
                         }
 
                         input.clear();
