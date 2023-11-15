@@ -143,7 +143,7 @@ impl Mempool {
             ));
         }
 
-        let dif:u32 = (256.0 / peer_count as f32).ceil() as u32;
+        /*let dif:u32 = (256.0 / peer_count as f32).ceil() as u32;
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
 
@@ -163,7 +163,7 @@ impl Mempool {
             //return MempoolStatus::new(MempoolStatusCode::Accepted);
             return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
                 "sharded out this tx".to_string());
-        }
+        }*/
 
         let now = SystemTime::now();
         let expiration_time =
