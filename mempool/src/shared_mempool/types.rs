@@ -125,7 +125,7 @@ impl<
                             let transaction_validation = locked_val.write();
 
                             RAYON_EXEC_POOL.scope(|s| {
-                                for _ in 0..num_threads {
+                                for _ in 0..4 {
                                     s.spawn(|_| {
 
                                         let mut current_index = exec_counter.fetch_add(1, Relaxed);
@@ -310,7 +310,7 @@ impl fmt::Display for QuorumStoreRequest {
 #[derive(Debug)]
 pub enum QuorumStoreResponse {
     /// Block to submit to consensus
-    GetBatchResponse(Vec<SignedTransaction>, Vec<u32>, Vec<Vec<u16>>),
+    GetBatchResponse(Vec<SignedTransaction>, Vec<u16>, Vec<Vec<u16>>),
     CommitResponse(),
 }
 

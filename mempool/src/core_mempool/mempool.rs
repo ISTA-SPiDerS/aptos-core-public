@@ -166,13 +166,21 @@ impl Mempool {
             ));
         }
 
-        let dif:u32 = (256.0 / peer_count as f32).ceil() as u32;
+        let dif:u32 = (256.0 / 2 as f32).ceil() as u32;
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
+        let actual_id;
+        if peer_id % 2 == 0 {
+            actual_id = 0;
+        }
+        else {
+            actual_id = 1;
+        }
 
         if peer_count > 1
         {
-            my_space_start = peer_id as u32 * dif;
+            // todo 4 = 2, 10 = 4 shards.
+            my_space_start = actual_id as u32 * dif;
             my_space_end = my_space_start + dif;
         }
 

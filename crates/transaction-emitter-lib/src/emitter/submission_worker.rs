@@ -138,7 +138,7 @@ impl SubmissionWorker {
 
             if !success {
                 self.accounts.retain(|x| x.address().to_vec() != requests[0].sender().to_vec());
-                println!("Retain: {}", self.accounts.len());
+                //println!("Retain: {}", self.accounts.len());
                 continue;
             }
 
@@ -150,7 +150,6 @@ impl SubmissionWorker {
                 ))
                 .await
             }
-
             self.wait_and_update_stats(
                 *loop_start_time,
                 txn_offset_time.load(Ordering::Relaxed) / (requests.len() as u64),

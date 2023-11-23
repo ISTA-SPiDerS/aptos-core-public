@@ -253,11 +253,9 @@ pub struct Scheduler {
     /// An index i maps to the most up-to-date status of transaction i.
     txn_status: Vec<CachePadded<(RwLock<ExecutionStatus>, RwLock<ValidationStatus>)>>,
 
-    hint_graph: Vec<Vec<usize>>,
+    hint_graph: Vec<Vec<u16>>,
 
     concurrency_level: usize,
-
-    gas_estimates: CachePadded<Vec<u32>>,
 
     pub(crate) channels: (crossbeam::channel::Sender<TxnIndex>, crossbeam::channel::Receiver<TxnIndex>),
 
@@ -273,8 +271,6 @@ pub struct Scheduler {
 
     pub mode: ExecutionMode,
 
-    pub path_cost: Vec<u32>,
-
     pub critical_path_parent: Vec<boxcar::Vec<usize>>,
 
     pub children: Vec<Vec<TxnIndex>>,
@@ -283,11 +279,9 @@ pub struct Scheduler {
 
 /// Public Interfaces for the Scheduler
 impl Scheduler {
-    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u16>>, gas_estimates: &Vec<u32>, concurrency_level: &usize, mode: ExecutionMode, map: Vec<(bool, MyMut<bool>)>) -> Self {
+    pub fn new(num_txns: usize, dependencies: &Vec<Vec<u16>>, gas_estimates: &Vec<u16>, concurrency_level: &usize, mode: ExecutionMode, map: Vec<(bool, MyMut<bool>)>) -> Self {
 
-        let hint_graph : Vec<Vec<TxnIndex>>  = (0..num_txns)
-            .map(|idx| dependencies[idx].iter().map(|v| *v as TxnIndex).collect())
-            .collect();
+        let hint_graph : Vec<Vec<u16>>  = dependencies.clone();
         let mut children: Vec<Vec<TxnIndex>> = (0..num_txns).map(|_|{Vec::new()}).collect();
 
         // Hint graph gives us our parent nodes.
@@ -300,20 +294,23 @@ impl Scheduler {
         let channels = crossbeam::channel::unbounded();
         let priochannels = crossbeam::channel::unbounded();
 
-        let mut path_cost: Vec<u32> = gas_estimates.clone();
+        let mut path_cost: Vec<u32> = gas_estimates.iter().map(|v | v.clone() as u32).collect();
 
+        // todo reduce cost to minimal network cost.
         // Mapping from parent to the children they unlock
         let mut send_vec = vec![];
         let critical_path_parent: Vec<boxcar::Vec<usize>> = (0..num_txns).map(|_|boxcar::Vec::new()).collect();
+        assert!(path_cost.len() >= num_txns && hint_graph.len() >= num_txns);
         for i in (0..num_txns) {
             let mut my_cost = 0;
             let mut parent = 50000;
             for node in &*hint_graph[i] {
-                if path_cost[*node] > my_cost {
-                    my_cost = path_cost[*node];
-                    parent = *node;
+                let usize_node = *node as usize;
+                if path_cost[usize_node] > my_cost {
+                    my_cost = path_cost[usize_node];
+                    parent = usize_node;
                 }
-                children[*node].push(i);
+                children[usize_node].push(i);
             }
             path_cost[i] += my_cost;
             if parent == 50000 {
@@ -349,7 +346,6 @@ impl Scheduler {
                 .collect(),
             hint_graph,
             concurrency_level: *concurrency_level,
-            gas_estimates: CachePadded::new(gas_estimates.clone()),
             channels,
             priochannels,
             valock: MyMut::new(false),
@@ -357,7 +353,6 @@ impl Scheduler {
             prologue_map: map,
             prologue_index: AtomicU16::new(0),
             mode,
-            path_cost,
             critical_path_parent,
             children
         };
@@ -647,9 +642,10 @@ impl Scheduler {
         let mut status = self.txn_status[txn_idx].0.write();
         if let ExecutionStatus::ReadyToExecute(incarnation, maybe_condvar) = &*status {
             for dependency in self.hint_graph[txn_idx].iter().rev() {
-                if self.is_executed(*dependency, true).is_none() {
-                    self.critical_path_parent[*dependency].push(txn_idx);
-                    if self.is_executed(*dependency, true).is_none()
+                let usize_dep = *dependency as usize;
+                if self.is_executed(usize_dep as usize, true).is_none() {
+                    self.critical_path_parent[usize_dep].push(txn_idx);
+                    if self.is_executed(usize_dep, true).is_none()
                     {
                         return None;
                     }

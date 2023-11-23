@@ -91,7 +91,7 @@ impl OurBenchmark {
             resource_distribution_vec = vec![1.0,1.0,1.0,1.0];
         }
 
-        println!("Start Creator for {:?} {}", load_type, resource_distribution_vec.len());
+        //println!("Start Creator for {:?} {}", load_type, resource_distribution_vec.len());
 
         let mut solana_len_options:Vec<usize> = vec![];
         let mut solana_cost_options:Vec<f64> = vec![];
@@ -230,7 +230,7 @@ impl OurBenchmarkGeneratorCreator {
 #[async_trait]
 impl TransactionGeneratorCreator for OurBenchmarkGeneratorCreator {
     async fn create_transaction_generator(&mut self) -> Box<dyn TransactionGenerator> {
-        println!("Starting our Benchmark creator!");
+        //println!("Starting our Benchmark creator!");
         Box::new(
             OurBenchmark::new(
                 self.txn_factory.clone(),

@@ -370,15 +370,21 @@ impl Block {
         )
         .chain(once(Transaction::StateCheckpoint(self.id)))
         .collect();
-        let gas_estimates = once(100)
+        let gas_estimates = once(10)
             .chain(txn_register.gas_estimates().clone().into_iter())
-            .chain(once(100))
+            .chain(once(10))
             .collect();
         let dependency_graph = once(vec![])
             .chain(txn_register.dependency_graph().clone().into_iter().map(|f| f.into_iter().map(|k| k + 1).chain(once(0)).collect()).collect::<Vec<Vec<u16>>>())
             .chain(once(vec![0]))
             .collect();
 
+        //let reg = TransactionRegister::new(txn, gas_estimates, dependency_graph);
+        //let bytes1 =  bcs::to_bytes(reg.txns()).unwrap();
+        //let bytes2 = bcs::to_bytes( &reg).unwrap();
+
+        //println!("bla size0: {} {} {} {} {}", reg.txns().len(), reg.gas_estimates().len(), reg.dependency_graph().len(), bytes1.len(), bytes2.len());
+        //reg
         TransactionRegister::new(txn, gas_estimates, dependency_graph)
     }
 

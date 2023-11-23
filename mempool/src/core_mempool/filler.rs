@@ -142,7 +142,7 @@ pub struct DependencyFiller {
     writes: BTreeMap<StateKey, Vec<u16>>,
     dependency_graph: Vec<HashSet<u16>>,
     block: Vec<SignedTransaction>,
-    estimated_gas: Vec<u32>,
+    estimated_gas: Vec<u16>,
 }
 
 impl DependencyFiller {
@@ -169,7 +169,7 @@ impl DependencyFiller {
         }
     }
 
-    pub fn get_gas_estimates(&mut self) -> Vec<u32> {
+    pub fn get_gas_estimates(&mut self) -> Vec<u16> {
         mem::take(&mut self.estimated_gas)
     }
 
@@ -227,11 +227,10 @@ impl BlockFiller for DependencyFiller {
                     break;
                 }
 
-                if let Some((write_set, read_set, gas_used , tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
-                    if gas_used > 100000
-                    {
-                        //println!("bla Wat a big tx: {}", gas_used);
-                    }
+                if let Some((write_set, read_set, gas , tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
+                    let gas_used = (gas / 10) as u16;
+
+                    println!("bla gas used {}", gas_used);
 
                     if write_set.is_empty()
                     {
@@ -260,13 +259,13 @@ impl BlockFiller for DependencyFiller {
                     if finish_time > (self.gas_per_core * 2) as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         continue;
                     }
 
                     if self.total_estimated_gas + gas_used as u64 > self.gas_per_core_init as u64 * self.cores as u64 {
                         self.full = true;
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         break;
                     }
 
@@ -288,7 +287,7 @@ impl BlockFiller for DependencyFiller {
 
                     if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                         self.full = true;
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas_used, tx));
+                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         break;
                     }
 

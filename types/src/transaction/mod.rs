@@ -1604,7 +1604,7 @@ impl TryFrom<Transaction> for SignedTransaction {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct TransactionRegister<T: Send + Sync + Clone> {
     txns: Vec<T>,
-    gas_estimates: Vec<u32>,
+    gas_estimates: Vec<u16>,
     dependency_graph: Vec<Vec<u16>>,
 }
 
@@ -1613,15 +1613,15 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
         Self {
             txns: vec![],
             gas_estimates: vec![],
-            dependency_graph: vec![],
+            dependency_graph: vec![]
         }
     }
 
-    pub fn new(txns: Vec<T>, gas_estimates: Vec<u32>, dependency_graph: Vec<Vec<u16>>) -> Self {
+    pub fn new(txns: Vec<T>, gas_estimates: Vec<u16>, dependency_graph: Vec<Vec<u16>>) -> Self {
         Self {
             txns,
             gas_estimates,
-            dependency_graph,
+            dependency_graph
         }
     }
 
@@ -1641,7 +1641,7 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
         self.txns
     }
 
-    pub fn gas_estimates(&self) -> &Vec<u32> {
+    pub fn gas_estimates(&self) -> &Vec<u16> {
         &self.gas_estimates
     }
 
@@ -1654,7 +1654,7 @@ impl<T: Send + Sync + Clone> TransactionRegister<T> {
         TransactionRegister {
             txns: self.txns.clone().into_par_iter().map(f).collect(),
             gas_estimates: self.gas_estimates.clone(),
-            dependency_graph: self.dependency_graph.clone(),
+            dependency_graph: self.dependency_graph.clone()
         }
     }
 }
