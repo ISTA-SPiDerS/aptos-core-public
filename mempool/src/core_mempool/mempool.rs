@@ -166,30 +166,35 @@ impl Mempool {
             ));
         }
 
-        let dif:u32 = (256.0 / 2 as f32).ceil() as u32;
+        let shards = ((peer_count as f32/ 3.0).floor() as u32 + 1);
+
+        let dif:u32 = (256.0 / peer_count as f32).ceil() as u32;
         let mut my_space_start= 0 as u32;
         let mut my_space_end = u8::MAX as u32;
-        let actual_id;
-        if peer_id % 2 == 0 {
-            actual_id = 0;
-        }
-        else {
-            actual_id = 1;
-        }
 
         if peer_count > 1
         {
-            // todo 4 = 2, 10 = 4 shards.
-            my_space_start = actual_id as u32 * dif;
-            my_space_end = my_space_start + dif;
+            my_space_start = peer_id as u32 * dif;
+            my_space_end = my_space_start + dif * shards;
         }
 
-        let mut shard = Wrapping(1 as u8);
+        let mut shard = Wrapping(0 as u8);
         for el in txn.sender().iter() {
             shard = shard + Wrapping(*el);
         }
 
-        if (shard.0 as u32) < my_space_start || (shard.0 as u32) >= my_space_end {
+        let val = shard.0 as u32;
+        if my_space_end > u8::MAX as u32 {
+
+            let dif_end = my_space_end - u8::MAX as u32;
+            if val < my_space_start && val >= dif_end {
+                //println!("bla shard deny {} {} {} {} {}", shard, my_space_start, my_space_end, peer_id, peer_count);
+                //return MempoolStatus::new(MempoolStatusCode::Accepted);
+                return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
+                    "sharded out this tx".to_string());
+            }
+        }
+        else if val < my_space_start || val >= my_space_end {
             //println!("bla shard deny {} {} {} {} {}", shard, my_space_start, my_space_end, peer_id, peer_count);
             //return MempoolStatus::new(MempoolStatusCode::Accepted);
             return MempoolStatus::new(MempoolStatusCode::UnknownStatus).with_message(
