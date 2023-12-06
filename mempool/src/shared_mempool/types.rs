@@ -23,15 +23,7 @@ use aptos_types::{mempool_status::MempoolStatus, PeerId, transaction::SignedTran
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
 use futures::{channel::{mpsc::UnboundedSender, oneshot}, future::Future, StreamExt, task::{Context, Poll}};
 use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    pin::Pin,
-    sync::Arc,
-    task::Waker,
-    time::{Instant, SystemTime},
-};
+use std::{cmp::Ordering, collections::{BTreeMap, BTreeSet}, fmt, pin::Pin, sync::Arc, task::Waker, thread, time::{Instant, SystemTime}};
 use std::cmp::max;
 use std::collections::{HashMap, VecDeque};
 use std::ptr::null;
@@ -95,15 +87,14 @@ impl<
                 let locked_val = tem_locked_val.clone();
 
                 let mut input: Vec<SignedTransaction> = vec![];
-                let num_threads = RAYON_EXEC_POOL.current_num_threads();
                 let mut cache_len = 0;
-                let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
+                let mut local_cache: HashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = HashMap::new();
                 loop
                 {
                     let mut time = Instant::now();
                     loop
                     {
-                        if input.len() >= num_threads * 8 {
+                        if input.len() >= 128 {
                             break;
                         }
                         if let Ok(x) = tx_receiver.try_recv() {
@@ -118,49 +109,34 @@ impl<
 
                     let count = input.len();
                     if count > 0 {
-                        println!("bla count: {} {} {}", count, thread_local_cache.len(), cache_len);
-                        let exec_counter = AtomicUsize::new(0);
-                        let failures = DashMap::new();
+                        println!("bla count: {} {} {}", count, local_cache.len(), cache_len);
+                        let transaction_validation = locked_val.write();
+                        for tx in input.drain(..)
                         {
-                            let transaction_validation = locked_val.write();
 
-                            RAYON_EXEC_POOL.scope(|s| {
-                                for _ in 0..4 {
-                                    s.spawn(|_| {
-
-                                        let mut current_index = exec_counter.fetch_add(1, Relaxed);
-                                        while current_index < count {
-                                            let  tx = &input[current_index];
-                                            let result = transaction_validation.speculate_transaction(&tx);
-                                            let (a, b) = result.unwrap();
-                                            match b {
-                                                VMStatus::Executed => {
-                                                    thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
-                                                }
-                                                _ => {
-                                                    failures.insert((tx.sender(), tx.sequence_number()), tx.clone());
-                                                }
-                                            }
-                                            current_index = exec_counter.fetch_add(1, Relaxed);
-                                        }
-                                    });
+                            let result = transaction_validation.speculate_transaction(&tx);
+                            let (a, b) = result.unwrap();
+                            match b {
+                                VMStatus::Executed => {
+                                    local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
                                 }
-                            });
-                        }
-
-                        input.clear();
-
-
-                        if thread_local_cache.len() > 0 {
-                            if let Ok(mut cache) = SYNC_CACHE.try_lock() {
-                                cache.extend(thread_local_cache);
-                                cache_len = cache.len();
-                                thread_local_cache = DashMap::new();
+                                _ => {
+                                    // Do nothing
+                                }
                             }
                         }
+
+                        let mut time = Instant::now();
+                        if local_cache.len() > 0 {
+                            if let Ok(mut cache) = SYNC_CACHE.try_lock() {
+                                cache.extend(local_cache.drain());
+                                cache_len = cache.len();
+                            }
+                        }
+                        println!("passed time: {} ", time.elapsed().as_micros());
                     }
 
-                    if input.is_empty() && thread_local_cache.is_empty() {
+                    if input.is_empty() && local_cache.is_empty() {
                         if let Ok(res) = tx_receiver.recv() {
                             input.push(res);
                         }
