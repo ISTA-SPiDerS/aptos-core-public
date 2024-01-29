@@ -20,13 +20,15 @@ use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
 use std::ptr::null;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
+use std::thread::sleep;
+use std::time::Duration;
 use itertools::Itertools;
 use move_core_types::{ident_str, identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -45,7 +47,7 @@ use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
-use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
+use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, MIXED};
 use aptos_types::transaction::ExecutionMode::{BlockSTM, BlockSTM_Sig};
 use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
@@ -116,6 +118,13 @@ fn main() {
 
     for mode in modes {
         for c in core_set {
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED);
+        }
+        println!("#################################################################################");
+    }
+
+    for mode in modes {
+        for c in core_set {
             runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
         }
         println!("#################################################################################");
@@ -131,13 +140,6 @@ fn main() {
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
@@ -248,83 +250,38 @@ fn create_block(
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
-) -> VecDeque<SignedTransaction> {
+) -> Vec<SignedTransaction> {
 
-    let mut result = VecDeque::new();
+    let mut result = vec![];
     let mut rng: ThreadRng = thread_rng();
-    let extended_size = size * 10;
 
-    let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
-    let mut count = 0.0;
-    if matches!(load_type, LoadType::DEXAVG)
+    let mut resource_distribution_vec: &[f64] = &AVG;
+    if matches!(load_type, LoadType::DEXBURSTY)
     {
-        for value in AVG {
-            resource_distribution_vec.push(value);
-        }
-    }
-    else if matches!(load_type, LoadType::DEXBURSTY)
-    {
-        for value in BURSTY {
-            resource_distribution_vec.push(value);
-        }
+        resource_distribution_vec = &BURSTY;
     }
     else if matches!(load_type, LoadType::NFT)
     {
-        for value in TX_NFT_TO {
-            resource_distribution_vec.push(value);
-        }
+        resource_distribution_vec = &TX_NFT_TO;
     }
-    else if matches!(load_type, LoadType::SOLANA)
+    else if matches!(load_type, LoadType::MIXED)
     {
-        for value in RES_DISTR {
-            for _ in 0..10 {
-                resource_distribution_vec.push(value);
-            }
-        }
+        resource_distribution_vec = &RES_DISTR;
     }
 
-    let mut solana_len_options:Vec<usize> = vec![];
-    let mut solana_cost_options:Vec<f64> = vec![];
-
-    for value in LEN_DISTR {
-        solana_len_options.push(value.round() as usize);
-    }
-
-    for value in COST_DISTR {
-        solana_cost_options.push(value);
-    }
-
-    let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
-
-    let mut nft_sender_distr_vec: Vec<f64> = vec![];
-    for value in TX_NFT_FROM {
-        nft_sender_distr_vec.push(value);
-    }
-
-    let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
-
-    let mut p2p_sender_distr_vec:Vec<f64> = vec![];
-    let mut p2p_receiver_distr_vec:Vec<f64> = vec![];
-
-    for value in TX_TO {
-        p2p_receiver_distr_vec.push(value);
-    }
-
-    for value in TX_FROM {
-        p2p_sender_distr_vec.push(value);
-    }
-
-    let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
-    let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
+    let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(resource_distribution_vec).unwrap();
+    let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
+    let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
+    let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
     for i in 0..size {
         let mut sender_id: usize = (i as usize) % accounts.len();
         let tx_entry_function;
 
-        if matches!(load_type, SOLANA)
+        if matches!(load_type, MIXED)
         {
-            let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len())];
-            let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len())];
+            let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
+            let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
 
             let mut writes: Vec<u64> = Vec::new();
             let mut i = 0;

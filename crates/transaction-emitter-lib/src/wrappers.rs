@@ -126,7 +126,7 @@ pub async fn emit_transactions_with_cluster(
                 load_type: LoadType::NFT
             },
             TransactionTypeArg::SOLANA => TransactionType::OurBenchmark {
-                load_type: LoadType::SOLANA
+                load_type: LoadType::MIXED
             },
             TransactionTypeArg::P2P => TransactionType::OurBenchmark {
                 load_type: LoadType::P2PTX
