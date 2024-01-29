@@ -112,7 +112,7 @@ fn main() {
 
     let core_set = [4,8,12,16,20,24,28,32];
     let trial_count = 10;
-    let modes = [BlockSTM, BlockSTM_Sig];
+    let modes = [BlockSTM_Sig];
 
     for mode in modes {
         for c in core_set {
