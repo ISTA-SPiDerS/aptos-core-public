@@ -47,7 +47,7 @@ pub struct OurBenchmark {
 #[derive(Debug, Copy, Clone)]
 pub enum LoadType {
     NFT,
-    SOLANA,
+    MIXED,
     DEXAVG,
     DEXBURSTY,
     P2PTX,
@@ -79,7 +79,7 @@ impl OurBenchmark {
                 resource_distribution_vec.push(value);
             }
         }
-        else if matches!(load_type, LoadType::SOLANA)
+        else if matches!(load_type, LoadType::MIXED)
         {
             for value in RES_DISTR {
                 for _ in 0..10 {
@@ -139,7 +139,7 @@ impl TransactionGenerator for OurBenchmark {
 
         for i in 0..needed {
             let mut sender_id: usize = (i as usize) % accounts.len();
-            if matches!(self.load_type, LoadType::SOLANA)
+            if matches!(self.load_type, LoadType::MIXED)
             {
                 let cost_sample = self.solana_cost_options[rand::thread_rng().gen_range(0, self.solana_cost_options.len())];
                 let write_len_sample = self.solana_len_options[rand::thread_rng().gen_range(0, self.solana_len_options.len())];

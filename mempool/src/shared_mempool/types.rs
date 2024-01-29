@@ -102,7 +102,7 @@ impl<
                     let mut time = Instant::now();
                     loop
                     {
-                        if input.len() >= num_threads * 2 {
+                        if input.len() >= num_threads * 4 {
                             break;
                         }
                         if let Ok(x) = tx_receiver.try_recv() {

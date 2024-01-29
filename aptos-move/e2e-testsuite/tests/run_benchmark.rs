@@ -11,7 +11,7 @@ use aptos_types::{
         ExecutionStatus, Module, SignedTransaction, Transaction, TransactionStatus, TransactionRegister, ExecutionMode
     },
 };
-use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller};
+use aptos_mempool::core_mempool::{BlockFiller, DependencyFiller, SimpleFiller, TxnPointer};
 use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
@@ -21,14 +21,17 @@ use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
 use std::ptr::null;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
+use std::thread::sleep;
+use std::time::Duration;
 use itertools::Itertools;
 use move_core_types::{ident_str, identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
@@ -47,7 +50,7 @@ use aptos_language_e2e_tests::compile::compile_source_module;
 use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
-use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, SOLANA};
+use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, MIXED};
 use aptos_types::transaction::ExecutionMode::{Pythia, Pythia_Sig, Standard};
 use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
@@ -55,7 +58,9 @@ use move_core_types::vm_status::VMStatus;
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
-use aptos_mempool::shared_mempool::types::{CACHE};
+use aptos_mempool::shared_mempool::types::{SYNC_CACHE};
+use aptos_types::state_store::state_key::StateKey;
+use aptos_types::write_set::WriteSet;
 use aptos_vm::data_cache::StorageAdapter;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
@@ -85,6 +90,7 @@ fn main() {
     println!("STARTING WARMUP");
     for _ in [1, 2, 3] {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
+        println!("block created");
         let block = get_transaction_register(txn.clone(), &executor, 4)
             .map_par_txns(Transaction::UserTransaction);
 
@@ -116,9 +122,16 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,8,12,16,20,24,28,32];
-    let trial_count = 10;
+    let core_set = [4,6];
+    let trial_count = 3;
     let modes = [Pythia, Pythia_Sig];
+
+    for mode in modes {
+        for c in core_set {
+            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED);
+        }
+        println!("#################################################################################");
+    }
 
     for mode in modes {
         for c in core_set {
@@ -137,13 +150,6 @@ fn main() {
     for mode in modes {
         for c in core_set {
             runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
-        }
-        println!("#################################################################################");
-    }
-
-    for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, SOLANA);
         }
         println!("#################################################################################");
     }
@@ -239,94 +245,107 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     println!("#-------------------------------------------------------------------------");
 }
 
-fn get_transaction_register(txns: VecDeque<SignedTransaction>, executor: &FakeExecutor, cores: usize) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
-    let (tx, rx):(mpsc::SyncSender<(u64, SignedTransaction)>, mpsc::Receiver<(u64, SignedTransaction)>) = mpsc::sync_channel(100000);
+    let (tx_sender, tx_receiver) =  std::sync::mpsc::channel();
 
     let mut filler: DependencyFiller = DependencyFiller::new(
         1000000000,
         1_000_000_000,
         10_000_000,
-        16, tx
+        16
     );
 
-    let len = txns.len();
+    std::thread::spawn(move ||  {
 
-    let th = rayon::spawn(move || {
-
-        let mut input = vec![];
+        let mut input: Vec<SignedTransaction> = vec![];
+        let num_threads = RAYON_EXEC_POOL.current_num_threads();
+        let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
         loop
         {
-            let start = Instant::now();
-            let mut count = 0;
+            let mut time = Instant::now();
             loop
             {
-                if let Ok((index, tx)) = rx.try_recv() {
-                    input.push((index, tx));
-                    count += 1;
-                }
-                else if count >= len {
-                    //println!("xxx thread end xxx");
+                if input.len() >= num_threads * 2 {
                     break;
                 }
-            }
-
-            if input.is_empty()
-            {
-                continue;
-            }
-
-            let exec_counter = AtomicUsize::new(0);
-
-            let failures = DashMap::new();
-            {
-                RAYON_EXEC_POOL.scope(|s| {
-                    for _ in 0..cores {
-                        s.spawn(|_| {
-
-                            let mut current_index = exec_counter.fetch_add(1, Ordering::SeqCst);
-                            while current_index < count {
-                                let (index, tx) = &input[current_index];
-                                let result = transaction_validation.speculate_transaction(&tx);
-                                let (a, b) = result.unwrap();
-                                match b {
-                                    VMStatus::Executed => {
-                                        CACHE.insert(index.clone(), (a, b, tx.clone()));
-                                    }
-                                    _ => {
-                                        failures.insert(index.clone(), tx.clone());
-                                    }
-                                }
-                                current_index = exec_counter.fetch_add(1, Ordering::SeqCst);
-                            }
-                        });
+                if let Ok(x) = tx_receiver.try_recv() {
+                    input.push(x);
+                } else {
+                    let elapsed = time.elapsed().as_millis();
+                    if elapsed > 50 {
+                        break;
                     }
-                });
+                }
             }
 
-            input.clear();
+            let count = input.len();
+            if count > 0 {
+                let exec_counter = AtomicUsize::new(0);
+                {
 
-            if count >= len {
-                println!("xxx thread end xxx {}", failures.len());
-                println!("Total time: {:?}", start.elapsed().as_millis());
+                    RAYON_EXEC_POOL.scope(|s| {
+                        for _ in 0..4 {
+                            s.spawn(|_| {
 
-                return;
+                                let mut current_index = exec_counter.fetch_add(1, Relaxed);
+                                while current_index < count {
+                                    let  tx = &input[current_index];
+                                    let result = transaction_validation.speculate_transaction(&tx);
+                                    let (a, b) = result.unwrap();
+                                    match b {
+                                        VMStatus::Executed => {
+                                            thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
+                                        }
+                                        _ => {
+                                            // Do nothing.
+                                        }
+                                    }
+                                    current_index = exec_counter.fetch_add(1, Relaxed);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                input.clear();
+
+
+                if thread_local_cache.len() > 0 {
+                    if let Ok(mut cache) = SYNC_CACHE.try_lock() {
+                        cache.extend(thread_local_cache);
+                        thread_local_cache = DashMap::new();
+                    }
+                }
             }
 
-            for value in failures {
-                input.push(value);
+            if input.is_empty() && thread_local_cache.is_empty() {
+                if let Ok(res) = tx_receiver.recv() {
+                    input.push(res);
+                }
+                continue
             }
         }
     });
 
+    let size = txns.len();
+    for tx in txns.clone() {
+        tx_sender.send(tx);
+    }
 
-    filler.add_all(txns, &mut VecDeque::with_capacity(10000), &mut u64::MAX, &mut 0, &mut HashSet::new());
+    let mut processed_len = 0;
+    while (processed_len < size)
+    {
+        processed_len = SYNC_CACHE.try_lock().unwrap().len();
+        sleep(Duration::from_millis(1000));
+    }
+
+
+    filler.add_all(&mut txns);
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
-
-    drop(th);
 
     println!("---Start---");
 
@@ -341,83 +360,38 @@ fn create_block(
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
-) -> VecDeque<SignedTransaction> {
+) -> Vec<SignedTransaction> {
 
-    let mut result = VecDeque::new();
+    let mut result = vec![];
     let mut rng: ThreadRng = thread_rng();
-    let extended_size = size * 10;
 
-    let mut resource_distribution_vec:Vec<f64> = vec![1.0,1.0,1.0,1.0];
-    let mut count = 0.0;
-    if matches!(load_type, LoadType::DEXAVG)
+    let mut resource_distribution_vec: &[f64] = &AVG;
+    if matches!(load_type, LoadType::DEXBURSTY)
     {
-        for value in AVG {
-            resource_distribution_vec.push(value);
-        }
-    }
-    else if matches!(load_type, LoadType::DEXBURSTY)
-    {
-        for value in BURSTY {
-            resource_distribution_vec.push(value);
-        }
+        resource_distribution_vec = &BURSTY;
     }
     else if matches!(load_type, LoadType::NFT)
     {
-        for value in TX_NFT_TO {
-            resource_distribution_vec.push(value);
-        }
+        resource_distribution_vec = &TX_NFT_TO;
     }
-    else if matches!(load_type, LoadType::SOLANA)
+    else if matches!(load_type, LoadType::MIXED)
     {
-        for value in RES_DISTR {
-            for _ in 0..10 {
-                resource_distribution_vec.push(value);
-            }
-        }
+        resource_distribution_vec = &RES_DISTR;
     }
 
-    let mut solana_len_options:Vec<usize> = vec![];
-    let mut solana_cost_options:Vec<f64> = vec![];
-
-    for value in LEN_DISTR {
-        solana_len_options.push(value.round() as usize);
-    }
-
-    for value in COST_DISTR {
-        solana_cost_options.push(value);
-    }
-
-    let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(&resource_distribution_vec).unwrap();
-
-    let mut nft_sender_distr_vec: Vec<f64> = vec![];
-    for value in TX_NFT_FROM {
-        nft_sender_distr_vec.push(value);
-    }
-
-    let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&nft_sender_distr_vec).unwrap();
-
-    let mut p2p_sender_distr_vec:Vec<f64> = vec![];
-    let mut p2p_receiver_distr_vec:Vec<f64> = vec![];
-
-    for value in TX_TO {
-        p2p_receiver_distr_vec.push(value);
-    }
-
-    for value in TX_FROM {
-        p2p_sender_distr_vec.push(value);
-    }
-
-    let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_receiver_distr_vec).unwrap();
-    let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&p2p_sender_distr_vec).unwrap();
+    let general_resource_distribution: WeightedIndex<f64> = WeightedIndex::new(resource_distribution_vec).unwrap();
+    let p2p_receiver_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_FROM).unwrap();
+    let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
+    let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
     for i in 0..size {
         let mut sender_id: usize = (i as usize) % accounts.len();
         let tx_entry_function;
 
-        if matches!(load_type, SOLANA)
+        if matches!(load_type, MIXED)
         {
-            let cost_sample = solana_cost_options[rand::thread_rng().gen_range(0..solana_cost_options.len())];
-            let write_len_sample = solana_len_options[rand::thread_rng().gen_range(0..solana_len_options.len())];
+            let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
+            let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
 
             let mut writes: Vec<u64> = Vec::new();
             let mut i = 0;
@@ -431,7 +405,7 @@ fn create_block(
             tx_entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
-                vec![],
+                vec![],if input.len() >= num_threads * 16 {
                 vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
             );
         }
@@ -449,6 +423,7 @@ fn create_block(
         }
         else
         {
+
             let resource_id = general_resource_distribution.sample(&mut rng);
             if matches!(load_type, NFT)
             {
@@ -469,7 +444,7 @@ fn create_block(
             .sequence_number(seq_num[&sender_id])
             .sign();
         seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-        result.push_back(txn);
+        result.push(txn);
     }
 
     result

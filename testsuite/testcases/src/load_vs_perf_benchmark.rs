@@ -137,7 +137,7 @@ impl TransactinWorkload {
                 request.transaction_type(TransactionType::default_script(LoadType::DEXBURSTY))
             },
             Self::SOLANA => {
-                request.transaction_type(TransactionType::default_script(LoadType::SOLANA))
+                request.transaction_type(TransactionType::default_script(LoadType::MIXED))
             },
             Self::P2P => {
                 request.transaction_type(TransactionType::default_script(LoadType::P2PTX))
