@@ -122,7 +122,7 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,6];
+    let core_set = [4,6,8,12,16,20,24,28,32];
     let trial_count = 3;
     let modes = [Pythia_Sig];
 
