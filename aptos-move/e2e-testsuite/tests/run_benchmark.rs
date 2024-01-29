@@ -173,7 +173,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     for trial in 0..trial_count {
         let mut profiler = Profiler::new();
 
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
+        let block = create_block(block_size * 4, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor, c)
             .map_par_txns(Transaction::UserTransaction);
 
