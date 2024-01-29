@@ -405,7 +405,7 @@ fn create_block(
             tx_entry_function = EntryFunction::new(
                 module_id.clone(),
                 ident_str!("loop_exchange").to_owned(),
-                vec![],if input.len() >= num_threads * 16 {
+                vec![],
                 vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
             );
         }
