@@ -124,7 +124,7 @@ fn main() {
 
     let core_set = [4,6];
     let trial_count = 3;
-    let modes = [Pythia, Pythia_Sig];
+    let modes = [Pythia_Sig];
 
     for mode in modes {
         for c in core_set {

@@ -229,9 +229,6 @@ impl BlockFiller for DependencyFiller {
 
                 if let Some((write_set, read_set, gas , tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
                     let gas_used = (gas / 10) as u16;
-
-                    println!("bla gas used {}", gas_used);
-
                     if write_set.is_empty()
                     {
                         println!("bla Empty????");
@@ -256,7 +253,7 @@ impl BlockFiller for DependencyFiller {
                         longest_chain = finish_time;
                     }
 
-                    if finish_time > (self.gas_per_core * 2) as u32 {
+                    if finish_time > self.gas_per_core as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                         map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
