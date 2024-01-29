@@ -252,7 +252,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let mut filler: DependencyFiller = DependencyFiller::new(
         1000000000,
         1_000_000_000,
-        10_000_000,
+        10_000,
         16
     );
 
