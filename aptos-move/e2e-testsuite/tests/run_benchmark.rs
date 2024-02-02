@@ -122,49 +122,65 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
+    // 700000 for NFT & DEX
+    // 4500000 for solana
+    // 1250000 for NFT & DEX
+
+
     let core_set = [8];
     let trial_count = 10;
     let modes = [Pythia_Sig];
+    let additional_modes = ["Good", ""];
 
     for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED);
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 4500000, mode_two);
+            }
+            println!("#################################################################################");
         }
-        println!("#################################################################################");
     }
 
     for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY);
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 700000, mode_two);
+            }
+            println!("#################################################################################");
         }
-        println!("#################################################################################");
     }
 
     for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG);
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 700000, mode_two);
+            }
+            println!("#################################################################################");
         }
-        println!("#################################################################################");
     }
 
     for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT);
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 700000, mode_two);
+            }
+            println!("#################################################################################");
         }
-        println!("#################################################################################");
     }
 
     for mode in modes {
-        for c in core_set {
-            runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX);
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1250000, mode_two);
+            }
+            println!("#################################################################################");
         }
-        println!("#################################################################################");
     }
 
     println!("EXECUTION SUCCESS");
 }
 
-fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType) {
+fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) {
     // This is for the total time
     let mut times = vec![];
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
@@ -173,8 +189,20 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     for trial in 0..trial_count {
         let mut profiler = Profiler::new();
 
-        let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
-        let block = get_transaction_register(block.clone(), &executor, c)
+        let mut ac_block_size = block_size;
+        if !mode_two.is_empty()
+        {
+            ac_block_size = block_size * 4;
+        }
+
+        let mut ac_max_gas = max_gas;
+        if mode_two.is_empty()
+        {
+            ac_max_gas = max_gas * 64;
+        }
+
+        let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
+        let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
 
         println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, mode, load_type);
@@ -245,14 +273,15 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     println!("#-------------------------------------------------------------------------");
 }
 
-fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
     let (tx_sender, tx_receiver) =  std::sync::mpsc::channel();
+
 
     //todo, to test this properly, I will need good gas_per_core and max_bytes measurements. Else we don't even start with good blocks really. (Aside for maybe solana, which has crazy big tx).
     //todo first a test run on how much a normal block has without good blocks for each workload. Then we translate this to a better measurement.
     let mut filler: DependencyFiller = DependencyFiller::new(
-        1000000000,
+        (max_gas / cores) as u64,
         1_000_000_000,
         10_000,
         cores as u32
@@ -349,7 +378,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
-    
+
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
 
