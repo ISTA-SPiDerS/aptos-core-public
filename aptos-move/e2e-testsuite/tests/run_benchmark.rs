@@ -127,10 +127,19 @@ fn main() {
     // 1250000 for NFT & DEX
 
 
-    let core_set = [8,16,32];
+    let core_set = [8, 16,32];
     let trial_count = 10;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good", ""];
+
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1250000, mode_two);
+            }
+            println!("#################################################################################");
+        }
+    }
 
     for mode in modes {
         for mode_two in additional_modes {
@@ -168,15 +177,6 @@ fn main() {
         }
     }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1250000, mode_two);
-            }
-            println!("#################################################################################");
-        }
-    }
-
     println!("EXECUTION SUCCESS");
 }
 
@@ -198,7 +198,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * 4;
+            ac_block_size = block_size * 10;
         }
 
         let mut ac_max_gas = max_gas;
@@ -210,8 +210,8 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
-        
-        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, print_mode, load_type);
+
+        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
         let start = Instant::now();
         block_result = executor
             .execute_transaction_block_parallel(
@@ -373,13 +373,14 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let mut processed_len = 0;
     while (processed_len < size)
     {
-        processed_len = SYNC_CACHE.try_lock().unwrap().len();
+        if let Ok(mut cache) = SYNC_CACHE.try_lock() {
+            processed_len = cache.len();
+        }
         sleep(Duration::from_millis(1000));
     }
 
 
     filler.add_all(&mut txns);
-    println!("#Gas cost: {:?}", filler.get_current_gas());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();

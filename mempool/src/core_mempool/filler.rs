@@ -129,7 +129,7 @@ type TransactionIdx = u64;
 pub struct DependencyFiller {
     gas_per_core: u64,
     gas_per_core_init: u64,
-
+    total_max_gas: u64,
     max_bytes: u64,
     max_txns: u64,
     cores: u32,
@@ -155,6 +155,7 @@ impl DependencyFiller {
         Self {
             gas_per_core,
             gas_per_core_init: gas_per_core,
+            total_max_gas: gas_per_core * cores as u64,
             max_bytes,
             max_txns,
             cores,
@@ -208,6 +209,7 @@ impl BlockFiller for DependencyFiller {
     ) -> Vec<SignedTransaction> {
 
         let start = Instant::now();
+        let mut skipped = 0;
 
         if let LockResult::Ok(mut map) = SYNC_CACHE.lock() {
             let lock_time = start.elapsed().as_millis();
@@ -218,12 +220,14 @@ impl BlockFiller for DependencyFiller {
                 //let (speculation, status, tx) = previous.get(ind).unwrap();
 
                 if self.full {
+                    println!("full!");
                     break;
                 }
 
                 let txn_len = txinput.raw_txn_bytes_len() as u64;
                 if self.total_bytes + txn_len > self.max_bytes {
                     self.full = true;
+                    println!("full");
                     break;
                 }
 
@@ -257,12 +261,14 @@ impl BlockFiller for DependencyFiller {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                         map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
+                        skipped+=1;
                         continue;
                     }
 
-                    if self.total_estimated_gas + gas_used as u64 > self.gas_per_core_init as u64 * self.cores as u64 {
+                    if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                         self.full = true;
                         map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
+                        println!("Reached max gas: {} {} {}", self.total_estimated_gas, gas_used, self.total_max_gas);
                         break;
                     }
 
@@ -341,8 +347,9 @@ impl BlockFiller for DependencyFiller {
                     return vec![];
                 }
             }
-            println!("bla endx {} {} {}", lock_time, start.elapsed().as_millis(), self.block.len());
         }
+
+        println!("skipped: {}", skipped);
 
 
         //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
