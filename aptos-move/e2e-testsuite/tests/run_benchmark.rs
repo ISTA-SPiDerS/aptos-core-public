@@ -186,6 +186,12 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
 
+    let mut print_mode = mode.to_string();
+    if !mode_two.is_empty()
+    {
+        print_mode = mode.to_string() + "_" + mode_two;
+    }
+
     for trial in 0..trial_count {
         let mut profiler = Profiler::new();
 
@@ -204,13 +210,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
-
-        let mut print_mode = mode.to_string();
-        if !mode_two.is_empty()
-        {
-            print_mode = mode.to_string() + "_" + mode_two;
-        }
-
+        
         println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, print_mode, load_type);
         let start = Instant::now();
         block_result = executor
