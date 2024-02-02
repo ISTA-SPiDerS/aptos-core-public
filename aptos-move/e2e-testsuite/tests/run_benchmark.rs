@@ -127,7 +127,7 @@ fn main() {
     // 1250000 for NFT & DEX
 
 
-    let core_set = [8];
+    let core_set = [8,16,32];
     let trial_count = 10;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good", ""];
