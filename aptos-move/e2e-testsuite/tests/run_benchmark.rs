@@ -259,8 +259,12 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
     all_stats.insert("final_time".to_string(), times);
 
-
-    println!("###,{},{},{:?}", mode, c, load_type);
+    let mut print_mode = mode.to_string();
+    if !mode_two.is_empty()
+    {
+        print_mode = mode + "_" + mode_two;
+    }
+    println!("###,{},{},{:?}", print_mode, c, load_type);
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
