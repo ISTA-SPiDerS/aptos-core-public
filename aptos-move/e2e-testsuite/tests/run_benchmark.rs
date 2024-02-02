@@ -91,7 +91,7 @@ fn main() {
     for _ in [1, 2, 3] {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
         println!("block created");
-        let block = get_transaction_register(txn.clone(), &executor, 4)
+        let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10)
             .map_par_txns(Transaction::UserTransaction);
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
@@ -205,7 +205,13 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
 
-        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, mode, load_type);
+        let mut print_mode = mode.to_string();
+        if !mode_two.is_empty()
+        {
+            print_mode = mode.to_string() + "_" + mode_two;
+        }
+
+        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size, num_accounts, c, print_mode, load_type);
         let start = Instant::now();
         block_result = executor
             .execute_transaction_block_parallel(
@@ -259,11 +265,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
     all_stats.insert("final_time".to_string(), times);
 
-    let mut print_mode = mode.to_string();
-    if !mode_two.is_empty()
-    {
-        print_mode = mode + "_" + mode_two;
-    }
+
     println!("###,{},{},{:?}", print_mode, c, load_type);
     for (key, value) in all_stats
     {
