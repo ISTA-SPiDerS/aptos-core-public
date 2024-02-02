@@ -344,14 +344,12 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
 
 
     filler.add_all(&mut txns);
+    println!("#Gas cost: {:?}", filler.get_current_gas());
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
-
-    println!("---Start---");
-    println!("#Gas cost: {:?}", filler.get_current_gas());
-
+    
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
 
