@@ -122,8 +122,8 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    let core_set = [4,6,8,12,16,20,24,28,32];
-    let trial_count = 3;
+    let core_set = [8];
+    let trial_count = 10;
     let modes = [Pythia_Sig];
 
     for mode in modes {
@@ -173,7 +173,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     for trial in 0..trial_count {
         let mut profiler = Profiler::new();
 
-        let block = create_block(block_size * 4, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
+        let block = create_block(block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor, c)
             .map_par_txns(Transaction::UserTransaction);
 
@@ -249,11 +249,13 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let mut transaction_validation = executor.get_transaction_validation();
     let (tx_sender, tx_receiver) =  std::sync::mpsc::channel();
 
+    //todo, to test this properly, I will need good gas_per_core and max_bytes measurements. Else we don't even start with good blocks really. (Aside for maybe solana, which has crazy big tx).
+    //todo first a test run on how much a normal block has without good blocks for each workload. Then we translate this to a better measurement.
     let mut filler: DependencyFiller = DependencyFiller::new(
         1000000000,
         1_000_000_000,
         10_000,
-        16
+        cores as u32
     );
 
     std::thread::spawn(move ||  {
@@ -348,6 +350,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let txns = filler.get_block();
 
     println!("---Start---");
+    println!("#Gas cost: {:?}", filler.get_current_gas());
 
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
