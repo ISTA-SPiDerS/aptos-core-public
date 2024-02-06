@@ -126,6 +126,10 @@ fn main() {
     // 4500000 for solana
     // 1500000 for p2p
 
+    // Evaluate 5 things:
+    // a) Good blocks Pythia vs Bad blocks Pythia (hint based/pessimistic) = 2
+    // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
+    // c) Varying workload and how we adjust to it.
 
     let core_set = [4, 8];
     let trial_count = 10;
@@ -136,22 +140,22 @@ fn main() {
     //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
     //todo can we find the best max_gas for each configuration?
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1500000*(c/4), mode_two);
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
+    //for mode in modes {
+    //    for mode_two in additional_modes {
+    //        for c in core_set {
+    //            for x in mult_set {
+    //                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1500000*(c/4), mode_two);
+    //            }
+    //        }
+    //        println!("#################################################################################");
+    //    }
+    //}
 
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 50000000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 20000000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
