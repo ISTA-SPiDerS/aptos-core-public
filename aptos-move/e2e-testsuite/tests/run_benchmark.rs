@@ -327,6 +327,9 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     let dependencies = filler.get_dependency_graph();
     let txns = filler.get_block();
 
+    // Resetting for next block!
+    SYNC_CACHE.lock().unwrap().clear();
+
     TransactionRegister::new(txns, gas_estimates, dependencies)
 }
 
