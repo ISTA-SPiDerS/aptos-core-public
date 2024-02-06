@@ -151,17 +151,17 @@ fn main() {
     //    }
     //}
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7000000, mode_two);
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
-    //todo, something is off! Pre-exec seems to be working but I feel like something is off with the dependencies!
+    //for mode in modes {
+    //    for mode_two in additional_modes {
+    //        for c in core_set {
+    //            for x in mult_set {
+    //                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7000000, mode_two);
+    //            }
+    //        }
+    //        println!("#################################################################################");
+    //    }
+    //}
+    // todo If at one point, one tx touches most of the big ones, we don't have a "replace" way. It will block adding any other. Even though we do a bit of a "re-order" on the other side, so it would be fine?
 
     for mode in modes {
         for mode_two in additional_modes {
