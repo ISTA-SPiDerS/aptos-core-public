@@ -167,7 +167,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 950000, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 800000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -178,7 +178,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 950000, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 700000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -189,7 +189,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 950000, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 700000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -217,7 +217,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * 10;
+            ac_block_size = block_size * 20;
         }
 
         let mut ac_max_gas = max_gas;
