@@ -127,15 +127,21 @@ fn main() {
     // 1250000 for NFT & DEX
 
 
-    let core_set = [8, 16,32];
+    let core_set = [4, 8];
     let trial_count = 10;
     let modes = [Pythia_Sig];
-    let additional_modes = ["Good", ""];
+    let additional_modes = ["Good"];
+    let mult_set = [1, 2, 4];
+
+    //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
+    //todo can we find the best max_gas for each configuration?
 
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1300000, mode_two);
+                for x in mult_set {
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1300000*x, mode_two);
+                }
             }
             println!("#################################################################################");
         }
@@ -144,7 +150,9 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 5000000, mode_two);
+                for x in mult_set {
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 5000000 * x, mode_two);
+                }
             }
             println!("#################################################################################");
         }
@@ -153,7 +161,9 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 750000, mode_two);
+                for x in mult_set {
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 750000 * x, mode_two);
+                }
             }
             println!("#################################################################################");
         }
@@ -162,7 +172,9 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 750000, mode_two);
+                for x in mult_set {
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 750000 * x, mode_two);
+                }
             }
             println!("#################################################################################");
         }
@@ -171,7 +183,9 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 750000, mode_two);
+                for x in mult_set {
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 750000 * x, mode_two);
+                }
             }
             println!("#################################################################################");
         }
@@ -266,7 +280,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     all_stats.insert("final_time".to_string(), times);
 
 
-    println!("###,{},{},{:?}", print_mode, c, load_type);
+    println!("###,{},{},{:?},{}", print_mode, c, load_type, max_gas);
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
