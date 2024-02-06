@@ -132,7 +132,7 @@ fn main() {
     // c) Varying workload and how we adjust to it.
 
     let core_set = [4, 8];
-    let trial_count = 10;
+    let trial_count = 3;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
     let mult_set = [1];
@@ -155,7 +155,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 3000000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 6000000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
