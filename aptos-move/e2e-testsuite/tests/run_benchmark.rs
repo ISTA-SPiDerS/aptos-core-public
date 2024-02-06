@@ -155,12 +155,13 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7000000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 3000000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
         }
     }
+    //todo, something is off! Pre-exec seems to be working but I feel like something is off with the dependencies!
 
     for mode in modes {
         for mode_two in additional_modes {
