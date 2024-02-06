@@ -155,7 +155,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 5000000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7000000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -167,7 +167,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 750000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 950000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -178,7 +178,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 750000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 950000, mode_two);
                 }
             }
             println!("#################################################################################");
@@ -189,7 +189,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 650000 * (c/4), mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 950000, mode_two);
                 }
             }
             println!("#################################################################################");
