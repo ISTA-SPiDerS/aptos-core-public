@@ -122,16 +122,16 @@ fn main() {
 
     println!("EXECUTE BLOCKS");
 
-    // 700000 for NFT & DEX
+    // 750000 for NFT & DEX
     // 4500000 for solana
-    // 1250000 for NFT & DEX
+    // 1500000 for p2p
 
 
     let core_set = [4, 8];
     let trial_count = 10;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
-    let mult_set = [1, 2, 4];
+    let mult_set = [1];
 
     //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
     //todo can we find the best max_gas for each configuration?
@@ -140,7 +140,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1300000*x, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1500000*(c/4), mode_two);
                 }
             }
             println!("#################################################################################");
@@ -151,7 +151,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 5000000 * x, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 50000000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
@@ -162,7 +162,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 750000 * x, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 7500000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
@@ -173,7 +173,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 750000 * x, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 7500000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
@@ -184,7 +184,7 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 750000 * x, mode_two);
+                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 750000 * (c/4), mode_two);
                 }
             }
             println!("#################################################################################");
@@ -295,8 +295,6 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
 fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> TransactionRegister<SignedTransaction> {
     let mut transaction_validation = executor.get_transaction_validation();
-    let (tx_sender, tx_receiver) =  std::sync::mpsc::channel();
-
 
     //todo, to test this properly, I will need good gas_per_core and max_bytes measurements. Else we don't even start with good blocks really. (Aside for maybe solana, which has crazy big tx).
     //todo first a test run on how much a normal block has without good blocks for each workload. Then we translate this to a better measurement.
@@ -307,92 +305,21 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
         cores as u32
     );
 
-    std::thread::spawn(move ||  {
-
-        let mut input: Vec<SignedTransaction> = vec![];
-        let num_threads = RAYON_EXEC_POOL.current_num_threads();
-        let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
-        loop
-        {
-            let mut time = Instant::now();
-            loop
-            {
-                if input.len() >= num_threads * 2 {
-                    break;
-                }
-                if let Ok(x) = tx_receiver.try_recv() {
-                    input.push(x);
-                } else {
-                    let elapsed = time.elapsed().as_millis();
-                    if elapsed > 50 {
-                        break;
-                    }
-                }
-            }
-
-            let count = input.len();
-            if count > 0 {
-                let exec_counter = AtomicUsize::new(0);
-                {
-
-                    RAYON_EXEC_POOL.scope(|s| {
-                        for _ in 0..4 {
-                            s.spawn(|_| {
-
-                                let mut current_index = exec_counter.fetch_add(1, Relaxed);
-                                while current_index < count {
-                                    let  tx = &input[current_index];
-                                    let result = transaction_validation.speculate_transaction(&tx);
-                                    let (a, b) = result.unwrap();
-                                    match b {
-                                        VMStatus::Executed => {
-                                            thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
-                                        }
-                                        _ => {
-                                            // Do nothing.
-                                        }
-                                    }
-                                    current_index = exec_counter.fetch_add(1, Relaxed);
-                                }
-                            });
-                        }
-                    });
-                }
-
-                input.clear();
-
-
-                if thread_local_cache.len() > 0 {
-                    if let Ok(mut cache) = SYNC_CACHE.try_lock() {
-                        cache.extend(thread_local_cache);
-                        thread_local_cache = DashMap::new();
-                    }
-                }
-            }
-
-            if input.is_empty() && thread_local_cache.is_empty() {
-                if let Ok(res) = tx_receiver.recv() {
-                    input.push(res);
-                }
-                continue
-            }
-        }
-    });
-
-    let size = txns.len();
-    for tx in txns.clone() {
-        tx_sender.send(tx);
-    }
-
-    let mut processed_len = 0;
-    while (processed_len < size)
     {
-        if let Ok(mut cache) = SYNC_CACHE.try_lock() {
-            processed_len = cache.len();
+        let mut locked_cache = SYNC_CACHE.lock().unwrap();
+        for tx in txns.clone() {
+            let result = transaction_validation.speculate_transaction(&tx);
+            let (a, b) = result.unwrap();
+            match b {
+                VMStatus::Executed => {
+                    locked_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
+                }
+                _ => {
+                    // Do nothing.
+                }
+            }
         }
-        sleep(Duration::from_millis(1000));
     }
-
 
     filler.add_all(&mut txns);
 
