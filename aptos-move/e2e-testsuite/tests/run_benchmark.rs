@@ -131,7 +131,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [4, 8];
+    let core_set = [4, 8, 16];
     let trial_count = 5;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
