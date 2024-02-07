@@ -188,8 +188,9 @@ fn main() {
                         max_gas = min_gas;
                         min_gas = min_gas / 2;
                     }
+                    println!("new min: {} max: {}", min_gas, max_gas);
 
-                    if max_gas <= min_gas {
+                    if max_gas <= min_gas + 500 {
                         println!("------------------- ^ FOUND BEST for setting ^ -------------------");
                         break;
                     }
