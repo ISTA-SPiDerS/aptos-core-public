@@ -132,10 +132,17 @@ fn main() {
     // c) Varying workload and how we adjust to it.
 
     let core_set = [4, 8, 16];
-    let trial_count = 5;
+    let trial_count = 3;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
     let mult_set = [1];
+
+    // [22:39, 2/6/2024] Ray: Adjust client model, clients resubmit the same transaction once finished (just resubmit finished tx back to the pool). We want to measure how long it takes though to get tail latency
+    // [22:40, 2/6/2024] Ray: Greedy algorithm that first goes for less complex transactions and then fills up only towards the end the big ones?
+    // [22:40, 2/6/2024] Ray: Allow above limit then
+
+    //todo: Run 10 blocks, record ms, fine tune up or down. Is it faster now? take as new value. Is it slower? try less aggressive change (binary search) until we find the optimal point where minor changes in each direction don't make any difference.
+    // run this to find the best result for each workload ---WITHOUT MIXED--- then get some graphs for up to 64 cores + already counting the time it takes to pack a block.
 
     //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
     //todo can we find the best max_gas for each configuration?
@@ -166,15 +173,48 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 800000, mode_two);
+
+                let mut last_time = u128::MAX;
+                let mut current_gas = 800000;
+                let mut adjustment_up = true;
+                while (true)
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, current_gas, mode_two);
+                    if time < last_time {
+                        if last_time - time < 10 {
+                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                            break;
+                        }
+                        last_time = time;
+                        if adjustment_up {
+                            current_gas += 50000;
+                        }
+                        else {
+                            current_gas -= 50000;
+                        }
+                    }
+                    else if time > last_time {
+                        if time - last_time < 10 {
+                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                            break;
+                        }
+                        last_time = time;
+                        if adjustment_up {
+                            adjustment_up = false;
+                            current_gas -= 50000;
+                        }
+                        else {
+                            current_gas += 50000;
+                            adjustment_up = true;
+                        }
+                    }
                 }
             }
             println!("#################################################################################");
         }
     }
 
-    for mode in modes {
+    /*for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 for x in mult_set {
@@ -194,12 +234,12 @@ fn main() {
             }
             println!("#################################################################################");
         }
-    }
+    }*/
 
     println!("EXECUTION SUCCESS");
 }
 
-fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) {
+fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) -> u128 {
     // This is for the total time
     let mut times = vec![];
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
@@ -229,6 +269,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
         let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
+
+        if block.len() < 9900 {
+            return u128::MAX;
+        }
 
         println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
         let start = Instant::now();
@@ -286,9 +330,13 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
 
     println!("###,{},{},{:?},{}", print_mode, c, load_type, max_gas);
+    let mut final_time = 0;
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
+        if key == "final_time" {
+            final_time = mean as u128;
+        }
         let variance = value.iter().map(|x| (*x as f64 - mean).powi(2)).sum::<f64>() / value.len() as f64;
         let standard_deviation = variance.sqrt();
         let min = value.iter().min().unwrap();
@@ -296,6 +344,8 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         println!("#,{},avg:,{},deviation:,{},min:,{},max:,{}", key, mean, standard_deviation, min, max);
     }
     println!("#-------------------------------------------------------------------------");
+
+    return final_time;
 }
 
 fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> TransactionRegister<SignedTransaction> {
