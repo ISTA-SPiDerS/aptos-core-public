@@ -174,43 +174,23 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
 
-                let mut last_time = u128::MAX;
-                let mut current_gas = 1000000;
-                let mut adjustment_up = true;
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
+
                 while true
                 {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, current_gas, mode_two);
-                    println!("last time: {} time: {}", last_time, time);
-                    if time < last_time {
-                        if last_time - time < 5 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
-                        last_time = time;
-                        if adjustment_up {
-                            current_gas += 100000;
-                        }
-                        else {
-                            current_gas -= 100000;
-                        }
-                    }
-                    else if time > last_time || time == u128::MAX {
-                        if time - last_time < 5 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
-                        
-                        if adjustment_up {
-                            adjustment_up = false;
-                            current_gas -= 100000;
-                        }
-                        else {
-                            current_gas += 100000;
-                            adjustment_up = true;
-                        }
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, min_gas, mode_two);
+
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas-min_gas) / 2;
                     }
                     else {
-                        println!("------------------- ^ FOUND BEST for setting - same time ^ -------------------");
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+
+                    if max_gas <= min_gas {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
                         break;
                     }
                 }
