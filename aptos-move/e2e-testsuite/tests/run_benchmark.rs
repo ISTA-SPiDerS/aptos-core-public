@@ -177,7 +177,7 @@ fn main() {
                 let mut last_time = u128::MAX;
                 let mut current_gas = 800000;
                 let mut adjustment_up = true;
-                while (true)
+                while true
                 {
                     let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, current_gas, mode_two);
                     if time < last_time {
@@ -193,7 +193,7 @@ fn main() {
                             current_gas -= 50000;
                         }
                     }
-                    else if time > last_time {
+                    else if time > last_time || time == u128::MAX {
                         if time - last_time < 10 {
                             println!("------------------- ^ FOUND BEST for setting ^ -------------------");
                             break;
@@ -208,6 +208,8 @@ fn main() {
                             adjustment_up = true;
                         }
                     }
+                    println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                    break;
                 }
             }
             println!("#################################################################################");
@@ -271,6 +273,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             .map_par_txns(Transaction::UserTransaction);
 
         if block.len() < 9900 {
+            println!("Only {} in block", block.len());
             return u128::MAX;
         }
 
