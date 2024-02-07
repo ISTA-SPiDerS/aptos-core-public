@@ -337,7 +337,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     for (key, value) in all_stats
     {
         let mean = (value.iter().sum::<u128>() as f64 / value.len() as f64) as f64;
-        if key == "final_time" {
+        if key.eq("final_time") {
             final_time = mean as u128;
         }
         let variance = value.iter().map(|x| (*x as f64 - mean).powi(2)).sum::<f64>() / value.len() as f64;

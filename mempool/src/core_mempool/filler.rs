@@ -220,14 +220,12 @@ impl BlockFiller for DependencyFiller {
                 //let (speculation, status, tx) = previous.get(ind).unwrap();
 
                 if self.full {
-                    println!("full!");
                     break;
                 }
 
                 let txn_len = txinput.raw_txn_bytes_len() as u64;
                 if self.total_bytes + txn_len > self.max_bytes {
                     self.full = true;
-                    println!("full");
                     break;
                 }
 
