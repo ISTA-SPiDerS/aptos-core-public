@@ -180,6 +180,7 @@ fn main() {
                 while true
                 {
                     let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, current_gas, mode_two);
+                    println!("last time: {} time: {}", last_time, time);
                     if time < last_time {
                         if last_time - time < 10 {
                             println!("------------------- ^ FOUND BEST for setting ^ -------------------");
