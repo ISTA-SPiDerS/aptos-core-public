@@ -131,7 +131,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [4, 8, 16];
+    let core_set = [4, 8, 16, 32, 64];
     let trial_count = 3;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
@@ -182,30 +182,30 @@ fn main() {
                     let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, current_gas, mode_two);
                     println!("last time: {} time: {}", last_time, time);
                     if time < last_time {
-                        if last_time - time < 10 {
+                        if last_time - time < 5 {
                             println!("------------------- ^ FOUND BEST for setting ^ -------------------");
                             break;
                         }
                         last_time = time;
                         if adjustment_up {
-                            current_gas += 50000;
+                            current_gas += 100000;
                         }
                         else {
-                            current_gas -= 50000;
+                            current_gas -= 100000;
                         }
                     }
                     else if time > last_time || time == u128::MAX {
-                        if time - last_time < 10 {
+                        if time - last_time < 5 {
                             println!("------------------- ^ FOUND BEST for setting ^ -------------------");
                             break;
                         }
-                        last_time = time;
+                        
                         if adjustment_up {
                             adjustment_up = false;
-                            current_gas -= 50000;
+                            current_gas -= 100000;
                         }
                         else {
-                            current_gas += 50000;
+                            current_gas += 100000;
                             adjustment_up = true;
                         }
                     }
