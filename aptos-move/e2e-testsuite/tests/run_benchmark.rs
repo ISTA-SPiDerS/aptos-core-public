@@ -175,7 +175,7 @@ fn main() {
             for c in core_set {
 
                 let mut last_time = u128::MAX;
-                let mut current_gas = 800000;
+                let mut current_gas = 1000000;
                 let mut adjustment_up = true;
                 while true
                 {
@@ -208,7 +208,7 @@ fn main() {
                             adjustment_up = true;
                         }
                     }
-                    println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                    println!("------------------- ^ FOUND BEST for setting - same time ^ -------------------");
                     break;
                 }
             }
