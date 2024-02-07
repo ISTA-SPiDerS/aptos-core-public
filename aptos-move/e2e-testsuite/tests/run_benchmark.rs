@@ -209,8 +209,10 @@ fn main() {
                             adjustment_up = true;
                         }
                     }
-                    println!("------------------- ^ FOUND BEST for setting - same time ^ -------------------");
-                    break;
+                    else {
+                        println!("------------------- ^ FOUND BEST for setting - same time ^ -------------------");
+                        break;
+                    }
                 }
             }
             println!("#################################################################################");
