@@ -92,7 +92,7 @@ fn main() {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
         println!("block created");
         let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10)
-            .map_par_txns(Transaction::UserTransaction);
+            .map_par_txns(Transaction::UserTransaction).1;
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
             block.clone(),
@@ -147,16 +147,35 @@ fn main() {
     //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
     //todo can we find the best max_gas for each configuration?
 
-    //for mode in modes {
-    //    for mode_two in additional_modes {
-    //        for c in core_set {
-    //            for x in mult_set {
-    //                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 1500000*(c/4), mode_two);
-    //            }
-    //        }
-    //        println!("#################################################################################");
-    //    }
-    //}
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+
+                let mut max_gas = 2_100_000;
+                let mut min_gas = 100_000;
+
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, min_gas, mode_two);
+
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas-min_gas) / 2;
+                    }
+                    else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
+
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
+                    }
+                }
+            }
+            println!("#################################################################################");
+        }
+    }
 
     //for mode in modes {
     //    for mode_two in additional_modes {
@@ -200,11 +219,30 @@ fn main() {
         }
     }
 
-    /*for mode in modes {
+    for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 700000, mode_two);
+
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
+
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, min_gas, mode_two);
+
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas-min_gas) / 2;
+                    }
+                    else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
+
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
+                    }
                 }
             }
             println!("#################################################################################");
@@ -214,13 +252,32 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                for x in mult_set {
-                    runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 700000, mode_two);
+
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
+
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, min_gas, mode_two);
+
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas-min_gas) / 2;
+                    }
+                    else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
+
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
+                    }
                 }
             }
             println!("#################################################################################");
         }
-    }*/
+    }
 
     println!("EXECUTION SUCCESS");
 }
@@ -228,6 +285,8 @@ fn main() {
 fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) -> u128 {
     // This is for the total time
     let mut times = vec![];
+    let mut filler_times = vec![];
+
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
 
@@ -253,10 +312,12 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
 
         let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
-        let block = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
+        let (filler_time, block) = get_transaction_register(block.clone(), &executor, c, ac_max_gas)
             .map_par_txns(Transaction::UserTransaction);
 
-        if block.len() < 9900 {
+        filler_times.push(filler_time);
+
+        if block.len() < 10000 {
             println!("Only {} in block", block.len());
             return u128::MAX;
         }
@@ -314,6 +375,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     }
 
     all_stats.insert("final_time".to_string(), times);
+    all_stats.insert("filler_time".to_string(), filler_times);
 
 
     println!("###,{},{},{:?},{}", print_mode, c, load_type, max_gas);
@@ -335,7 +397,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> TransactionRegister<SignedTransaction> {
+fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> (TransactionRegister<SignedTransaction>, u128) {
     let mut transaction_validation = executor.get_transaction_validation();
 
     //todo, to test this properly, I will need good gas_per_core and max_bytes measurements. Else we don't even start with good blocks really. (Aside for maybe solana, which has crazy big tx).
@@ -363,7 +425,11 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
         }
     }
 
+    let start = Instant::now();
+
     filler.add_all(&mut txns);
+
+    let elapsed = start.elapsed().as_millis();
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
@@ -372,7 +438,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     // Resetting for next block!
     SYNC_CACHE.lock().unwrap().clear();
 
-    TransactionRegister::new(txns, gas_estimates, dependencies)
+    (TransactionRegister::new(txns, gas_estimates, dependencies), elapsed)
 }
 
 //Create block with coin exchange transactions
