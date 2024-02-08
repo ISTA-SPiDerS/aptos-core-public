@@ -91,7 +91,7 @@ fn main() {
     for _ in [1, 2, 3] {
         let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
         println!("block created");
-        let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10).1
+        let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10).0
             .map_par_txns(Transaction::UserTransaction);
 
         let mut prex_block_result = executor.execute_transaction_block_parallel(
@@ -312,7 +312,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
 
         let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
-        let (filler_time, return_block) = get_transaction_register(block.clone(), &executor, c, ac_max_gas);
+        let (return_block, filler_time) = get_transaction_register(block.clone(), &executor, c, ac_max_gas);
         let block = return_block.map_par_txns(Transaction::UserTransaction);
 
         filler_times.push(filler_time);
