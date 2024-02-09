@@ -207,7 +207,7 @@ impl BlockFiller for DependencyFiller {
         let mut skipped = 0;
         let mut len = 0;
 
-        let mut last_touched: BTreeMap<StateKey, (u32, u16)> = BTreeMap::new();
+        let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
         if let Ok(mut map) = SYNC_CACHE.lock() {
 
             let mut longest_chain = 0;
