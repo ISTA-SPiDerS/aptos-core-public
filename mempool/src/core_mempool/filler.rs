@@ -219,12 +219,6 @@ impl BlockFiller for DependencyFiller {
                     break;
                 }
 
-                let txn_len = txinput.raw_txn_bytes_len() as u64;
-                if self.total_bytes + txn_len > self.max_bytes {
-                    self.full = true;
-                    break;
-                }
-
                 if let Some((write_set, read_set, gas , tx)) = map.get(&(txinput.sender(), txinput.sequence_number())) {
                     let gas_used = (gas / 10) as u16;
                     if write_set.is_empty()
@@ -278,12 +272,6 @@ impl BlockFiller for DependencyFiller {
                         dependencies.insert(*key);
                     }
 
-                    if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
-                        self.full = true;
-                        break;
-                    }
-
-                    self.total_bytes += txn_len + dependencies.len() as u64 * size_of::<TransactionIdx>() as u64 + size_of::<u64>() as u64;
                     self.total_estimated_gas += gas_used as u64;
 
                     let current_idx = self.block.len() as u16;
