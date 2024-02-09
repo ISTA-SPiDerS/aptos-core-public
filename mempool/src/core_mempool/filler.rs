@@ -293,13 +293,17 @@ impl BlockFiller for DependencyFiller {
 
 
                     for write in write_set {
-                        let mx = max(finish_time, last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0);
-                        last_touched.insert(write.0.clone(), (mx.into(), current_idx));
+                        let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
+                        if finish_time > curr_max {
+                            last_touched.insert(write.0.clone(), (curr_max.into(), current_idx));
+                        }
                     }
 
                     //todo: We only have to insert into last_touched, if we are actually larger!
-                    let mx = max(finish_time, last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0);
-                    last_touched.insert(user_state_key.clone(), (mx.into(), current_idx));
+                    let curr_max = last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0;
+                    if finish_time > curr_max {
+                        last_touched.insert(user_state_key.clone(), (curr_max.into(), current_idx));
+                    }
 
                     let(write_set, read_set, gas , full_tx) =  map.remove(&(txinput.sender(), txinput.sequence_number())).unwrap();
                     self.block.push(full_tx);
