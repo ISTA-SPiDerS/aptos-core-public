@@ -138,8 +138,6 @@ pub struct DependencyFiller {
     total_estimated_gas: u64,
     full: bool,
 
-    last_touched: BTreeMap<StateKey, u32>,
-    writes: BTreeMap<StateKey, Vec<u16>>,
     dependency_graph: Vec<HashSet<u16>>,
     block: Vec<SignedTransaction>,
     estimated_gas: Vec<u16>,
@@ -162,8 +160,6 @@ impl DependencyFiller {
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
-            last_touched: BTreeMap::new(),
-            writes: BTreeMap::new(),
             dependency_graph: vec![],
             block: vec![],
             estimated_gas: vec![]
@@ -208,11 +204,11 @@ impl BlockFiller for DependencyFiller {
         result: &mut Vec<SignedTransaction>,
     ) -> Vec<SignedTransaction> {
 
-        let start = Instant::now();
         let mut skipped = 0;
+        let mut len = 0;
 
-        if let LockResult::Ok(mut map) = SYNC_CACHE.lock() {
-            let lock_time = start.elapsed().as_millis();
+        let mut last_touched: BTreeMap<StateKey, (u32, u16)> = BTreeMap::new();
+        if let Ok(mut map) = SYNC_CACHE.lock() {
 
             let mut longest_chain = 0;
             for txinput in result
@@ -229,7 +225,7 @@ impl BlockFiller for DependencyFiller {
                     break;
                 }
 
-                if let Some((write_set, read_set, gas , tx)) = map.remove(&(txinput.sender(), txinput.sequence_number())) {
+                if let Some((write_set, read_set, gas , tx)) = map.get(&(txinput.sender(), txinput.sequence_number())) {
                     let gas_used = (gas / 10) as u16;
                     if write_set.is_empty()
                     {
@@ -237,11 +233,20 @@ impl BlockFiller for DependencyFiller {
                         continue;
                     }
 
+                    if len >= 100 && len <= 9900 {
+
+                        // think specifically on how we are tracking. And how we should track.
+
+                    }
+
                     // When transaction can start assuming unlimited resources.
                     let mut arrival_time = 0;
-                    for read in &read_set {
-                        if let Some(val) = self.last_touched.get(read) {
-                            arrival_time = max(arrival_time, *val);
+                    let mut dependencies = HashSet::new();
+
+                    for read in read_set {
+                        if let Some((time, key)) = last_touched.get(read) {
+                            arrival_time = max(arrival_time, *time);
+                            dependencies.insert(*key);
                         }
                     }
 
@@ -258,37 +263,23 @@ impl BlockFiller for DependencyFiller {
                     if finish_time > self.gas_per_core as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         skipped+=1;
                         continue;
                     }
 
                     if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                         self.full = true;
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         println!("Reached max gas: {} {} {}", self.total_estimated_gas, gas_used, self.total_max_gas);
                         break;
                     }
 
-                    let mut dependencies = HashSet::new();
-                    for read in &read_set {
-                        if let Some(val) = self.writes.get(read) {
-                            for parent_txn in val {
-                                dependencies.insert(*parent_txn);
-                            }
-                        }
-                    }
-
                     let user_state_key = StateKey::raw(tx.sender().to_vec());
-                    if self.writes.contains_key(&user_state_key) {
-                        for parent_txn in self.writes.get(&user_state_key).unwrap() {
-                            dependencies.insert(*parent_txn);
-                        }
+                    if let Some((time, key)) = last_touched.get(&user_state_key) {
+                        dependencies.insert(*key);
                     }
 
                     if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
                         self.full = true;
-                        map.insert((txinput.sender(), txinput.sequence_number()), (write_set, read_set, gas, tx));
                         break;
                     }
 
@@ -296,50 +287,26 @@ impl BlockFiller for DependencyFiller {
                     self.total_estimated_gas += gas_used as u64;
 
                     let current_idx = self.block.len() as u16;
-
                     self.estimated_gas.push(gas_used);
                     // println!("len {}", dependencies.len());
                     self.dependency_graph.push(dependencies);
 
-                    //self.transaction_validation.add_write_set(write_set);
-
-                    // Update last touched time for used resources.
-                    /*for (delta, _op) in delta_set {
-                    let mx = max(finish_time, *self.last_touched.get(delta).unwrap_or(&0u32));
-                    self.last_touched.insert(delta.clone(), mx.into());
-
-                    if !self.writes.contains_key(delta) {
-                        self.writes.insert(delta.clone(), vec![]);
-                    }
-
-                    if read_set.contains(&delta) {
-                        self.writes.insert(delta.clone(), vec![]);
-                    }
-                    self.writes.get_mut(delta).unwrap().push(current_idx);
-                    }*/
 
                     for write in write_set {
-                        let mx = max(finish_time, *self.last_touched.get(&write.0).unwrap_or(&0u32));
-                        self.last_touched.insert(write.0.clone(), mx.into());
-
-                        if !self.writes.contains_key(&write.0) {
-                            self.writes.insert(write.0.clone(), vec![]);
-                        }
-
-                        self.writes.insert(write.0.clone(), vec![current_idx]);
+                        let mx = max(finish_time, last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0);
+                        last_touched.insert(write.0.clone(), (mx.into(), current_idx));
                     }
 
-                    let mx = max(finish_time, *self.last_touched.get(&user_state_key).unwrap_or(&0u32));
-                    self.last_touched.insert(user_state_key.clone(), mx.into());
+                    //todo: We only have to insert into last_touched, if we are actually larger!
+                    let mx = max(finish_time, last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0);
+                    last_touched.insert(user_state_key.clone(), (mx.into(), current_idx));
 
-                    self.writes.insert(user_state_key, vec![current_idx]);
+                    let(write_set, read_set, gas , full_tx) =  map.remove(&(txinput.sender(), txinput.sequence_number())).unwrap();
+                    self.block.push(full_tx);
+                    len+=1;
 
-
-                    self.block.push(tx);
-
-                    if self.block.len() as u64 == self.max_txns {
+                    if len == self.max_txns {
                         self.full = true;
-                        //println!("bla final gas6: {}", self.total_estimated_gas);
                     }
                 } else {
                     return vec![];
@@ -348,11 +315,7 @@ impl BlockFiller for DependencyFiller {
         }
 
         println!("skipped: {}", skipped);
-
-
-        //println!("bla final gas7: {} {}", self.total_estimated_gas, longestChain);
         return vec![];
-
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {

@@ -131,21 +131,29 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [4, 8, 16, 32, 64];
+    //let core_set = [4, 8, 16, 32, 64];
+    let core_set = [16];
+
     let trial_count = 3;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good"];
-    let mult_set = [1];
 
-    // [22:39, 2/6/2024] Ray: Adjust client model, clients resubmit the same transaction once finished (just resubmit finished tx back to the pool). We want to measure how long it takes though to get tail latency
-    // [22:40, 2/6/2024] Ray: Greedy algorithm that first goes for less complex transactions and then fills up only towards the end the big ones?
-    // [22:40, 2/6/2024] Ray: Allow above limit then
+    // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
+    //
+    // Compare more and less strict models also in terms of execution time.
+    //
+    // Optimize execution time more of the filler calc. We can now more easily evaluate it. As its single threaded even on my pc alone.
+    //
+    // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    //todo: Run 10 blocks, record ms, fine tune up or down. Is it faster now? take as new value. Is it slower? try less aggressive change (binary search) until we find the optimal point where minor changes in each direction don't make any difference.
-    // run this to find the best result for each workload ---WITHOUT MIXED--- then get some graphs for up to 64 cores + already counting the time it takes to pack a block.
-
-    //todo: Adjust the gas such that with 4 cores, all transactions are accepted. (Do we have to maybe alter this to 8 cores for the other workloads? we will see) We can also test different levels then.
-    //todo can we find the best max_gas for each configuration?
+    /*for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7_000_000, mode_two);
+            }
+            println!("#################################################################################");
+        }
+    }*/
 
     for mode in modes {
         for mode_two in additional_modes {
@@ -177,18 +185,7 @@ fn main() {
         }
     }
 
-    //for mode in modes {
-    //    for mode_two in additional_modes {
-    //        for c in core_set {
-    //            for x in mult_set {
-    //                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7000000, mode_two);
-    //            }
-    //        }
-    //        println!("#################################################################################");
-    //    }
-    //}
-    // todo If at one point, one tx touches most of the big ones, we don't have a "replace" way. It will block adding any other. Even though we do a bit of a "re-order" on the other side, so it would be fine?
-
+    /*
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
@@ -277,7 +274,7 @@ fn main() {
             }
             println!("#################################################################################");
         }
-    }
+    }*/
 
     println!("EXECUTION SUCCESS");
 }
@@ -318,7 +315,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         filler_times.push(filler_time);
 
         if block.len() < 10000 {
-            println!("Only {} in block", block.len());
+            println!("Only {} in block: {}", block.len(), filler_time);
             return u128::MAX;
         }
 
@@ -400,8 +397,6 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> (TransactionRegister<SignedTransaction>, u128) {
     let mut transaction_validation = executor.get_transaction_validation();
 
-    //todo, to test this properly, I will need good gas_per_core and max_bytes measurements. Else we don't even start with good blocks really. (Aside for maybe solana, which has crazy big tx).
-    //todo first a test run on how much a normal block has without good blocks for each workload. Then we translate this to a better measurement.
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
@@ -430,6 +425,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
     filler.add_all(&mut txns);
 
     let elapsed = start.elapsed().as_millis();
+    println!("elapsed: {}", elapsed);
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
