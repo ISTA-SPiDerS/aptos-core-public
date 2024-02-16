@@ -227,33 +227,32 @@ impl BlockFiller for DependencyFiller {
                         continue;
                     }
 
-                    if len >= 100 && len <= 9900 {
-
-                        // think specifically on how we are tracking. And how we should track.
-
-                    }
-
                     // When transaction can start assuming unlimited resources.
                     let mut arrival_time = 0;
                     let mut dependencies = HashSet::new();
 
+                    let mut hot_read_access = 0;
                     for read in read_set {
                         if let Some((time, key)) = last_touched.get(read) {
                             arrival_time = max(arrival_time, *time);
+
+                            if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                                hot_read_access+=1;
+                            }
                             dependencies.insert(*key);
+                        }
+                        if len >= 1000 && hot_read_access >= 2 {
+                            // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
+                            // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
+
+                            // not skipping anything atm.
+                            skipped+=1;
+                            continue;
                         }
                     }
 
                     // Check if there is room for the new block.
                     let finish_time = arrival_time as u32 + gas_used as u32;
-                    if finish_time > 1000000
-                    {
-                        //println!("bla Wat a long chain: {}", finish_time);
-                    }
-                    if finish_time > longest_chain {
-                        longest_chain = finish_time;
-                    }
-
                     if finish_time > self.gas_per_core as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);

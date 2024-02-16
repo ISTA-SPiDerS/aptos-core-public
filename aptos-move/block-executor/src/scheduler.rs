@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_infallible::{Mutex};
-use std::sync::Mutex as MyMut;
+use std::sync::{Mutex as MyMut, MutexGuard};
 use crossbeam::utils::CachePadded;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use tracing::info;
@@ -245,7 +245,7 @@ pub struct Scheduler {
     validation_idx: AtomicU64,
     /// Next transaction to commit, and sweeping lower bound on the wave of a validation that must
     /// be successful in order to commit the next transaction.
-    commit_state: Mutex<(TxnIndex, Wave)>,
+    pub(crate) commit_state: Mutex<(TxnIndex, Wave)>,
 
     /// Shared marker that is set when a thread detects that all txns can be committed.
     done_marker: AtomicBool,
@@ -361,14 +361,11 @@ impl Scheduler {
 
     /// If successful, returns Some(TxnIndex), the index of committed transaction.
     /// The current implementation has one dedicated thread to try_commit.
-    pub fn try_commit(&self) -> Option<TxnIndex> {
-        let mut commit_state_mutex = self.commit_state.lock();
-        let commit_state = commit_state_mutex.deref_mut();
+    pub fn try_commit(&self, commit_state: &mut (TxnIndex, Wave)) -> Option<TxnIndex> {
         let (commit_idx, commit_wave) = (&mut commit_state.0, &mut commit_state.1);
         //println!("commit idx =  {}", *commit_idx);
-        if *commit_idx == self.num_txns
-        {
-            if !matches!(self.mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
+        if *commit_idx == self.num_txns  {
+            if !matches!(self.mode, ExecutionMode::Pythia_Sig) || self.sig_val_idx.load(Ordering::Relaxed) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);

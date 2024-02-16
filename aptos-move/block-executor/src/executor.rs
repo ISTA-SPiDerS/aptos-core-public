@@ -33,6 +33,7 @@ use std::{
     collections::btree_map::BTreeMap,
 };
 use std::borrow::Borrow;
+use std::ops::DerefMut;
 use aptos_infallible::Mutex;
 use crate::txn_last_input_output::ReadDescriptor;
 use core_affinity;
@@ -274,8 +275,8 @@ where
         let init_timer = VM_INIT_SECONDS.start_timer();
         let executor = E::init(*executor_arguments);
 
-        profiler.start_timing(&"thread-time".to_string());
         let thread_id = idx;
+        profiler.start_timing(&format!("thread_time {}", idx).to_string());
 
         drop(init_timer);
 
@@ -283,16 +284,21 @@ where
         let mut finished_val_flag = false;
 
         let mut last_ind: u16 = 0;
+        let mut commit_state: (TxnIndex, Wave) = (0, 0);
 
         loop {
             // Only one thread try_commit to avoid contention.
+
             if committing {
+                profiler.start_timing(&format!("committing {}", idx).to_string());
+
                 // Keep committing txns until there is no more that can be committed now.
                 loop {
-                    if scheduler.try_commit().is_none() {
+                    if scheduler.try_commit(&mut commit_state).is_none() {
                         break;
                     }
                 }
+                profiler.end_timing(&format!("committing {}", idx).to_string());
             }
 
             scheduler_task = match scheduler_task {
@@ -302,7 +308,7 @@ where
                     //     thread_id,
                     //     version_to_validate.0
                     // );
-                    profiler.start_timing(&"validation".to_string());
+                    profiler.start_timing(&format!("validation {}", idx).to_string());
                     profiler.count_one("val".to_string());
                     let ret = self.validate(
                         version_to_validate,
@@ -313,7 +319,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&"validation".to_string());
+                    profiler.end_timing(&format!("validation {}", idx).to_string());
                     ret
                 },
                 SchedulerTask::SigTask(index) => {
@@ -328,7 +334,6 @@ where
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
-
                     //profiler.start_timing(&"scheduling".to_string());
                     let ret = scheduler.next_task(committing, &mut profiler, thread_id, &mut finished_val_flag);
                     if matches!(ret, SchedulerTask::NoTask )
@@ -364,7 +369,7 @@ where
                 },
                 SchedulerTask::Done => {
                     // info!("Received Done hurray");
-                    profiler.end_timing(&"thread-time".to_string());
+                    profiler.end_timing(&format!("thread_time {}", idx).to_string());
                     (*total_profiler.lock()).add_from(&profiler);
 
                     break;
@@ -408,7 +413,6 @@ where
                                 if let Ok(mut res) = resource {
                                     if !*res
                                     {
-                                        profiler.count_one("prologue".to_string());
                                         *res = self.execute_prologue(
                                             ind as usize,
                                             block,
