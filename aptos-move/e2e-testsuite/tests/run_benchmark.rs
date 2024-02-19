@@ -159,8 +159,8 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
 
-                let mut max_gas = 20_000_000;
-                let mut min_gas = 500_000;
+                let mut max_gas = 40_000_000;
+                let mut min_gas = 2_000_000;
 
                 while true
                 {
