@@ -237,7 +237,6 @@ impl BlockFiller for DependencyFiller {
 
                             if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
                                 hot_read_access+=1;
-                                println!("hot read!");
                             }
                             dependencies.insert(*key);
                         }
