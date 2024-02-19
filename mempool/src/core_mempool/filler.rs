@@ -237,10 +237,11 @@ impl BlockFiller for DependencyFiller {
 
                             if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
                                 hot_read_access+=1;
+                                println!("hot read!");
                             }
                             dependencies.insert(*key);
                         }
-                        if len >= 1000 && hot_read_access >= 4 {
+                        if len >= 1000 && hot_read_access >= 2 {
                             // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
                             // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
 
