@@ -164,7 +164,7 @@ fn main() {
 
                 while true
                 {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, max_gas, mode_two);
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, min_gas, mode_two);
 
                     if time == u128::MAX {
                         min_gas = min_gas + (max_gas-min_gas) / 2;
