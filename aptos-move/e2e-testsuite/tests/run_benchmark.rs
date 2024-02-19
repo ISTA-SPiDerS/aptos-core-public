@@ -146,14 +146,45 @@ fn main() {
     //
     // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    for mode in modes {
+    /*for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 10000000, mode_two);
             }
             println!("#################################################################################");
         }
+    }*/
+
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+
+                let mut max_gas = 20_000_000;
+                let mut min_gas = 500_000;
+
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, max_gas, mode_two);
+
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas-min_gas) / 2;
+                    }
+                    else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
+
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
+                    }
+                }
+            }
+            println!("#################################################################################");
+        }
     }
+
 
     /*
         for mode in modes {
