@@ -149,7 +149,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 7500000, mode_two);
+                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 8000000, mode_two);
             }
             println!("#################################################################################");
         }
