@@ -185,128 +185,118 @@ fn main() {
         }
     }
 
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut max_gas = 2_100_000;
+                let mut min_gas = 100_000;
 
-    /*
-        for mode in modes {
-            for mode_two in additional_modes {
-                for c in core_set {
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, min_gas, mode_two);
 
-                    let mut max_gas = 2_100_000;
-                    let mut min_gas = 100_000;
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas - min_gas) / 2;
+                    } else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
 
-                    while true
-                    {
-                        let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, max_gas, mode_two);
-
-                        if time == u128::MAX {
-                            min_gas = min_gas + (max_gas-min_gas) / 2;
-                        }
-                        else {
-                            max_gas = min_gas;
-                            min_gas = min_gas / 2;
-                        }
-                        println!("new min: {} max: {}", min_gas, max_gas);
-
-                        if max_gas <= min_gas + 500 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
                     }
                 }
-                println!("#################################################################################");
             }
+            println!("#################################################################################");
         }
+    }
 
 
-        for mode in modes {
-            for mode_two in additional_modes {
-                for c in core_set {
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
 
-                    let mut max_gas = 1_100_000;
-                    let mut min_gas = 100_000;
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, min_gas, mode_two);
 
-                    while true
-                    {
-                        let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, min_gas, mode_two);
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas - min_gas) / 2;
+                    } else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
 
-                        if time == u128::MAX {
-                            min_gas = min_gas + (max_gas-min_gas) / 2;
-                        }
-                        else {
-                            max_gas = min_gas;
-                            min_gas = min_gas / 2;
-                        }
-                        println!("new min: {} max: {}", min_gas, max_gas);
-
-                        if max_gas <= min_gas + 500 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
                     }
                 }
-                println!("#################################################################################");
             }
+            println!("#################################################################################");
         }
+    }
 
-        for mode in modes {
-            for mode_two in additional_modes {
-                for c in core_set {
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
 
-                    let mut max_gas = 1_100_000;
-                    let mut min_gas = 100_000;
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, min_gas, mode_two);
 
-                    while true
-                    {
-                        let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, min_gas, mode_two);
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas - min_gas) / 2;
+                    } else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
 
-                        if time == u128::MAX {
-                            min_gas = min_gas + (max_gas-min_gas) / 2;
-                        }
-                        else {
-                            max_gas = min_gas;
-                            min_gas = min_gas / 2;
-                        }
-                        println!("new min: {} max: {}", min_gas, max_gas);
-
-                        if max_gas <= min_gas + 500 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
                     }
                 }
-                println!("#################################################################################");
             }
+            println!("#################################################################################");
         }
+    }
 
-        for mode in modes {
-            for mode_two in additional_modes {
-                for c in core_set {
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut max_gas = 1_100_000;
+                let mut min_gas = 100_000;
 
-                    let mut max_gas = 1_100_000;
-                    let mut min_gas = 100_000;
+                while true
+                {
+                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, min_gas, mode_two);
 
-                    while true
-                    {
-                        let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, min_gas, mode_two);
+                    if time == u128::MAX {
+                        min_gas = min_gas + (max_gas - min_gas) / 2;
+                    } else {
+                        max_gas = min_gas;
+                        min_gas = min_gas / 2;
+                    }
+                    println!("new min: {} max: {}", min_gas, max_gas);
 
-                        if time == u128::MAX {
-                            min_gas = min_gas + (max_gas-min_gas) / 2;
-                        }
-                        else {
-                            max_gas = min_gas;
-                            min_gas = min_gas / 2;
-                        }
-                        println!("new min: {} max: {}", min_gas, max_gas);
-
-                        if max_gas <= min_gas + 500 {
-                            println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                            break;
-                        }
+                    if max_gas <= min_gas + 500 {
+                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                        break;
                     }
                 }
-                println!("#################################################################################");
             }
-        }*/
+            println!("#################################################################################");
+        }
+    }
 
     println!("EXECUTION SUCCESS");
 }
