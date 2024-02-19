@@ -214,7 +214,6 @@ impl BlockFiller for DependencyFiller {
             for txinput in result
             {
                 //let (speculation, status, tx) = previous.get(ind).unwrap();
-
                 if self.full {
                     break;
                 }
@@ -241,7 +240,7 @@ impl BlockFiller for DependencyFiller {
                             }
                             dependencies.insert(*key);
                         }
-                        if len >= 1000 && hot_read_access >= 2 {
+                        if len >= 1000 && hot_read_access >= 4 {
                             // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
                             // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
 
@@ -251,8 +250,18 @@ impl BlockFiller for DependencyFiller {
                         }
                     }
 
+                    let user_state_key = StateKey::raw(tx.sender().to_vec());
+                    if let Some((time, key)) = last_touched.get(&user_state_key) {
+                        arrival_time = max(arrival_time, *time);
+
+                        if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                            hot_read_access+=1;
+                        }
+                        dependencies.insert(*key);
+                    }
+
                     // Check if there is room for the new block.
-                    let finish_time = arrival_time as u32 + gas_used as u32;
+                    let finish_time = arrival_time + gas_used as u32;
                     if finish_time > self.gas_per_core as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
@@ -260,15 +269,11 @@ impl BlockFiller for DependencyFiller {
                         continue;
                     }
 
+
                     if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                         self.full = true;
                         println!("Reached max gas: {} {} {}", self.total_estimated_gas, gas_used, self.total_max_gas);
                         break;
-                    }
-
-                    let user_state_key = StateKey::raw(tx.sender().to_vec());
-                    if let Some((time, key)) = last_touched.get(&user_state_key) {
-                        dependencies.insert(*key);
                     }
 
                     self.total_estimated_gas += gas_used as u64;
@@ -282,14 +287,13 @@ impl BlockFiller for DependencyFiller {
                     for write in write_set {
                         let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
                         if finish_time > curr_max {
-                            last_touched.insert(write.0.clone(), (curr_max.into(), current_idx));
+                            last_touched.insert(write.0.clone(), (finish_time, current_idx));
                         }
                     }
 
-                    //todo: We only have to insert into last_touched, if we are actually larger!
                     let curr_max = last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0;
                     if finish_time > curr_max {
-                        last_touched.insert(user_state_key.clone(), (curr_max.into(), current_idx));
+                        last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
                     }
 
                     let(write_set, read_set, gas , full_tx) =  map.remove(&(txinput.sender(), txinput.sequence_number())).unwrap();
@@ -303,6 +307,7 @@ impl BlockFiller for DependencyFiller {
                     return vec![];
                 }
             }
+            println!("longest chain {} {} {}", longest_chain, self.total_max_gas, self.total_estimated_gas);
         }
 
         println!("skipped: {}", skipped);
