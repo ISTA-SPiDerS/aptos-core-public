@@ -29,7 +29,7 @@ pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        previous: &mut Vec<SignedTransaction>,
+        previous: &mut BTreeMap<u16, SignedTransaction>,
     ) -> Vec<SignedTransaction>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
@@ -90,7 +90,7 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        previous: &mut Vec<SignedTransaction>,
+        previous: &mut BTreeMap<u16, SignedTransaction>,
     ) -> Vec<SignedTransaction> {
 
         vec![]
@@ -201,7 +201,7 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        result: &mut Vec<SignedTransaction>,
+        result: &mut BTreeMap<u16, SignedTransaction>,
     ) -> Vec<SignedTransaction> {
 
         let mut skipped = 0;
@@ -209,9 +209,7 @@ impl BlockFiller for DependencyFiller {
 
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
         if let Ok(mut map) = SYNC_CACHE.lock() {
-
-            let mut longest_chain = 0;
-            for txinput in result
+            for (ind, txinput) in result.clone()
             {
                 //let (speculation, status, tx) = previous.get(ind).unwrap();
                 if self.full {
@@ -282,6 +280,7 @@ impl BlockFiller for DependencyFiller {
                     self.estimated_gas.push(gas_used);
                     // println!("len {}", dependencies.len());
                     self.dependency_graph.push(dependencies);
+                    result.remove(&ind);
 
 
                     for write in write_set {
@@ -307,7 +306,6 @@ impl BlockFiller for DependencyFiller {
                     return vec![];
                 }
             }
-            println!("longest chain {} {} {}", longest_chain, self.total_max_gas, self.total_estimated_gas);
         }
 
         println!("skipped: {}", skipped);

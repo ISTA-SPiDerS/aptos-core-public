@@ -434,7 +434,7 @@ impl Scheduler {
         //profiler.start_timing(&"try_val".to_string());
 
         // //println!("nscheduled = {}", self.nscheduled.load(Ordering::SeqCst));
-        if *finished_val_flag && self.done() {
+        if *finished_val_flag && (self.done() || !commiting) {
             return SchedulerTask::Done;
         }
 

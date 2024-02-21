@@ -158,145 +158,154 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-
-                let mut max_gas = 40_000_000;
-                let mut min_gas = 2_000_000;
-
-                while true
-                {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, min_gas, mode_two);
-
-                    if time == u128::MAX {
-                        min_gas = min_gas + (max_gas-min_gas) / 2;
-                    }
-                    else {
-                        max_gas = min_gas;
-                        min_gas = min_gas / 2;
-                    }
-                    println!("new min: {} max: {}", min_gas, max_gas);
-
-                    if max_gas <= min_gas + 500 {
-                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                        break;
-                    }
-                }
+                let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2255000, mode_two);
             }
             println!("#################################################################################");
         }
     }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut max_gas = 2_100_000;
-                let mut min_gas = 100_000;
+    /*for mode in modes {
+       for mode_two in additional_modes {
+           for c in core_set {
 
-                while true
-                {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, min_gas, mode_two);
+               let mut max_gas = 40_000_000;
+               let mut min_gas = 2_000_000;
 
-                    if time == u128::MAX {
-                        min_gas = min_gas + (max_gas - min_gas) / 2;
-                    } else {
-                        max_gas = min_gas;
-                        min_gas = min_gas / 2;
-                    }
-                    println!("new min: {} max: {}", min_gas, max_gas);
+               while true
+               {
+                   let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, min_gas, mode_two);
 
-                    if max_gas <= min_gas + 500 {
-                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                        break;
-                    }
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
+                   if time == u128::MAX {
+                       min_gas = min_gas + (max_gas-min_gas) / 2;
+                   }
+                   else {
+                       max_gas = min_gas;
+                       min_gas = min_gas / 2;
+                   }
+                   println!("new min: {} max: {}", min_gas, max_gas);
+
+                   if max_gas <= min_gas + 500 {
+                       println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                       break;
+                   }
+               }
+           }
+           println!("#################################################################################");
+       }
+   }
+
+   for mode in modes {
+       for mode_two in additional_modes {
+           for c in core_set {
+               let mut max_gas = 2_100_000;
+               let mut min_gas = 100_000;
+
+               while true
+               {
+                   let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, min_gas, mode_two);
+
+                   if time == u128::MAX {
+                       min_gas = min_gas + (max_gas - min_gas) / 2;
+                   } else {
+                       max_gas = min_gas;
+                       min_gas = min_gas / 2;
+                   }
+                   println!("new min: {} max: {}", min_gas, max_gas);
+
+                   if max_gas <= min_gas + 500 {
+                       println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                       break;
+                   }
+               }
+           }
+           println!("#################################################################################");
+       }
+   }
 
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut max_gas = 1_100_000;
-                let mut min_gas = 100_000;
+   for mode in modes {
+       for mode_two in additional_modes {
+           for c in core_set {
+               let mut max_gas = 1_100_000;
+               let mut min_gas = 100_000;
 
-                while true
-                {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, min_gas, mode_two);
+               while true
+               {
+                   let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, min_gas, mode_two);
 
-                    if time == u128::MAX {
-                        min_gas = min_gas + (max_gas - min_gas) / 2;
-                    } else {
-                        max_gas = min_gas;
-                        min_gas = min_gas / 2;
-                    }
-                    println!("new min: {} max: {}", min_gas, max_gas);
+                   if time == u128::MAX {
+                       min_gas = min_gas + (max_gas - min_gas) / 2;
+                   } else {
+                       max_gas = min_gas;
+                       min_gas = min_gas / 2;
+                   }
+                   println!("new min: {} max: {}", min_gas, max_gas);
 
-                    if max_gas <= min_gas + 500 {
-                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                        break;
-                    }
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
+                   if max_gas <= min_gas + 500 {
+                       println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                       break;
+                   }
+               }
+           }
+           println!("#################################################################################");
+       }
+   }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut max_gas = 1_100_000;
-                let mut min_gas = 100_000;
+   for mode in modes {
+       for mode_two in additional_modes {
+           for c in core_set {
+               let mut max_gas = 1_100_000;
+               let mut min_gas = 100_000;
 
-                while true
-                {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, min_gas, mode_two);
+               while true
+               {
+                   let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, min_gas, mode_two);
 
-                    if time == u128::MAX {
-                        min_gas = min_gas + (max_gas - min_gas) / 2;
-                    } else {
-                        max_gas = min_gas;
-                        min_gas = min_gas / 2;
-                    }
-                    println!("new min: {} max: {}", min_gas, max_gas);
+                   if time == u128::MAX {
+                       min_gas = min_gas + (max_gas - min_gas) / 2;
+                   } else {
+                       max_gas = min_gas;
+                       min_gas = min_gas / 2;
+                   }
+                   println!("new min: {} max: {}", min_gas, max_gas);
 
-                    if max_gas <= min_gas + 500 {
-                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                        break;
-                    }
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
+                   if max_gas <= min_gas + 500 {
+                       println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                       break;
+                   }
+               }
+           }
+           println!("#################################################################################");
+       }
+   }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut max_gas = 1_100_000;
-                let mut min_gas = 100_000;
+   for mode in modes {
+       for mode_two in additional_modes {
+           for c in core_set {
+               let mut max_gas = 1_100_000;
+               let mut min_gas = 100_000;
 
-                while true
-                {
-                    let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, min_gas, mode_two);
+               while true
+               {
+                   let time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, min_gas, mode_two);
 
-                    if time == u128::MAX {
-                        min_gas = min_gas + (max_gas - min_gas) / 2;
-                    } else {
-                        max_gas = min_gas;
-                        min_gas = min_gas / 2;
-                    }
-                    println!("new min: {} max: {}", min_gas, max_gas);
+                   if time == u128::MAX {
+                       min_gas = min_gas + (max_gas - min_gas) / 2;
+                   } else {
+                       max_gas = min_gas;
+                       min_gas = min_gas / 2;
+                   }
+                   println!("new min: {} max: {}", min_gas, max_gas);
 
-                    if max_gas <= min_gas + 500 {
-                        println!("------------------- ^ FOUND BEST for setting ^ -------------------");
-                        break;
-                    }
-                }
-            }
-            println!("#################################################################################");
-        }
-    }
+                   if max_gas <= min_gas + 500 {
+                       println!("------------------- ^ FOUND BEST for setting ^ -------------------");
+                       break;
+                   }
+               }
+           }
+           println!("#################################################################################");
+       }
+   }*/
 
     println!("EXECUTION SUCCESS");
 }
@@ -330,66 +339,94 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             ac_max_gas = max_gas * 64;
         }
 
-        let block = create_block(ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
-        let (return_block, filler_time) = get_transaction_register(block.clone(), &executor, c, ac_max_gas);
-        let block = return_block.map_par_txns(Transaction::UserTransaction);
+        // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
-        filler_times.push(filler_time);
-
-        if block.len() < 10000 {
-            println!("Only {} in block: {}", block.len(), filler_time);
-            return u128::MAX;
-        }
-
-        println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
-        let start = Instant::now();
-        block_result = executor
-            .execute_transaction_block_parallel(
-                block.clone(),
-                c as usize,
-                mode, profiler.borrow_mut()
-            )
-            .unwrap();
-        times.push(start.elapsed().as_millis());
+        // Generate the workload.
+        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
 
 
-        let collected_times = profiler.collective_times.borrow();
-        for (key,value) in collected_times {
-            if all_stats.contains_key(key) {
-                all_stats.get_mut(key).unwrap().push(value.as_millis());
-            }
-            else {
-                all_stats.insert(key.to_string(), vec![value.as_millis()]);
-            }
-        }
-
-        let counters = profiler.counters.borrow();
-        for (key,value) in counters {
-            if all_stats.contains_key(key) {
-                all_stats.get_mut(key).unwrap().push(*value);
-            }
-            else {
-                all_stats.insert(key.to_string(), vec![*value]);
-            }
-        }
-
-        println!("Total time: {:?}", start.elapsed());
-
-        for result in block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
+        while true {
+            if let first = Some(main_block.first_key_value()) {
+                if *first.unwrap().unwrap().0 >= 10000 {
+                    println!("Reached End {}", first.unwrap().unwrap().0);
+                    break;
                 }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
+
+                //todo continue until the smallest number in map is 10000
+                // Run it through the block creation & hint extraction
+                let (return_block, filler_time) = get_transaction_register(&mut main_block, &executor, c, ac_max_gas);
+                filler_times.push(filler_time);
+
+                // Map to user transactions.
+                let block = return_block.map_par_txns(Transaction::UserTransaction);
+
+
+                if block.len() < 10000 {
+                    println!("Only {} in block: {}", block.len(), filler_time);
+                    return u128::MAX;
+                }
+
+                println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
+
+                let start = Instant::now();
+
+                // The actual execution.
+                block_result = executor
+                    .execute_transaction_block_parallel(
+                        block.clone(),
+                        c as usize,
+                        mode, profiler.borrow_mut()
+                    )
+                    .unwrap();
+
+                times.push(start.elapsed().as_millis());
+
+                let collected_times = profiler.collective_times.borrow();
+                for (key,value) in collected_times {
+                    if all_stats.contains_key(key) {
+                        all_stats.get_mut(key).unwrap().push(value.as_millis());
+                    }
+                    else {
+                        all_stats.insert(key.to_string(), vec![value.as_millis()]);
+                    }
+                }
+
+                let counters = profiler.counters.borrow();
+                for (key,value) in counters {
+                    if all_stats.contains_key(key) {
+                        all_stats.get_mut(key).unwrap().push(*value);
+                    }
+                    else {
+                        all_stats.insert(key.to_string(), vec![*value]);
+                    }
+                }
+
+                println!("Total time: {:?}", start.elapsed());
+
+                for result in block_result {
+                    match result.status() {
+                        TransactionStatus::Keep(status) => {
+                            executor.apply_write_set(result.write_set());
+                            assert_eq!(
+                                status,
+                                &ExecutionStatus::Success,
+                                "transaction failed with {:?}",
+                                status
+                            );
+                        }
+                        TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+                        TransactionStatus::Retry => panic!("transaction status is retry"),
+                    };
+                }
+
+            }
+            else {
+                println!("What happened???");
+                break;
+            }
         }
+
+
         //profiler.print()
     }
 
@@ -416,7 +453,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> (TransactionRegister<SignedTransaction>, u128) {
+fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> (TransactionRegister<SignedTransaction>, u128) {
     let mut transaction_validation = executor.get_transaction_validation();
 
     let mut filler: DependencyFiller = DependencyFiller::new(
@@ -428,7 +465,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
 
     {
         let mut locked_cache = SYNC_CACHE.lock().unwrap();
-        for tx in txns.clone() {
+        for (ind, tx) in txns.clone() {
             let result = transaction_validation.speculate_transaction(&tx);
             let (a, b) = result.unwrap();
             match b {
@@ -444,7 +481,7 @@ fn get_transaction_register(mut txns: Vec<SignedTransaction>, executor: &FakeExe
 
     let start = Instant::now();
 
-    filler.add_all(&mut txns);
+    filler.add_all( txns);
 
     let elapsed = start.elapsed().as_millis();
     println!("elapsed: {}", elapsed);
@@ -467,9 +504,9 @@ fn create_block(
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
-) -> Vec<SignedTransaction> {
+) -> BTreeMap<u16, SignedTransaction> {
 
-    let mut result = vec![];
+    let mut result = BTreeMap::new();
     let mut rng: ThreadRng = thread_rng();
 
     let mut resource_distribution_vec: &[f64] = &AVG;
@@ -492,6 +529,7 @@ fn create_block(
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
     for i in 0..size {
+
         let mut sender_id: usize = (i as usize) % accounts.len();
         let tx_entry_function;
 
@@ -551,7 +589,7 @@ fn create_block(
             .sequence_number(seq_num[&sender_id])
             .sign();
         seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-        result.push(txn);
+        result.insert(i as u16, txn);
     }
 
     result

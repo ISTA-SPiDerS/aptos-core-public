@@ -32,7 +32,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use std::cmp::{max, min};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::pending;
 use std::hash::Hash;
 use std::num::Wrapping;
@@ -272,7 +272,7 @@ impl Mempool {
     ) -> DependencyFiller {
 
         let mut time = Instant::now();
-        let mut result = Vec::new();
+        let mut result = BTreeMap::new();
         // Helper DS. Helps to mitigate scenarios where account submits several transactions
         // with increasing gas price (e.g. user submits transactions with sequence number 1, 2
         // and gas_price 1, 10 respectively)
@@ -284,6 +284,7 @@ impl Mempool {
         let seen_size = seen.len();
 
         let mut txn_walked = 0usize;
+        let mut index = 0;
 
         let mut block_filler: DependencyFiller = DependencyFiller::new(
             2_000_000_000,
@@ -305,7 +306,7 @@ impl Mempool {
             if seen_previous || account_sequence_number == Some(&tx_seq) {
                 let ptr = TxnPointer::from(txn);
 
-                if result.len() as u64 >= block_filler.get_max_txn() {
+                if index as u64 >= block_filler.get_max_txn() {
                    break;
                 }
 
@@ -317,7 +318,8 @@ impl Mempool {
 
                 total_bytes += full_tx.raw_txn_bytes_len() as u64;
 
-                result.push(full_tx);
+                result.insert(index, full_tx);
+                index += 1;
 
                 // check if we can now include some transactions
                 // that were skipped before for given account
@@ -327,7 +329,10 @@ impl Mempool {
                         break 'main;
                     }
                     seen.insert(skipped_txn);
-                    result.push(self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    result.insert(index, self.transactions.get(&skipped_txn.0, skipped_txn.1).unwrap());
+                    index += 1;
+
+
                     skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
             } else {
@@ -337,7 +342,7 @@ impl Mempool {
 
         if !result.is_empty() {
             let elapsed1 = time.elapsed().as_millis();
-            let result_size = result.len();
+            let result_size = index;
             block_filler.set_gas_per_core(self.last_max_gas);
             block_filler.add_all(&mut result);
 
