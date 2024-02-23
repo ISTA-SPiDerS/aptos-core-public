@@ -62,6 +62,8 @@ use aptos_mempool::shared_mempool::types::{SYNC_CACHE};
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::write_set::WriteSet;
 use aptos_vm::data_cache::StorageAdapter;
+use statrs::statistics::OrderStatistics;
+use statrs::statistics::Data;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -315,9 +317,6 @@ fn main() {
 
 fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) -> u128 {
     // This is for the total time
-    let mut times = vec![];
-    let mut filler_times = vec![];
-
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
 
@@ -328,7 +327,6 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     }
 
     for trial in 0..trial_count {
-        let mut profiler = Profiler::new();
 
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
@@ -336,106 +334,134 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             ac_block_size = block_size * 20;
         }
 
-        let mut ac_max_gas = max_gas;
-        if mode_two.is_empty()
-        {
-            ac_max_gas = max_gas * 64;
-        }
+        //todo: Now we want to measure the latency per tx for the initial block.
+        //todo: The other transactions, are they of the same workload? Do we want to have just generic "cheap" transactions added in to allow filling up?
+        //TODO: for the 10k transactions, we want to measure the individual latencies. We know like we're at index 7k, so 7k * direct latency, then we have 9k = 9k-previous*current, etc. Measure individually, so that we can do p50, p96, p95
+        let mut local_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
 
         // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
         // Generate the workload.
         let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
 
+        let mut latvec = vec![];
+        let mut total_tx = 0;
 
-        while true {
-            if let first = Some(main_block.first_key_value()) {
-                if *first.unwrap().unwrap().0 >= 10000 {
-                    println!("Reached End {}", first.unwrap().unwrap().0);
-                    break;
-                }
+        let mut run = true;
+        let mut iter = 0;
 
-                //todo continue until the smallest number in map is 10000
-                // Run it through the block creation & hint extraction
-                let (return_block, filler_time) = get_transaction_register(&mut main_block, &executor, c, ac_max_gas);
-                filler_times.push(filler_time);
+        while run {
+            iter+=1;
 
-                // Map to user transactions.
-                let block = return_block.map_par_txns(Transaction::UserTransaction);
+            let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty());
 
-
-                if block.len() < 10000 {
-                    println!("Only {} in block: {}", block.len(), filler_time);
-                    return u128::MAX;
-                }
-
-                println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
-
-                let start = Instant::now();
-
-                // The actual execution.
-                block_result = executor
-                    .execute_transaction_block_parallel(
-                        block.clone(),
-                        c as usize,
-                        mode, profiler.borrow_mut()
-                    )
-                    .unwrap();
-
-                times.push(start.elapsed().as_millis());
-
-                let collected_times = profiler.collective_times.borrow();
-                for (key,value) in collected_times {
-                    if all_stats.contains_key(key) {
-                        all_stats.get_mut(key).unwrap().push(value.as_millis());
-                    }
-                    else {
-                        all_stats.insert(key.to_string(), vec![value.as_millis()]);
-                    }
-                }
-
-                let counters = profiler.counters.borrow();
-                for (key,value) in counters {
-                    if all_stats.contains_key(key) {
-                        all_stats.get_mut(key).unwrap().push(*value);
-                    }
-                    else {
-                        all_stats.insert(key.to_string(), vec![*value]);
-                    }
-                }
-
-                println!("Total time: {:?}", start.elapsed());
-
-                for result in block_result {
-                    match result.status() {
-                        TransactionStatus::Keep(status) => {
-                            executor.apply_write_set(result.write_set());
-                            assert_eq!(
-                                status,
-                                &ExecutionStatus::Success,
-                                "transaction failed with {:?}",
-                                status
-                            );
-                        }
-                        TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                        TransactionStatus::Retry => panic!("transaction status is retry"),
-                    };
-                }
-
+            total_tx += first_iter_tx;
+            if total_tx >= 10000 {
+                run = false;
             }
-            else {
-                println!("What happened???");
-                break;
+
+            // Map to user transactions.
+            let block = return_block.map_par_txns(Transaction::UserTransaction);
+            if block.len() < 10000 {
+                println!("Only {} in block: {}", block.len(), filler_time);
+                return u128::MAX;
+            }
+
+            println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
+
+            let start = Instant::now();
+
+            let mut profiler = Profiler::new();
+
+            // The actual execution.
+            block_result = executor
+                .execute_transaction_block_parallel(
+                    block.clone(),
+                    c as usize,
+                    mode, profiler.borrow_mut(),
+                )
+                .unwrap();
+
+            let final_time = start.elapsed();
+            latvec.push((first_iter_tx, final_time));
+
+
+            let mut collected_times = profiler.collective_times.borrow_mut();
+            collected_times.insert("final_time".to_string(), final_time);
+
+            if mode_two.is_empty() {
+                collected_times.insert("filler_time".to_string(), Duration::from_millis(0 as u64));
+            } else {
+                collected_times.insert("filler_time".to_string(), Duration::from_millis(filler_time as u64));
+            }
+
+            for (key, value) in collected_times {
+                if local_stats.contains_key(key) {
+                    local_stats.get_mut(key).unwrap().push(value.as_millis());
+                } else {
+                    local_stats.insert(key.to_string(), vec![value.as_millis()]);
+                }
+            }
+
+            let counters = profiler.counters.borrow();
+            for (key, value) in counters {
+                if local_stats.contains_key(key) {
+                    local_stats.get_mut(key).unwrap().push(*value);
+                } else {
+                    local_stats.insert(key.to_string(), vec![*value]);
+                }
+            }
+
+            println!("Total time: {:?}", start.elapsed());
+
+            for result in block_result {
+                match result.status() {
+                    TransactionStatus::Keep(status) => {
+                        executor.apply_write_set(result.write_set());
+                        assert_eq!(
+                            status,
+                            &ExecutionStatus::Success,
+                            "transaction failed with {:?}",
+                            status
+                        );
+                    }
+                    TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+                    TransactionStatus::Retry => panic!("transaction status is retry"),
+                };
             }
         }
 
+        let mut data = vec![];
+        let mut lat = 0;
+        let mut total = 0;
+        for (key, value) in latvec
+        {
+            lat = lat + value.as_millis();
+            total+= key as u128 * lat;
+            for i in 0..key {
+                data.push(lat as f64);
+            }
+        }
 
-        //profiler.print()
+        let mut dataFrame = Data::new(data);
+        local_stats.insert("p50".to_string(), vec![dataFrame.percentile(50) as u128]);
+        local_stats.insert("p90".to_string(), vec![dataFrame.percentile(90) as u128]);
+        local_stats.insert("p95".to_string(), vec![dataFrame.percentile(95) as u128]);
+
+        let avg = total/10000;
+        local_stats.insert("mean_latency".to_string(), vec![avg.into()]);
+
+        for (key, value) in local_stats
+        {
+            let sum = value.iter().sum::<u128>();
+            if all_stats.contains_key(&key) {
+                all_stats.get_mut(&key).unwrap().push(sum);
+            }
+            else {
+                all_stats.insert(key.to_string(), vec![sum]);
+            }
+        }
     }
-
-    all_stats.insert("final_time".to_string(), times);
-    all_stats.insert("filler_time".to_string(), filler_times);
-
 
     println!("###,{},{},{:?},{}", print_mode, c, load_type, max_gas);
     let mut final_time = 0;
@@ -456,7 +482,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize) -> (TransactionRegister<SignedTransaction>, u128) {
+fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let mut transaction_validation = executor.get_transaction_validation();
 
     let mut filler: DependencyFiller = DependencyFiller::new(
@@ -484,7 +510,7 @@ fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executo
 
     let start = Instant::now();
 
-    filler.add_all( txns);
+    let first_iter_tx = filler.add_all( txns, good_block);
 
     let elapsed = start.elapsed().as_millis();
     println!("elapsed: {}", elapsed);
@@ -496,7 +522,7 @@ fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executo
     // Resetting for next block!
     SYNC_CACHE.lock().unwrap().clear();
 
-    (TransactionRegister::new(txns, gas_estimates, dependencies), elapsed)
+    (TransactionRegister::new(txns, gas_estimates, dependencies), elapsed, first_iter_tx)
 }
 
 //Create block with coin exchange transactions

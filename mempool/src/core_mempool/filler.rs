@@ -30,7 +30,8 @@ pub trait BlockFiller {
     fn add_all(
         &mut self,
         previous: &mut BTreeMap<u16, SignedTransaction>,
-    ) -> Vec<SignedTransaction>;
+        good_block: bool
+    ) -> u16;
 
     fn get_block(self) -> Vec<SignedTransaction>;
     fn get_blockx(&mut self) -> Vec<SignedTransaction>;
@@ -91,9 +92,10 @@ impl BlockFiller for SimpleFiller {
     fn add_all(
         &mut self,
         previous: &mut BTreeMap<u16, SignedTransaction>,
-    ) -> Vec<SignedTransaction> {
+        good_block: bool
+    ) -> u16 {
 
-        vec![]
+        1
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
@@ -202,10 +204,12 @@ impl BlockFiller for DependencyFiller {
     fn add_all(
         &mut self,
         result: &mut BTreeMap<u16, SignedTransaction>,
-    ) -> Vec<SignedTransaction> {
+        good_block: bool
+    ) -> u16 {
 
         let mut skipped = 0;
         let mut len = 0;
+        let mut first_iter_tx = 0;
 
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
         if let Ok(mut map) = SYNC_CACHE.lock() {
@@ -238,7 +242,7 @@ impl BlockFiller for DependencyFiller {
                             }
                             dependencies.insert(*key);
                         }
-                        if len >= 1000 && hot_read_access >= 4 {
+                        if good_block && len >= 1000 && hot_read_access >= 4 {
                             // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
                             // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
 
@@ -260,7 +264,7 @@ impl BlockFiller for DependencyFiller {
 
                     // Check if there is room for the new block.
                     let finish_time = arrival_time + gas_used as u32;
-                    if finish_time > self.gas_per_core as u32 {
+                    if good_block && finish_time > self.gas_per_core as u32 {
                         //self.full = true;
                         //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                         skipped+=1;
@@ -282,6 +286,10 @@ impl BlockFiller for DependencyFiller {
                     self.dependency_graph.push(dependencies);
                     result.remove(&ind);
 
+                    if ind < self.max_txns as u16 {
+                        first_iter_tx += 1;
+                    }
+
 
                     for write in write_set {
                         let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
@@ -299,17 +307,17 @@ impl BlockFiller for DependencyFiller {
                     self.block.push(full_tx);
                     len+=1;
 
-                    if len == self.max_txns {
+                    if len >= self.max_txns {
                         self.full = true;
                     }
                 } else {
-                    return vec![];
+                    return first_iter_tx;
                 }
             }
         }
 
         println!("skipped: {}", skipped);
-        return vec![];
+        return first_iter_tx;
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {

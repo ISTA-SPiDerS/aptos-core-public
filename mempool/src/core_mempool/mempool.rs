@@ -344,7 +344,7 @@ impl Mempool {
             let elapsed1 = time.elapsed().as_millis();
             let result_size = index;
             block_filler.set_gas_per_core(self.last_max_gas);
-            block_filler.add_all(&mut result);
+            block_filler.add_all(&mut result, true);
 
             let len =  block_filler.get_blockx().len();
             if (len > 0) {
