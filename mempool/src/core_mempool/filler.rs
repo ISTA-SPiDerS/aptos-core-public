@@ -308,9 +308,12 @@ impl BlockFiller for DependencyFiller {
                     len+=1;
 
                     if len >= self.max_txns {
+                        println!("reached 10k");
                         self.full = true;
                     }
                 } else {
+
+                    println!("waaaaaaaaaaaaaaaaaaaat: {}", skipped);
                     return first_iter_tx;
                 }
             }

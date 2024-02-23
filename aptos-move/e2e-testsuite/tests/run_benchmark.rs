@@ -336,7 +336,6 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
         //todo: Now we want to measure the latency per tx for the initial block.
         //todo: The other transactions, are they of the same workload? Do we want to have just generic "cheap" transactions added in to allow filling up?
-        //TODO: for the 10k transactions, we want to measure the individual latencies. We know like we're at index 7k, so 7k * direct latency, then we have 9k = 9k-previous*current, etc. Measure individually, so that we can do p50, p96, p95
         let mut local_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
 
         // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
