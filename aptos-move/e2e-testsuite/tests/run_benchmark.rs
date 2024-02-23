@@ -138,7 +138,7 @@ fn main() {
 
     let trial_count = 3;
     let modes = [Pythia_Sig];
-    let additional_modes = ["Good"];
+    let additional_modes = ["Good", ""];
 
     // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
     //
@@ -160,9 +160,9 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2255000, mode_two);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two);
                 while time == u128::MAX {
-                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2255000, mode_two);
+                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two);
                 }
             }
             println!("#################################################################################");
