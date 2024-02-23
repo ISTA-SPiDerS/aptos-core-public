@@ -211,6 +211,8 @@ impl BlockFiller for DependencyFiller {
         let mut len = 0;
         let mut first_iter_tx = 0;
 
+        print!("Got x transactions: {}", result.len());
+
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
         if let Ok(mut map) = SYNC_CACHE.lock() {
             for (ind, txinput) in result.clone()
