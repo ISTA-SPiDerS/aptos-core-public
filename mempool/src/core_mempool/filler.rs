@@ -29,7 +29,7 @@ pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u16, SignedTransaction>,
+        previous: &mut BTreeMap<u32, SignedTransaction>,
         good_block: bool
     ) -> u16;
 
@@ -91,7 +91,7 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u16, SignedTransaction>,
+        previous: &mut BTreeMap<u32, SignedTransaction>,
         good_block: bool
     ) -> u16 {
 
@@ -203,7 +203,7 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        result: &mut BTreeMap<u16, SignedTransaction>,
+        result: &mut BTreeMap<u32, SignedTransaction>,
         good_block: bool
     ) -> u16 {
 
@@ -211,7 +211,7 @@ impl BlockFiller for DependencyFiller {
         let mut len = 0;
         let mut first_iter_tx = 0;
 
-        print!("Got x transactions: {}", result.len());
+        println!("Got x transactions: {}", result.len());
 
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
         if let Ok(mut map) = SYNC_CACHE.lock() {
@@ -288,7 +288,7 @@ impl BlockFiller for DependencyFiller {
                     self.dependency_graph.push(dependencies);
                     result.remove(&ind);
 
-                    if ind < self.max_txns as u16 {
+                    if ind < self.max_txns as u32 {
                         first_iter_tx += 1;
                     }
 

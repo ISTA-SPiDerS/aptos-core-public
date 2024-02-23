@@ -331,7 +331,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64;
+            ac_block_size = block_size * (c/4) as u64;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
@@ -481,7 +481,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(txns: &mut BTreeMap<u16, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn get_transaction_register(txns: &mut BTreeMap<u32, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let mut transaction_validation = executor.get_transaction_validation();
 
     let mut filler: DependencyFiller = DependencyFiller::new(
@@ -532,7 +532,7 @@ fn create_block(
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
-) -> BTreeMap<u16, SignedTransaction> {
+) -> BTreeMap<u32, SignedTransaction> {
 
     let mut result = BTreeMap::new();
     let mut rng: ThreadRng = thread_rng();
@@ -617,7 +617,7 @@ fn create_block(
             .sequence_number(seq_num[&sender_id])
             .sign();
         seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-        result.insert(i as u16, txn);
+        result.insert(i as u32, txn);
     }
 
     result
