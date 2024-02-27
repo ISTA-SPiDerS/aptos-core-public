@@ -16,12 +16,12 @@ use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
-use std::{collections::hash_map::HashMap, fmt, format, fs, str::FromStr, time::Instant};
+use std::{fmt, format, fs, str::FromStr, time::Instant, hash::BuildHasherDefault};
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
 use std::cmp::max;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fmt::{Display, Formatter};
 use std::iter::Enumerate;
 use std::ops::Deref;
@@ -64,6 +64,7 @@ use aptos_types::write_set::WriteSet;
 use aptos_vm::data_cache::StorageAdapter;
 use statrs::statistics::OrderStatistics;
 use statrs::statistics::Data;
+use integer_hasher::IntHasher;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -533,7 +534,9 @@ fn create_block(
     let mut transaction_validation = executor.get_transaction_validation();
 
 
+
     let mut result = BTreeMap::new();
+
     let mut rng: ThreadRng = thread_rng();
 
     let mut resource_distribution_vec: &[f64] = &AVG;

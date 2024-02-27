@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
+
 use std::borrow::Borrow;
 use std::cmp::max;
-use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
+use std::collections::{BTreeSet, HashSet, VecDeque};
 use std::{mem, thread};
 use std::mem::size_of;
 use dashmap::{DashMap, DashSet};
@@ -9,7 +11,7 @@ use aptos_types::state_store::state_key::StateKey;
 use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::LockResult;
 use std::sync::mpsc::SyncSender;
@@ -214,21 +216,20 @@ impl BlockFiller for DependencyFiller {
 
         println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
+        let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::with_capacity(self.max_txns as usize);
         let mut removal_vec:Vec<u32> = Vec::with_capacity(self.max_txns as usize);
 
-        for (ind, (write_set, read_set, gas, tx)) in result.iter()
-        {
+        result.retain(|ind, (write_set, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
-                break;
+                return true;;
             }
 
             let gas_used = (*gas / 10) as u16;
             if write_set.is_empty()
             {
                 println!("bla Empty????");
-                continue;
+                return true;
             }
 
             // When transaction can start assuming unlimited resources.
@@ -251,7 +252,7 @@ impl BlockFiller for DependencyFiller {
 
                     // not skipping anything atm.
                     skipped += 1;
-                    continue;
+                    return true;
                 }
             }
 
@@ -271,12 +272,12 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
-                continue;
+                return true;
             }
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
-                break;
+                return true;
             }
 
             self.total_estimated_gas += gas_used as u64;
@@ -285,7 +286,8 @@ impl BlockFiller for DependencyFiller {
             self.estimated_gas.push(gas_used);
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
-            removal_vec.push(*ind);
+
+            self.block.push(tx.clone());
 
             if *ind < self.max_txns as u32 {
                 first_iter_tx += 1;
@@ -303,17 +305,19 @@ impl BlockFiller for DependencyFiller {
                 last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
             }
 
-            self.block.push(tx.clone());
             len += 1;
 
             if len >= self.max_txns {
-                self.full = true;
+               self.full = true;
             }
-        }
+            return false;
+        });
 
-        for ind in removal_vec {
-            result.remove(&ind);
-        }
+
+        RAYON_EXEC_POOL.spawn(move || {
+            // Explicit async drops.
+            drop(last_touched);
+        });
 
         println!("skipped: {}", skipped);
         return first_iter_tx;
