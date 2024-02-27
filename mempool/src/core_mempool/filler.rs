@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use std::borrow::Borrow;
 use std::cmp::max;
@@ -11,7 +11,6 @@ use aptos_types::state_store::state_key::StateKey;
 use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
-use hashbrown::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::LockResult;
 use std::sync::mpsc::SyncSender;

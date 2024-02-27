@@ -64,7 +64,6 @@ use aptos_types::write_set::WriteSet;
 use aptos_vm::data_cache::StorageAdapter;
 use statrs::statistics::OrderStatistics;
 use statrs::statistics::Data;
-use integer_hasher::IntHasher;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
