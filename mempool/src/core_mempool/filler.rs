@@ -215,16 +215,16 @@ impl BlockFiller for DependencyFiller {
         println!("Got x transactions: {}", result.len());
 
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
+        let mut removal_vec:Vec<u32> = Vec::with_capacity(self.max_txns as usize);
 
-
-        for (ind, (write_set, read_set, gas, tx)) in result.clone()
+        for (ind, (write_set, read_set, gas, tx)) in result.iter()
         {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
                 break;
             }
 
-            let gas_used = (gas / 10) as u16;
+            let gas_used = (*gas / 10) as u16;
             if write_set.is_empty()
             {
                 println!("bla Empty????");
@@ -236,8 +236,8 @@ impl BlockFiller for DependencyFiller {
             let mut dependencies = HashSet::new();
 
             let mut hot_read_access = 0;
-            for read in read_set {
-                if let Some((time, key)) = last_touched.get(&read) {
+            for read in read_set.iter() {
+                if let Some((time, key)) = last_touched.get(read) {
                     arrival_time = max(arrival_time, *time);
 
                     if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
@@ -285,14 +285,14 @@ impl BlockFiller for DependencyFiller {
             self.estimated_gas.push(gas_used);
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
-            result.remove(&ind);
+            removal_vec.push(*ind);
 
-            if ind < self.max_txns as u32 {
+            if *ind < self.max_txns as u32 {
                 first_iter_tx += 1;
             }
 
-            for write in write_set {
-                let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
+            for write in write_set.iter() {
+                let curr_max = last_touched.get(write.0).unwrap_or(&(0u32, 0)).0;
                 if finish_time > curr_max {
                     last_touched.insert(write.0.clone(), (finish_time, current_idx));
                 }
@@ -303,12 +303,16 @@ impl BlockFiller for DependencyFiller {
                 last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
             }
 
-            self.block.push(tx);
+            self.block.push(tx.clone());
             len += 1;
 
             if len >= self.max_txns {
                 self.full = true;
             }
+        }
+
+        for ind in removal_vec {
+            result.remove(&ind);
         }
 
         println!("skipped: {}", skipped);
