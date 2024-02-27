@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::{mem, thread};
 use std::mem::size_of;
 use dashmap::{DashMap, DashSet};
@@ -22,6 +22,7 @@ use crate::shared_mempool::types::{SYNC_CACHE};
 use once_cell::sync::{Lazy, OnceCell};
 use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::account_address::AccountAddress;
+use aptos_types::write_set::WriteSet;
 use crate::core_mempool::transaction_store::TransactionStore;
 use crate::core_mempool::TxnPointer;
 
@@ -29,7 +30,7 @@ pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, SignedTransaction>,
+        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
         good_block: bool
     ) -> u16;
 
@@ -91,7 +92,7 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, SignedTransaction>,
+        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
         good_block: bool
     ) -> u16 {
 
@@ -203,7 +204,7 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        result: &mut BTreeMap<u32, SignedTransaction>,
+        result: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
         good_block: bool
     ) -> u16 {
 
@@ -214,110 +215,99 @@ impl BlockFiller for DependencyFiller {
         println!("Got x transactions: {}", result.len());
 
         let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::new();
-        if let Ok(mut map) = SYNC_CACHE.lock() {
-            for (ind, txinput) in result.clone()
+
+
+        for (ind, (write_set, read_set, gas, tx)) in result.clone()
+        {
+            //let (speculation, status, tx) = previous.get(ind).unwrap();
+            if self.full {
+                break;
+            }
+
+            let gas_used = (gas / 10) as u16;
+            if write_set.is_empty()
             {
-                //let (speculation, status, tx) = previous.get(ind).unwrap();
-                if self.full {
-                    break;
+                println!("bla Empty????");
+                continue;
+            }
+
+            // When transaction can start assuming unlimited resources.
+            let mut arrival_time = 0;
+            let mut dependencies = HashSet::new();
+
+            let mut hot_read_access = 0;
+            for read in read_set {
+                if let Some((time, key)) = last_touched.get(&read) {
+                    arrival_time = max(arrival_time, *time);
+
+                    if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                        hot_read_access += 1;
+                    }
+                    dependencies.insert(*key);
                 }
+                if good_block && len >= 1000 && hot_read_access >= 4 {
+                    // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
+                    // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
 
-                if let Some((write_set, read_set, gas , tx)) = map.get(&(txinput.sender(), txinput.sequence_number())) {
-                    let gas_used = (gas / 10) as u16;
-                    if write_set.is_empty()
-                    {
-                        println!("bla Empty????");
-                        continue;
-                    }
-
-                    // When transaction can start assuming unlimited resources.
-                    let mut arrival_time = 0;
-                    let mut dependencies = HashSet::new();
-
-                    let mut hot_read_access = 0;
-                    for read in read_set {
-                        if let Some((time, key)) = last_touched.get(read) {
-                            arrival_time = max(arrival_time, *time);
-
-                            if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
-                                hot_read_access+=1;
-                            }
-                            dependencies.insert(*key);
-                        }
-                        if good_block && len >= 1000 && hot_read_access >= 4 {
-                            // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
-                            // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
-
-                            // not skipping anything atm.
-                            skipped+=1;
-                            continue;
-                        }
-                    }
-
-                    let user_state_key = StateKey::raw(tx.sender().to_vec());
-                    if let Some((time, key)) = last_touched.get(&user_state_key) {
-                        arrival_time = max(arrival_time, *time);
-
-                        if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
-                            hot_read_access+=1;
-                        }
-                        dependencies.insert(*key);
-                    }
-
-                    // Check if there is room for the new block.
-                    let finish_time = arrival_time + gas_used as u32;
-                    if good_block && finish_time > self.gas_per_core as u32 {
-                        //self.full = true;
-                        //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
-                        skipped+=1;
-                        continue;
-                    }
-
-
-                    if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
-                        self.full = true;
-                        println!("Reached max gas: {} {} {}", self.total_estimated_gas, gas_used, self.total_max_gas);
-                        break;
-                    }
-
-                    self.total_estimated_gas += gas_used as u64;
-
-                    let current_idx = self.block.len() as u16;
-                    self.estimated_gas.push(gas_used);
-                    // println!("len {}", dependencies.len());
-                    self.dependency_graph.push(dependencies);
-                    result.remove(&ind);
-
-                    if ind < self.max_txns as u32 {
-                        first_iter_tx += 1;
-                    }
-
-
-                    for write in write_set {
-                        let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
-                        if finish_time > curr_max {
-                            last_touched.insert(write.0.clone(), (finish_time, current_idx));
-                        }
-                    }
-
-                    let curr_max = last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0;
-                    if finish_time > curr_max {
-                        last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
-                    }
-
-                    let(write_set, read_set, gas , full_tx) =  map.remove(&(txinput.sender(), txinput.sequence_number())).unwrap();
-                    self.block.push(full_tx);
-                    len+=1;
-
-                    if len >= self.max_txns {
-                        println!("reached 10k");
-                        self.full = true;
-                    }
-                } else {
-
-                    println!("waaaaaaaaaaaaaaaaaaaat: {}", skipped);
-                    return first_iter_tx;
+                    // not skipping anything atm.
+                    skipped += 1;
+                    continue;
                 }
+            }
+
+            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            if let Some((time, key)) = last_touched.get(&user_state_key) {
+                arrival_time = max(arrival_time, *time);
+
+                if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                    hot_read_access += 1;
+                }
+                dependencies.insert(*key);
+            }
+
+            // Check if there is room for the new block.
+            let finish_time = arrival_time + gas_used as u32;
+            if good_block && finish_time > self.gas_per_core as u32 {
+                //self.full = true;
+                //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
+                skipped += 1;
+                continue;
+            }
+
+            if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
+                self.full = true;
+                break;
+            }
+
+            self.total_estimated_gas += gas_used as u64;
+
+            let current_idx = self.block.len() as u16;
+            self.estimated_gas.push(gas_used);
+            // println!("len {}", dependencies.len());
+            self.dependency_graph.push(dependencies);
+            result.remove(&ind);
+
+            if ind < self.max_txns as u32 {
+                first_iter_tx += 1;
+            }
+
+            for write in write_set {
+                let curr_max = last_touched.get(&write.0).unwrap_or(&(0u32, 0)).0;
+                if finish_time > curr_max {
+                    last_touched.insert(write.0.clone(), (finish_time, current_idx));
+                }
+            }
+
+            let curr_max = last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0;
+            if finish_time > curr_max {
+                last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
+            }
+
+            self.block.push(tx);
+            len += 1;
+
+            if len >= self.max_txns {
+                self.full = true;
             }
         }
 

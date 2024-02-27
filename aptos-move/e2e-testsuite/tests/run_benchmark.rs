@@ -169,6 +169,19 @@ fn main() {
         }
     }
 
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1300000, mode_two);
+                while time == u128::MAX {
+                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1300000, mode_two);
+                }
+            }
+            println!("#################################################################################");
+        }
+    }
+
+
     /*for mode in modes {
        for mode_two in additional_modes {
            for c in core_set {
@@ -341,7 +354,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
         // Generate the workload.
-        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone());
+        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
 
         let mut latvec = vec![];
         let mut total_tx = 0;
@@ -481,31 +494,13 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(txns: &mut BTreeMap<u32, SignedTransaction>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
-    let mut transaction_validation = executor.get_transaction_validation();
-
+fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
         10_000,
         cores as u32
     );
-
-    {
-        let mut locked_cache = SYNC_CACHE.lock().unwrap();
-        for (ind, tx) in txns.clone() {
-            let result = transaction_validation.speculate_transaction(&tx);
-            let (a, b) = result.unwrap();
-            match b {
-                VMStatus::Executed => {
-                    locked_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
-                }
-                _ => {
-                    // Do nothing.
-                }
-            }
-        }
-    }
 
     let start = Instant::now();
 
@@ -532,7 +527,11 @@ fn create_block(
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
-) -> BTreeMap<u32, SignedTransaction> {
+    executor: &FakeExecutor
+) -> BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
+
+    let mut transaction_validation = executor.get_transaction_validation();
+
 
     let mut result = BTreeMap::new();
     let mut rng: ThreadRng = thread_rng();
@@ -617,7 +616,18 @@ fn create_block(
             .sequence_number(seq_num[&sender_id])
             .sign();
         seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-        result.insert(i as u32, txn);
+
+
+        let ex_result = transaction_validation.speculate_transaction(&txn);
+        let (a, b) = ex_result.unwrap();
+        match b {
+            VMStatus::Executed => {
+                result.insert(i as u32, (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, txn.clone()));
+            }
+            _ => {
+                // Do nothing.
+            }
+        }
     }
 
     result

@@ -32,7 +32,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::pending;
 use std::hash::Hash;
 use std::num::Wrapping;
@@ -343,8 +343,9 @@ impl Mempool {
         if !result.is_empty() {
             let elapsed1 = time.elapsed().as_millis();
             let result_size = index;
+            let mut map = BTreeMap::new();
             block_filler.set_gas_per_core(self.last_max_gas);
-            block_filler.add_all(&mut result, true);
+            block_filler.add_all(&mut map, true);
 
             let len =  block_filler.get_blockx().len();
             if (len > 0) {

@@ -52,8 +52,8 @@ use aptos_types::state_store::state_key::StateKey;
 use aptos_types::write_set::{WriteOp, WriteSet};
 use crate::core_mempool::{BlockFiller, DependencyFiller, TxnPointer};
 
-pub static SYNC_CACHE: Lazy<std::sync::Mutex<HashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
-    HashMap::new()
+pub static SYNC_CACHE: Lazy<std::sync::Mutex<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
+    Vec::new()
 )});
 
 /// Struct that owns all dependencies required by shared mempool routines.
@@ -97,72 +97,6 @@ impl<
                 let mut input: Vec<SignedTransaction> = vec![];
                 let num_threads = RAYON_EXEC_POOL2.current_num_threads();
                 let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
-                loop
-                {
-                    let mut time = Instant::now();
-                    loop
-                    {
-                        if input.len() >= num_threads * 4 {
-                            break;
-                        }
-                        if let Ok(x) = tx_receiver.try_recv() {
-                            input.push(x);
-                        } else {
-                            let elapsed = time.elapsed().as_millis();
-                            if elapsed > 50 {
-                                break;
-                            }
-                        }
-                    }
-
-                    let count = input.len();
-                    if count > 0 {
-                        let exec_counter = AtomicUsize::new(0);
-                        {
-                            let transaction_validation = locked_val.write();
-
-                            RAYON_EXEC_POOL2.scope(|s| {
-                                for _ in 0..4 {
-                                    s.spawn(|_| {
-
-                                        let mut current_index = exec_counter.fetch_add(1, Relaxed);
-                                        while current_index < count {
-                                            let  tx = &input[current_index];
-                                            let result = transaction_validation.speculate_transaction(&tx);
-                                            let (a, b) = result.unwrap();
-                                            match b {
-                                                VMStatus::Executed => {
-                                                    thread_local_cache.insert((tx.sender(), tx.sequence_number()), (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, tx.clone()));
-                                                }
-                                                _ => {
-                                                    // Do nothing.
-                                                }
-                                            }
-                                            current_index = exec_counter.fetch_add(1, Relaxed);
-                                        }
-                                    });
-                                }
-                            });
-                        }
-
-                        input.clear();
-
-
-                        if thread_local_cache.len() > 0 {
-                            if let Ok(mut cache) = SYNC_CACHE.try_lock() {
-                                cache.extend(thread_local_cache);
-                                thread_local_cache = DashMap::new();
-                            }
-                        }
-                    }
-
-                    if input.is_empty() && thread_local_cache.is_empty() {
-                        if let Ok(res) = tx_receiver.recv() {
-                            input.push(res);
-                        }
-                        continue
-                    }
-                }
         });
 
         SharedMempool {
