@@ -74,7 +74,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 10000;
+    let block_size = 100000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
