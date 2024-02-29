@@ -161,9 +161,6 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two);
-                while time == u128::MAX {
-                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two);
-                }
             }
             println!("#################################################################################");
         }
@@ -173,9 +170,6 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 1300000, mode_two);
-                while time == u128::MAX {
-                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 1300000, mode_two);
-                }
             }
             println!("#################################################################################");
         }
@@ -184,10 +178,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1300000, mode_two);
-                while time == u128::MAX {
-                    time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1300000, mode_two);
-                }
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1500000, mode_two);
             }
             println!("#################################################################################");
         }
