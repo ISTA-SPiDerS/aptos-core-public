@@ -160,7 +160,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -169,7 +169,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 1300000, mode_two);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 1300000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -178,7 +178,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1500000, mode_two);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1500000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -187,7 +187,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1500000, mode_two);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1500000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -340,7 +340,7 @@ fn main() {
     println!("EXECUTION SUCCESS");
 }
 
-fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str) -> u128 {
+fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str, abort_if_lower: bool) -> u128 {
     // This is for the total time
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
@@ -386,7 +386,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
             // Map to user transactions.
             let block = return_block.map_par_txns(Transaction::UserTransaction);
-            if block.len() < 10000 {
+            if block.len() < 10000 && abort_if_lower {
                 println!("Only {} in block: {}", block.len(), filler_time);
                 return u128::MAX;
             }
@@ -407,7 +407,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 .unwrap();
 
             let final_time = start.elapsed();
-            latvec.push((first_iter_tx, final_time));
+            latvec.push((first_iter_tx, final_time+filler_time));
 
 
             let mut collected_times = profiler.collective_times.borrow_mut();
@@ -510,7 +510,7 @@ fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKe
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
-        10_000,
+        100_000,
         cores as u32
     );
 
