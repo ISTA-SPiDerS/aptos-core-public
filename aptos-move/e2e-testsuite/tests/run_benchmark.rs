@@ -407,7 +407,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 .unwrap();
 
             let final_time = start.elapsed();
-            latvec.push((first_iter_tx, final_time+filler_time));
+            latvec.push((first_iter_tx, final_time.as_millis()+filler_time));
 
 
             let mut collected_times = profiler.collective_times.borrow_mut();
@@ -460,7 +460,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut total = 0;
         for (key, value) in latvec
         {
-            lat = lat + value.as_millis();
+            lat = lat + value;
             total+= key as u128 * lat;
             for i in 0..key {
                 data.push(lat as f64);
