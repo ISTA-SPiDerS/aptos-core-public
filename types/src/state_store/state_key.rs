@@ -104,6 +104,14 @@ impl StateKey {
         }
     }
 
+    pub fn get_raw(&self) -> Vec<u8> {
+        match &self.inner {
+            StateKeyInner::AccessPath(access_path) => access_path.address.to_vec(),
+            StateKeyInner::TableItem { handle, key } => key.to_vec(),
+            StateKeyInner::Raw(bytes) => bytes.to_vec(),
+        }
+    }
+
     pub fn access_path(access_path: AccessPath) -> Self {
         Self::new(StateKeyInner::AccessPath(access_path))
     }

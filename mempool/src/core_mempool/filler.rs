@@ -216,7 +216,7 @@ impl BlockFiller for DependencyFiller {
 
         println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: FxHashMap<StateKey, (u32, u16)> = FxHashMap::default();
+        let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
 
         result.retain(|ind, (write_set, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
@@ -237,7 +237,7 @@ impl BlockFiller for DependencyFiller {
 
             let mut hot_read_access = 0;
             for read in read_set.iter() {
-                if let Some((time, key)) = last_touched.get(read) {
+                if let Some((time, key)) = last_touched.get(&read.get_raw()) {
                     arrival_time = max(arrival_time, *time);
 
                     if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
@@ -256,7 +256,7 @@ impl BlockFiller for DependencyFiller {
             }
 
             let user_state_key = StateKey::raw(tx.sender().to_vec());
-            if let Some((time, key)) = last_touched.get(&user_state_key) {
+            if let Some((time, key)) = last_touched.get(&user_state_key.get_raw()) {
                 arrival_time = max(arrival_time, *time);
 
                 if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
@@ -293,15 +293,15 @@ impl BlockFiller for DependencyFiller {
             }
 
             for write in write_set.iter() {
-                let curr_max = last_touched.get(write.0).unwrap_or(&(0u32, 0)).0;
+                let curr_max = last_touched.get(&write.0.get_raw()).unwrap_or(&(0u32, 0)).0;
                 if finish_time > curr_max {
-                    last_touched.insert(write.0.clone(), (finish_time, current_idx));
+                    last_touched.insert(write.0.get_raw(), (finish_time, current_idx));
                 }
             }
 
-            let curr_max = last_touched.get(&user_state_key).unwrap_or(&(0u32, 0)).0;
+            let curr_max = last_touched.get(&user_state_key.get_raw()).unwrap_or(&(0u32, 0)).0;
             if finish_time > curr_max {
-                last_touched.insert(user_state_key.clone(), (finish_time, current_idx));
+                last_touched.insert(user_state_key.get_raw(), (finish_time, current_idx));
             }
 
             len += 1;
