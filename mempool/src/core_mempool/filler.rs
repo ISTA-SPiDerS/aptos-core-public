@@ -1,7 +1,9 @@
+use std::collections::{BTreeMap, HashMap};
+
 use std::borrow::Borrow;
 use std::cmp::max;
-use std::collections::{BTreeMap, HashSet, VecDeque};
-use std::mem;
+use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::{mem, thread};
 use std::mem::size_of;
 use dashmap::{DashMap, DashSet};
 use rayon::iter::IntoParallelIterator;
@@ -9,18 +11,30 @@ use aptos_types::state_store::state_key::StateKey;
 use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
-use std::collections::HashMap;
+use std::sync::atomic::Ordering;
+use std::sync::LockResult;
+use std::sync::mpsc::SyncSender;
+use std::time::{Duration, Instant};
 use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use anyhow::{anyhow, Result, Error};
+use itertools::Itertools;
+use crate::shared_mempool::types::{SYNC_CACHE};
+use once_cell::sync::{Lazy, OnceCell};
+use rustc_hash::FxHashMap;
+use aptos_crypto::hash::TestOnlyHash;
+use aptos_types::account_address::AccountAddress;
+use aptos_types::write_set::WriteSet;
+use crate::core_mempool::transaction_store::TransactionStore;
+use crate::core_mempool::TxnPointer;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>,
-    ) -> Vec<SignedTransaction>;
+        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        good_block: bool
+    ) -> u16;
 
     fn get_block(self) -> Vec<SignedTransaction>;
     fn get_blockx(&mut self) -> Vec<SignedTransaction>;
@@ -30,6 +44,10 @@ pub trait BlockFiller {
     fn get_max_bytes(&self) -> u64;
 
     fn get_max_txn(&self) -> u64;
+
+    fn get_current_gas(&self) -> u64;
+
+    fn set_gas_per_core(&mut self, last_max: u64);
 }
 
 pub struct SimpleFiller {
@@ -49,7 +67,7 @@ impl SimpleFiller {
 
             current_bytes: 0,
             full: false,
-            block: vec![],
+            block: vec![]
         }
     }
 }
@@ -76,31 +94,11 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        mut txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>
-    ) -> Vec<SignedTransaction> {
-        let mut rejected = vec![];
+        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        good_block: bool
+    ) -> u16 {
 
-        while let Some(tx) = txn.pop_front()
-        {
-            /*if self.full {
-                rejected.push(tx);
-                continue;
-            }
-
-            if self.current_bytes + tx.raw_txn_bytes_len() as u64 > self.max_bytes {
-                self.full = true;
-                rejected.push(tx);
-                continue;
-            }*/
-
-            self.block.push(tx);
-
-            if self.block.len() as u64 == self.max_txns {
-                self.full = true;
-            }
-        }
-        rejected
+        1
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
@@ -121,56 +119,63 @@ impl BlockFiller for SimpleFiller {
     fn get_max_txn(&self) -> u64 {
         self.max_txns
     }
+
+    fn get_current_gas(&self) -> u64 {
+        0
+    }
+
+    fn set_gas_per_core(&mut self, last_max: u64) {
+        // Do nothing
+    }
 }
 
 type TransactionIdx = u64;
 
-pub struct DependencyFiller<'a, V: TransactionValidation, const C: u64> {
-    transaction_validation: &'a mut V,
+pub struct DependencyFiller {
     gas_per_core: u64,
+    gas_per_core_init: u64,
+    total_max_gas: u64,
     max_bytes: u64,
     max_txns: u64,
+    cores: u32,
 
     total_bytes: u64,
     total_estimated_gas: u64,
     full: bool,
 
-    last_touched: BTreeMap<StateKey, u64>,
-    writes: BTreeMap<StateKey, Vec<TransactionIdx>>,
-    dependency_graph: Vec<HashSet<TransactionIdx>>,
-
+    dependency_graph: Vec<HashSet<u16>>,
     block: Vec<SignedTransaction>,
-    estimated_gas: Vec<u64>,
+    estimated_gas: Vec<u16>,
 }
 
-impl<'a, V: TransactionValidation, const C: u64> DependencyFiller<'a, V, C> {
+impl DependencyFiller {
     pub fn new(
-        transaction_validation: &'a mut V,
         gas_per_core: u64,
         max_bytes: u64,
-        max_txns: u64)
-        -> DependencyFiller<V, C> {
+        max_txns: u64,
+        cores: u32)
+        -> DependencyFiller {
         Self {
-            transaction_validation,
             gas_per_core,
+            gas_per_core_init: gas_per_core,
+            total_max_gas: gas_per_core * cores as u64,
             max_bytes,
             max_txns,
+            cores,
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
-            last_touched: BTreeMap::new(),
-            writes: BTreeMap::new(),
-            dependency_graph: vec![],
-            block: vec![],
-            estimated_gas: vec![],
+            dependency_graph: Vec::with_capacity(max_txns as usize),
+            block: Vec::with_capacity(max_txns as usize),
+            estimated_gas: Vec::with_capacity(max_txns as usize)
         }
     }
 
-    pub fn get_gas_estimates(&mut self) -> Vec<u64> {
+    pub fn get_gas_estimates(&mut self) -> Vec<u16> {
         mem::take(&mut self.estimated_gas)
     }
 
-    pub fn get_dependency_graph(&self) -> Vec<Vec<TransactionIdx>> {
+    pub fn get_dependency_graph(&self) -> Vec<Vec<u16>> {
         let mut result = vec![];
         for parents in &self.dependency_graph {
             let mut parents_vec = vec![];
@@ -184,7 +189,7 @@ impl<'a, V: TransactionValidation, const C: u64> DependencyFiller<'a, V, C> {
     }
 }
 
-impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFiller<'a, V, C> {
+impl BlockFiller for DependencyFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool {
         if self.full {
             return false;
@@ -196,238 +201,125 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
             return false;
         }
 
-        if let anyhow::Result::Ok((speculation, status)) = self.transaction_validation.speculate_transaction(&txn) {
-            let read_set = &speculation.input;
-            let write_set = speculation.output.txn_output().write_set();
-            let delta_set = speculation.output.delta_change_set();
-            let gas_used = speculation.output.txn_output().gas_used();
-
-
-            // When transaction can start assuming unlimited resources.
-            let mut arrival_time = 0;
-            for read in read_set {
-                if self.last_touched.contains_key(&read) {
-                    arrival_time = max(arrival_time, *self.last_touched.get(&read).unwrap())
-                }
-            }
-
-            // Check if there is room for the new block.
-            let finish_time = arrival_time + gas_used;
-            if finish_time > self.gas_per_core {
-                self.full = true;
-                return false;
-            }
-            if self.total_estimated_gas + gas_used > self.gas_per_core * C {
-                self.full = true;
-                return false;
-            }
-
-            let mut dependencies = HashSet::new();
-            for read in read_set {
-                if self.writes.contains_key(&read) {
-                    for parent_txn in self.writes.get(&read).unwrap() {
-                        dependencies.insert(*parent_txn);
-                    }
-                }
-            }
-
-            if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
-                self.full = true;
-                return false;
-            }
-
-            self.total_bytes += txn_len + dependencies.len() as u64 * size_of::<TransactionIdx>() as u64 + size_of::<u64>() as u64;
-            self.total_estimated_gas += gas_used;
-
-            let current_idx = self.block.len() as TransactionIdx;
-
-            self.block.push(txn);
-            self.estimated_gas.push(gas_used);
-            // println!("len {}", dependencies.len());
-            self.dependency_graph.push(dependencies);
-
-            //self.transaction_validation.add_write_set(write_set);
-
-            // Update last touched time for used resources.
-            const ZERO: u64 = 0u64;
-            for (write, _op) in write_set {
-                let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&ZERO));
-                self.last_touched.insert(write.clone(), mx.into());
-
-                if !self.writes.contains_key(write) {
-                    self.writes.insert(write.clone(), vec![]);
-                }
-
-                self.writes.remove(write);
-                self.writes.insert(write.clone(), vec![current_idx]);
-            }
-
-            if self.block.len() as u64 == self.max_txns {
-                self.full = true;
-            }
-
-            return true;
-        }
-
         return false;
     }
 
     fn add_all(
         &mut self,
-        mut txn: VecDeque<SignedTransaction>,
-        past_results: &DashMap<TransactionAuthenticator, Result<(VMSpeculationResult, VMStatus)>>,
-    ) -> Vec<SignedTransaction> {
-        let result : HashMap<usize, anyhow::Result<(VMSpeculationResult, VMStatus)>> = RAYON_EXEC_POOL.install(|| {
-            (&txn)
-                .into_par_iter()
-                .enumerate()
-                .map(|(i, tx)| {
-                    match past_results.get(&tx.authenticator()) {
-                        Some(result) => (i, match result.value() {
-                            Result::Ok((ref a, ref b)) => anyhow::Ok((a.clone(), b.clone())),
-                            Result::Err(ref e) => Err(anyhow!("Error during pre execution")),
-                        }),
-                        None => {
-                            let result = self.transaction_validation.speculate_transaction(&tx);
-                            match result {
-                                Result::Ok((ref a, ref b)) => {past_results.insert(tx.authenticator(), anyhow::Ok((a.clone(), b.clone())));},
-                                Result::Err(ref e) => {println!("Error during pre execution {}", e);},
-                            };
-                            (i, result)
-                        }
+        result: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        good_block: bool
+    ) -> u16 {
+
+        let mut skipped = 0;
+        let mut len = 0;
+        let mut first_iter_tx = 0;
+
+        println!("Got x transactions: {}", result.len());
+
+        let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
+
+        result.retain(|ind, (write_set, read_set, gas, tx)| {
+            //let (speculation, status, tx) = previous.get(ind).unwrap();
+            if self.full {
+                return true;;
+            }
+
+            let gas_used = (*gas / 10) as u16;
+            if write_set.is_empty()
+            {
+                println!("bla Empty????");
+                return true;
+            }
+
+            // When transaction can start assuming unlimited resources.
+            let mut arrival_time = 0;
+            let mut dependencies = HashSet::new();
+
+            let mut hot_read_access = 0;
+            for read in read_set.iter() {
+                if let Some((time, key)) = last_touched.get(&read.get_raw()) {
+                    arrival_time = max(arrival_time, *time);
+
+                    if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                        hot_read_access += 1;
                     }
-                })
-                .collect()
+                    dependencies.insert(*key);
+                }
+                if good_block && len >= 1000 && hot_read_access >= 4 {
+                    // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
+                    // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
+
+                    // not skipping anything atm.
+                    skipped += 1;
+                    return true;
+                }
+            }
+
+            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            if let Some((time, key)) = last_touched.get(&user_state_key.get_raw()) {
+                arrival_time = max(arrival_time, *time);
+
+                if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                    hot_read_access += 1;
+                }
+                dependencies.insert(*key);
+            }
+
+            // Check if there is room for the new block.
+            let finish_time = arrival_time + gas_used as u32;
+            if good_block && finish_time > self.gas_per_core as u32 {
+                //self.full = true;
+                //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
+                skipped += 1;
+                return true;
+            }
+
+            if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
+                self.full = true;
+                return true;
+            }
+
+            self.total_estimated_gas += gas_used as u64;
+
+            let current_idx = self.block.len() as u16;
+            self.estimated_gas.push(gas_used);
+            // println!("len {}", dependencies.len());
+            self.dependency_graph.push(dependencies);
+
+            self.block.push(tx.clone());
+
+            if *ind < self.max_txns as u32 {
+                first_iter_tx += 1;
+            }
+
+            for write in write_set.iter() {
+                let curr_max = last_touched.get(&write.0.get_raw()).unwrap_or(&(0u32, 0)).0;
+                if finish_time > curr_max {
+                    last_touched.insert(write.0.get_raw(), (finish_time, current_idx));
+                }
+            }
+
+            let curr_max = last_touched.get(&user_state_key.get_raw()).unwrap_or(&(0u32, 0)).0;
+            if finish_time > curr_max {
+                last_touched.insert(user_state_key.get_raw(), (finish_time, current_idx));
+            }
+
+            len += 1;
+
+            if len >= self.max_txns {
+                self.full = true;
+            }
+            return false;
         });
 
-        let mut rejected = vec![];
 
-        let mut index:usize = 0;
-        while let Some(tx) = txn.pop_front()
-        {
-            let res = result.get(&index);
-            if self.full {
-                println!("bla estgas1 {}", self.total_estimated_gas);
+        RAYON_EXEC_POOL.spawn(move || {
+            // Explicit async drops.
+            drop(last_touched);
+        });
 
-                rejected.push(tx);
-                rejected.extend(txn);
-                println!("bla final gas1: {}", self.total_estimated_gas);
-
-                return rejected;
-            }
-
-            let txn_len = tx.raw_txn_bytes_len() as u64;
-            if self.total_bytes + txn_len > self.max_bytes {
-                println!("bla estgas2 {}", self.total_estimated_gas);
-                self.full = true;
-                rejected.push(tx);
-                rejected.extend(txn);
-                println!("bla final gas2: {}", self.total_estimated_gas);
-
-                return rejected;
-            }
-
-            if let anyhow::Result::Ok((speculation, status)) = res.unwrap() {
-                let read_set = &speculation.input;
-                let write_set = speculation.output.txn_output().write_set();
-                let delta_set = speculation.output.delta_change_set();
-                let gas_used = speculation.output.txn_output().gas_used();
-
-                if gas_used > 100000
-                {
-                    println!("bla Wat a big tx: {}", gas_used);
-                }
-
-                if write_set.is_empty() && delta_set.is_empty()
-                {
-                    println!("Empty????");
-                }
-
-                // When transaction can start assuming unlimited resources.
-                let mut arrival_time = 0;
-                for read in read_set {
-                    if self.last_touched.contains_key(&read) {
-                        arrival_time = max(arrival_time, *self.last_touched.get(&read).unwrap())
-                    }
-                }
-
-                // Check if there is room for the new block.
-                let finish_time = arrival_time + gas_used;
-                if finish_time > 1000000
-                {
-                    println!("bla Wat a long chain: {}", finish_time);
-                }
-                if finish_time > self.gas_per_core {
-                    //self.full = true;
-                    rejected.push(tx);
-                    continue;
-                }
-
-                if self.total_estimated_gas + gas_used > self.gas_per_core * C {
-                    self.full = true;
-                    rejected.push(tx);
-                    rejected.extend(txn);
-                    println!("bla final gas4: {}", self.total_estimated_gas);
-                    return rejected;
-                }
-
-                let mut dependencies = HashSet::new();
-                for read in read_set {
-                    if self.writes.contains_key(&read) {
-                        for parent_txn in self.writes.get(&read).unwrap() {
-                            dependencies.insert(*parent_txn);
-                        }
-                    }
-                }
-
-                if self.total_bytes + txn_len + (dependencies.len() as u64) * (size_of::<TransactionIdx>() as u64) + (size_of::<u64>() as u64) > self.max_bytes {
-                    self.full = true;
-                    rejected.push(tx);
-                    rejected.extend(txn);
-                    println!("bla final gas5: {}", self.total_estimated_gas);
-                    return rejected;
-                }
-
-                self.total_bytes += txn_len + dependencies.len() as u64 * size_of::<TransactionIdx>() as u64 + size_of::<u64>() as u64;
-                self.total_estimated_gas += gas_used;
-
-                let current_idx = self.block.len() as TransactionIdx;
-
-                past_results.remove(&tx.authenticator());
-                self.block.push(tx);
-                self.estimated_gas.push(gas_used);
-                // println!("len {}", dependencies.len());
-                self.dependency_graph.push(dependencies);
-
-                //self.transaction_validation.add_write_set(write_set);
-
-                // Update last touched time for used resources.
-                for (write, _op) in write_set {
-                    let mx = max(finish_time, *self.last_touched.get(write).unwrap_or(&0u64));
-                    self.last_touched.insert(write.clone(), mx.into());
-
-                    if !self.writes.contains_key(write) {
-                        self.writes.insert(write.clone(), vec![]);
-                    }
-
-                    self.writes.remove(write);
-                    self.writes.insert(write.clone(), vec![current_idx]);
-                }
-
-                if self.block.len() as u64 == self.max_txns {
-                    self.full = true;
-                    println!("bla estgas5 {}", self.total_estimated_gas);
-                    rejected.extend(txn);
-                    println!("bla final gas6: {}", self.total_estimated_gas);
-
-                    return rejected;
-                }
-            }
-            index+=1;
-        }
-
-        println!("bla final gas7: {}", self.total_estimated_gas);
-        return rejected;
+        println!("skipped: {}", skipped);
+        return first_iter_tx;
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
@@ -448,5 +340,13 @@ impl<'a, V: TransactionValidation, const C: u64> BlockFiller for DependencyFille
 
     fn get_max_txn(&self) -> u64 {
         self.max_txns
+    }
+
+    fn get_current_gas(&self) -> u64 {
+        self.total_estimated_gas
+    }
+
+    fn set_gas_per_core(&mut self, last_max: u64) {
+        self.gas_per_core = last_max / self.cores as u64;
     }
 }
