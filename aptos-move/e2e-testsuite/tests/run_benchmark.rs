@@ -74,7 +74,7 @@ const CORES: u64 = 10;
 fn main() {
     let module_path = "test_module_new.move";
     let num_accounts = 100000;
-    let block_size = 100000;
+    let block_size = 10000;
 
     let mut executor = FakeExecutor::from_head_genesis();
     executor.set_golden_file(current_function_name!());
@@ -178,7 +178,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1500000, mode_two, false);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1700000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -188,6 +188,15 @@ fn main() {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1500000, mode_two, false);
+            }
+            println!("#################################################################################");
+        }
+    }
+
+    for mode in modes {
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 14500000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -510,7 +519,7 @@ fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKe
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
-        100_000,
+        10_000,
         cores as u32
     );
 

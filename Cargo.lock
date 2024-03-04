@@ -1728,6 +1728,7 @@ dependencies = [
  "proptest",
  "rand 0.7.3",
  "rayon",
+ "rustc-hash",
  "serde 1.0.160",
  "serde_json",
  "thiserror",
@@ -6558,6 +6559,7 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "regex",
+ "rustc-hash",
  "serde 1.0.160",
  "statrs",
 ]

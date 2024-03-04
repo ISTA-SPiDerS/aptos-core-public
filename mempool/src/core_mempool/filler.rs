@@ -21,6 +21,7 @@ use anyhow::{anyhow, Result, Error};
 use itertools::Itertools;
 use crate::shared_mempool::types::{SYNC_CACHE};
 use once_cell::sync::{Lazy, OnceCell};
+use rustc_hash::FxHashMap;
 use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::account_address::AccountAddress;
 use aptos_types::write_set::WriteSet;
@@ -164,9 +165,9 @@ impl DependencyFiller {
             total_bytes: 0,
             total_estimated_gas: 0,
             full: false,
-            dependency_graph: vec![],
-            block: vec![],
-            estimated_gas: vec![]
+            dependency_graph: Vec::with_capacity(max_txns as usize),
+            block: Vec::with_capacity(max_txns as usize),
+            estimated_gas: Vec::with_capacity(max_txns as usize)
         }
     }
 
@@ -215,8 +216,7 @@ impl BlockFiller for DependencyFiller {
 
         println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: HashMap<StateKey, (u32, u16)> = HashMap::with_capacity(self.max_txns as usize);
-        let mut removal_vec:Vec<u32> = Vec::with_capacity(self.max_txns as usize);
+        let mut last_touched: FxHashMap<StateKey, (u32, u16)> = FxHashMap::default();
 
         result.retain(|ind, (write_set, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
