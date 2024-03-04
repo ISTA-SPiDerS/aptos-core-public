@@ -699,7 +699,7 @@ impl AptosVM {
             &mut session,
             storage,
             txn,
-            false,
+            true,
             log_context,
         ) {
             return discard_error_vm_status(err);
