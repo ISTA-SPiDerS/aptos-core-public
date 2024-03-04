@@ -36,7 +36,15 @@ use std::{
     task::Waker,
     time::{Instant, SystemTime},
 };
+use once_cell::sync::Lazy;
 use tokio::runtime::Handle;
+use aptos_types::state_store::state_key::StateKey;
+use aptos_types::write_set::WriteSet;
+
+pub static SYNC_CACHE: Lazy<std::sync::Mutex<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
+    Vec::new()
+)});
+
 
 /// Struct that owns all dependencies required by shared mempool routines.
 #[derive(Clone)]
