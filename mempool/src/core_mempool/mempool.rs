@@ -31,7 +31,7 @@ use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
 };
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::num::Wrapping;
 use dashmap::DashMap;
 
@@ -304,13 +304,8 @@ impl Mempool {
             //println!("bla result: {}", result_size);
             //println!("bla seen: {}", seen.len());
 
-            let off = block_filler.add_all(result, &DashMap::new());
+            block_filler.add_all(&mut BTreeMap::new(), true);
             //println!("bla unsee: {}", off.len());
-
-            for tx in off
-            {
-                seen.remove(&(tx.sender(), tx.sequence_number()));
-            }
 
             //println!("bla blocklen: {}", block_filler.get_blockx().len());
             //println!("bla seen now: {}", seen.len());

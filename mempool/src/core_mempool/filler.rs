@@ -19,7 +19,6 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use anyhow::{anyhow, Result, Error};
 use itertools::Itertools;
-use crate::shared_mempool::types::{SYNC_CACHE};
 use once_cell::sync::{Lazy, OnceCell};
 use rustc_hash::FxHashMap;
 use aptos_crypto::hash::TestOnlyHash;

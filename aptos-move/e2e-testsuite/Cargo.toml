@@ -41,6 +41,7 @@ aptos-transaction-generator-lib = { workspace = true }
 dashmap = { workspace = true }
 rayon = { workspace = true }
 aptos-vm-validator = { workspace = true }
+statrs = "0.16.0"
 
 crossbeam-skiplist = "0.1.1"
 [features]
