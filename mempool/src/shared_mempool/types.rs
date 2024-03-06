@@ -49,6 +49,8 @@ use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::write_set::{WriteOp, WriteSet};
+use aptos_types::transaction::RAYON_EXEC_POOL;
+
 use crate::core_mempool::{BlockFiller, DependencyFiller, TxnPointer};
 
 pub static SYNC_CACHE: Lazy<std::sync::Mutex<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>> = Lazy::new(|| { std::sync::Mutex::new(
