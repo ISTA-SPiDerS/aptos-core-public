@@ -290,7 +290,7 @@ where
             // Only one thread try_commit to avoid contention.
 
             if committing {
-                profiler.start_timing(&format!("committing {}", idx).to_string());
+                //profiler.start_timing(&format!("committing {}", idx).to_string());
 
                 // Keep committing txns until there is no more that can be committed now.
                 loop {
@@ -298,7 +298,7 @@ where
                         break;
                     }
                 }
-                profiler.end_timing(&format!("committing {}", idx).to_string());
+                //profiler.end_timing(&format!("committing {}", idx).to_string());
             }
 
             scheduler_task = match scheduler_task {
@@ -308,7 +308,7 @@ where
                     //     thread_id,
                     //     version_to_validate.0
                     // );
-                    profiler.start_timing(&format!("validation {}", idx).to_string());
+                    //profiler.start_timing(&format!("validation {}", idx).to_string());
                     profiler.count_one("val".to_string());
                     let ret = self.validate(
                         version_to_validate,
@@ -319,18 +319,18 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&format!("validation {}", idx).to_string());
+                    //profiler.end_timing(&format!("validation {}", idx).to_string());
                     ret
                 },
                 SchedulerTask::SigTask(index) => {
-                    profiler.start_timing(&"sig".to_string());
+                    //profiler.start_timing(&"sig".to_string());
                     profiler.count_one("sigc".to_string());
                     for n in 0..24 {
                         if index + n < block.len() {
                             executor.verify_transaction(block[index + n].borrow());
                         }
                     }
-                    profiler.end_timing(&"sig".to_string());
+                    //profiler.end_timing(&"sig".to_string());
                     SchedulerTask::NoTask
                 },
                 SchedulerTask::NoTask => {
@@ -381,7 +381,7 @@ where
                     //     thread_id,
                     //     version_to_execute.0
                     // );
-                    profiler.start_timing(&format!("execution {}", idx).to_string());
+                    //profiler.start_timing(&format!("execution {}", idx).to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -395,7 +395,7 @@ where
                         &mut profiler,
                         thread_id,
                     );
-                    profiler.end_timing(&format!("execution {}", idx.to_string()));
+                    //profiler.end_timing(&format!("execution {}", idx.to_string()));
                     ret
                 },
                 SchedulerTask::PrologueTask => {
