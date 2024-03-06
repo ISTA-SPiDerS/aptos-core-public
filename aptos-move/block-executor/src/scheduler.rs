@@ -31,6 +31,7 @@ type DependencyCondvar = Arc<(Mutex<bool>, Condvar)>;
 pub enum SchedulerTask {
     ExecutionTask(Version, Option<DependencyCondvar>),
     ValidationTask(Version, Wave),
+    SigTask(usize),
     NoTask,
     Done,
 }
@@ -234,6 +235,7 @@ impl Scheduler {
 
         if *commit_idx == self.num_txns
         {
+            if !matches!(self.mode, ExecutionMode::BlockSTM_Sig) || self.sig_val_idx.load(Ordering::Acquire) >= self.num_txns
             {
                 // All txns have been committed, the parallel execution can finish.
                 self.done_marker.store(true, Ordering::SeqCst);
@@ -319,6 +321,16 @@ impl Scheduler {
                         // We don't want to hint on the thread that is committing
                         // because it may have work to do (to commit) even if there
                         // is no more conventional (validation and execution tasks) work.
+                        if matches!(self.mode, ExecutionMode::BlockSTM_Sig) && self.sig_val_idx.load(Ordering::Acquire) < self.num_txns
+                        {
+                            let idx = self.sig_val_idx.fetch_add(25, Ordering::Acquire);
+                            if idx > self.num_txns
+                            {
+                                return SchedulerTask::NoTask;
+                            }
+                            return SchedulerTask::SigTask(idx);
+                            //println!("{}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis());
+                        }
                         hint::spin_loop();
                     }
                     SchedulerTask::NoTask
