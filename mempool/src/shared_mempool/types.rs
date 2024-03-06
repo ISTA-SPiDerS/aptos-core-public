@@ -42,7 +42,6 @@ use std::time::Duration;
 use dashmap::{DashMap, DashSet};
 use tokio::runtime::Handle;
 use aptos_types::transaction::authenticator::TransactionAuthenticator;
-use aptos_types::transaction::RAYON_EXEC_POOL2;
 use aptos_types::vm_status::{StatusCode, VMStatus};
 use once_cell::sync::{Lazy, OnceCell};
 use rayon::iter::ParallelIterator;
@@ -95,7 +94,7 @@ impl<
                 let locked_val = tem_locked_val.clone();
 
                 let mut input: Vec<SignedTransaction> = vec![];
-                let num_threads = RAYON_EXEC_POOL2.current_num_threads();
+                let num_threads = RAYON_EXEC_POOL.current_num_threads();
                 let mut thread_local_cache: DashMap<TxnPointer, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> = DashMap::new();
         });
 
