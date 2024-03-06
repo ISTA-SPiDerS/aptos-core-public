@@ -254,7 +254,7 @@ where
             }
             scheduler_task = match scheduler_task {
                 SchedulerTask::ValidationTask(version_to_validate, wave) => {
-                    profiler.start_timing(&"validation".to_string());
+                    //profiler.start_timing(&"validation".to_string());
                     profiler.count_one("val".to_string());
                     let ret = self.validate(
                         version_to_validate,
@@ -264,12 +264,12 @@ where
                         scheduler,
                         &mut profiler
                     );
-                    profiler.end_timing(&"validation".to_string());
+                    //profiler.end_timing(&"validation".to_string());
                     ret
                 },
                 SchedulerTask::ExecutionTask(version_to_execute, None) => {
                     let now = Instant::now();
-                    profiler.start_timing(&format!("execution {}", idx).to_string());
+                    //profiler.start_timing(&format!("execution {}", idx).to_string());
                     profiler.count_one("exec".to_string());
 
                     let ret = self.execute(
@@ -282,7 +282,7 @@ where
                         base_view,
                         &mut profiler
                     );
-                    profiler.end_timing(&format!("execution {}", idx.to_string()));
+                    //profiler.end_timing(&format!("execution {}", idx.to_string()));
                     extimer += now.elapsed().as_nanos();
                     ret
                 },
