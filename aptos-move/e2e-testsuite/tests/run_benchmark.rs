@@ -133,7 +133,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [48, 52, 56, 60, 64];
+    let core_set = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64];
     //let core_set = [4,6,8];
 
     let trial_count = 10;
@@ -156,9 +156,7 @@ fn main() {
             println!("#################################################################################");
         }
     }*/
-
-    runExperimentWithSetting(BlockSTM_Sig, 4, 1, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 10000000, "", false);
-
+    
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
