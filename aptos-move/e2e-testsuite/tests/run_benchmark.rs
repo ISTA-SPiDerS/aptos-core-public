@@ -157,6 +157,8 @@ fn main() {
         }
     }*/
 
+    runExperimentWithSetting(BlockSTM_Sig, 4, 1, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 10000000, "", false);
+
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
