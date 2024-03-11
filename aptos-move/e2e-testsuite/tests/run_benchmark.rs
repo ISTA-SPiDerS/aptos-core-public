@@ -138,7 +138,7 @@ fn main() {
 
     let trial_count = 10;
     let modes = [BlockSTM_Sig];
-    let additional_modes = ["Good", ""];
+    let additional_modes = ["", ""];
 
     // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
     //
