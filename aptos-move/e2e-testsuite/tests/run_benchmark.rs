@@ -133,7 +133,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64];
+    let core_set = [4, 8, 12, 16, 20, 24, 28, 32];
     //let core_set = [4,6,8];
 
     let trial_count = 10;
@@ -157,7 +157,7 @@ fn main() {
         }
     }*/
     
-    for mode in modes {
+    /*for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two, false);
@@ -191,14 +191,15 @@ fn main() {
             }
             println!("#################################################################################");
         }
-    }
+    }*/
 
     for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
+        for c in core_set {
+            for mode_two in additional_modes {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 14500000, mode_two, false);
+
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
     }
 
