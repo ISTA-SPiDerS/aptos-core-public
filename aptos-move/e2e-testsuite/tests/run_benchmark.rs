@@ -365,7 +365,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c * 2 as u64;
+            ac_block_size = block_size * c as u64 * 2;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
