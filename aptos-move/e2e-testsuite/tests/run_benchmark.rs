@@ -133,7 +133,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [32];
+    let core_set = [8];
     //let core_set = [4,6,8];
 
     let trial_count = 10;
@@ -365,7 +365,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64;
+            ac_block_size = block_size * c * 2 as u64;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
