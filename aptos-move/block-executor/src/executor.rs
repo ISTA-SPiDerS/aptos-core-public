@@ -376,9 +376,9 @@ where
         (*profiler.lock()).count("#txns".to_string(), num_txns as u128);
 
         if num_txns > 2 {
-            let mut prof = &(*profiler.lock());
-            prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
-            prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1));
+            //let mut prof = &(*profiler.lock());
+            //prof.collective_times.iter().for_each(|f | println!("bla {}: {}", f.0, f.1.as_millis()));
+            //prof.counters.iter().for_each(|f | println!("bla {}: {}", f.0, f.1));
         }
 
         // TODO: for large block sizes and many cores, extract outputs in parallel.
