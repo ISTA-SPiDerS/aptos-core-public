@@ -72,57 +72,6 @@ const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
 fn main() {
-    let module_path = "test_module_new.move";
-    let num_accounts = 100000;
-    let block_size = 10000;
-
-    let mut executor = FakeExecutor::from_head_genesis();
-    executor.set_golden_file(current_function_name!());
-
-    let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
-
-    let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
-    let mut seq_num = HashMap::new();
-
-    for idx in 0..289023 {
-        seq_num.insert(idx, SEQ_NUM);
-    }
-    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
-
-    println!("STARTING WARMUP");
-    /*for _ in [1, 2, 3] {
-        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
-        println!("block created");
-        let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10).0
-            .map_par_txns(Transaction::UserTransaction);
-
-        let mut prex_block_result = executor.execute_transaction_block_parallel(
-            block.clone(),
-            4 as usize,
-            Pythia, &mut Profiler::new(),
-        )
-            .unwrap();
-
-        for result in prex_block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
-                }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
-        }
-    }*/
-    println!("END WARMUP");
-
-
-    println!("EXECUTE BLOCKS");
 
     // 750000 for NFT & DEX
     // 4500000 for solana
@@ -196,6 +145,24 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
+
+                let module_path = "test_module_new.move";
+                let num_accounts = 100000;
+                let block_size = 10000;
+
+                let mut executor = FakeExecutor::from_head_genesis();
+                executor.set_golden_file(current_function_name!());
+
+                let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
+
+                let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
+                let mut seq_num = HashMap::new();
+
+                for idx in 0..289023 {
+                    seq_num.insert(idx, SEQ_NUM);
+                }
+                seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
+
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 14500000, mode_two, false);
             }
             println!("#################################################################################");
