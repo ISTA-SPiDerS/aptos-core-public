@@ -82,7 +82,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [8];
+    let core_set = [16, 32];
     //let core_set = [4,6,8];
 
     let trial_count = 10;
