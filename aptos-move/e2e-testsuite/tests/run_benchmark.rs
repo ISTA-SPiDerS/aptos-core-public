@@ -72,6 +72,11 @@ const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
 fn main() {
+    let name = current_function_name!();
+
+    let module_path = "test_module_new.move";
+    let num_accounts = 100000;
+    let block_size = 10000;
 
     // 750000 for NFT & DEX
     // 4500000 for solana
@@ -82,7 +87,7 @@ fn main() {
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [16, 32];
+    let core_set = [32];
     //let core_set = [4,6,8];
 
     let trial_count = 10;
@@ -145,13 +150,8 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-
-                let module_path = "test_module_new.move";
-                let num_accounts = 100000;
-                let block_size = 10000;
-
                 let mut executor = FakeExecutor::from_head_genesis();
-                executor.set_golden_file(current_function_name!());
+                //executor.set_golden_file(name);
 
                 let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
 
