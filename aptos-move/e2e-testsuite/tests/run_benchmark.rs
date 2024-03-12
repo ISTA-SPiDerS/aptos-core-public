@@ -51,7 +51,7 @@ use aptos_language_e2e_tests::current_function_name;
 use aptos_language_e2e_tests::executor::{FakeExecutor, FakeValidation};
 use aptos_transaction_generator_lib::LoadType;
 use aptos_transaction_generator_lib::LoadType::{DEXAVG, DEXBURSTY, NFT, P2PTX, MIXED};
-use aptos_types::transaction::ExecutionMode::{BlockSTM, BlockSTM_Sig};
+use aptos_types::transaction::ExecutionMode::{BlockSTM_Sig};
 use aptos_types::transaction::{EntryFunction, Profiler, RAYON_EXEC_POOL, TransactionOutput};
 use dashmap::{DashMap, DashSet};
 use move_core_types::vm_status::VMStatus;
@@ -72,71 +72,21 @@ const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
 fn main() {
-    let module_path = "test_module_new.move";
-    let num_accounts = 100000;
-    let block_size = 10000;
-
-    let mut executor = FakeExecutor::from_head_genesis();
-    executor.set_golden_file(current_function_name!());
-
-    let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
-
-    let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
-    let mut seq_num = HashMap::new();
-
-    for idx in 0..289023 {
-        seq_num.insert(idx, SEQ_NUM);
-    }
-    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
-
-    println!("STARTING WARMUP");
-    /*for _ in [1, 2, 3] {
-        let txn = create_block(block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, LoadType::P2PTX);
-        println!("block created");
-        let block = get_transaction_register(txn.clone(), &executor, 4, 4500000 * 10).0
-            .map_par_txns(Transaction::UserTransaction);
-
-        let mut prex_block_result = executor.execute_transaction_block_parallel(
-            block.clone(),
-            4 as usize,
-            BlockSTM_Sig, &mut Profiler::new(),
-        )
-            .unwrap();
-
-        for result in prex_block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
-                }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
-        }
-    }*/
-    println!("END WARMUP");
-
-
-    println!("EXECUTE BLOCKS");
-
     // 750000 for NFT & DEX
     // 4500000 for solana
     // 1500000 for p2p
 
     // Evaluate 5 things:
-    // a) Good blocks BlockSTM_Sig vs Bad blocks BlockSTM_Sig (hint based/pessimistic) = 2
+    // a) Good blocks Pythia vs Bad blocks Pythia (hint based/pessimistic) = 2
     // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
     // c) Varying workload and how we adjust to it.
 
-    let core_set = [32];
+    let num_accounts = 100000;
+    let block_size = 10000;
+    let core_set = [4,8,12,16,20,24,28,32];
     //let core_set = [4,6,8];
 
-    let trial_count = 10;
+    let trial_count = 5;
     let modes = [BlockSTM_Sig];
     let additional_modes = ["Good", ""];
 
@@ -148,19 +98,10 @@ fn main() {
     //
     // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    /*for mode in modes {
+    for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 10000000, mode_two);
-            }
-            println!("#################################################################################");
-        }
-    }*/
-    
-    /*for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, P2PTX, 2300000, mode_two, false);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -169,7 +110,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXAVG, 1300000, mode_two, false);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -178,7 +119,7 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, NFT, 1700000, mode_two, false);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
             }
             println!("#################################################################################");
         }
@@ -187,19 +128,18 @@ fn main() {
     for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, DEXBURSTY, 1500000, mode_two, false);
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
             }
             println!("#################################################################################");
         }
-    }*/
+    }
 
     for mode in modes {
-        for c in core_set {
-            for mode_two in additional_modes {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, &mut executor, &module_id, &accounts, &module_owner, &mut seq_num, MIXED, 14500000, mode_two, false);
-
-                println!("#################################################################################");
+        for mode_two in additional_modes {
+            for c in core_set {
+                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
             }
+            println!("#################################################################################");
         }
     }
 
@@ -350,7 +290,23 @@ fn main() {
     println!("EXECUTION SUCCESS");
 }
 
-fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, executor: &mut FakeExecutor, module_id: &ModuleId, accounts: &Vec<Account>, module_owner: &AccountData, seq_num: &mut HashMap<usize, u64>, load_type: LoadType, max_gas: usize, mode_two: &str, abort_if_lower: bool) -> u128 {
+fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, load_type: LoadType, max_gas: usize, mode_two: &str, abort_if_lower: bool) -> u128 {
+    let module_path = "test_module_new.move";
+
+    let mut executor = FakeExecutor::from_head_genesis();
+    //executor.set_golden_file(name);
+
+    let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
+
+    let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
+    let mut seq_num = HashMap::new();
+
+    for idx in 0..289023 {
+        seq_num.insert(idx, SEQ_NUM);
+    }
+    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
+
+
     // This is for the total time
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
@@ -366,7 +322,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64;
+            ac_block_size = block_size * c as u64 * 2;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
@@ -376,7 +332,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
         // Generate the workload.
-        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
+        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
 
         let mut latvec = vec![];
         let mut total_tx = 0;
