@@ -50,6 +50,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 rustc-hash = "1.1.0"
+aptos-aggregator = { workspace = true }
 
 [dev-dependencies]
 aptos-compression = { workspace = true }
