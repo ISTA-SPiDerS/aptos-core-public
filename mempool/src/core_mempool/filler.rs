@@ -217,8 +217,8 @@ impl BlockFiller for DependencyFiller {
 
         println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
-        let mut skipped_users = HashSet::new();
+        let mut last_touched: FxHashMap<StateKey, (u32, u16)> = FxHashMap::default();
+        let mut skipped_users = FxHashSet::default();
 
         result.retain(|ind, (writeset, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
@@ -226,6 +226,11 @@ impl BlockFiller for DependencyFiller {
                 return true;;
             }
 
+            //todo: Can we get some better performance out of this?
+            //todo should we start with subsets and add more tx later?
+            //todo workloads with limited clients are a problem! But the distribution was very clear. It's not just 10k clients, its a wide distribution of clients actually.
+
+            //todo: Main cost is the dropping of the old retains + removal, statekey.getraw and hashmap insert
             let gas_used = (*gas / 10) as u16;
             if writeset.is_empty()
             {
@@ -233,8 +238,8 @@ impl BlockFiller for DependencyFiller {
                 return true;
             }
 
-            let user_state_key = StateKey::raw(tx.sender().to_vec());
-            if skipped_users.contains(&user_state_key)
+            let user_vec = tx.sender().to_vec();
+            if skipped_users.contains(&user_vec)
             {
                 skipped += 1;
                 return true;
@@ -260,13 +265,13 @@ impl BlockFiller for DependencyFiller {
 
                     // not skipping anything atm.
                     skipped += 1;
-                    skipped_users.insert(user_state_key);
+                    skipped_users.insert(user_vec);
                     return true;
                 }
             }
 
             let mut founduser = false;
-            if let Some((time, key)) = last_touched.get(&user_state_key.get_raw()) {
+            if let Some((time, key)) = last_touched.get(&user_vec) {
                 arrival_time = max(arrival_time, *time);
                 dependencies.insert(*key);
                 founduser = true;
@@ -278,7 +283,7 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
-                skipped_users.insert(user_state_key);
+                skipped_users.insert(user_vec);
                 return true;
             }
 
@@ -308,9 +313,9 @@ impl BlockFiller for DependencyFiller {
                 }
             }
 
-            let curr_max = last_touched.get(&user_state_key.get_raw()).unwrap_or(&(0u32, 0)).0;
+            let curr_max = last_touched.get(&user_vec).unwrap_or(&(0u32, 0)).0;
             if finish_time > curr_max {
-                last_touched.insert(user_state_key.get_raw(), (finish_time, current_idx));
+                last_touched.insert(user_vec, (finish_time, current_idx));
             }
 
             len += 1;
@@ -325,6 +330,7 @@ impl BlockFiller for DependencyFiller {
         RAYON_EXEC_POOL.spawn(move || {
             // Explicit async drops.
             drop(last_touched);
+            drop(skipped_users);
         });
 
         println!("skipped: {}", skipped);

@@ -84,7 +84,7 @@ fn main() {
 
     let num_accounts = 100000;
     let block_size = 10000;
-    let core_set = [4,8,12,16,20,24,28,32];
+    let core_set = [16];
     //let core_set = [4,6,8];
 
     let trial_count = 5;
@@ -321,7 +321,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64 * 2;
+            ac_block_size = block_size * c as u64 / 2;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
