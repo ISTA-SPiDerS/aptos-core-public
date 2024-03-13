@@ -8,7 +8,7 @@ use std::mem::size_of;
 use dashmap::{DashMap, DashSet};
 use rayon::iter::IntoParallelIterator;
 use aptos_types::state_store::state_key::StateKey;
-use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator};
+use aptos_types::transaction::{RAYON_EXEC_POOL, SignedTransaction, authenticator::TransactionAuthenticator, TransactionOutput};
 use aptos_types::vm_status::VMStatus;
 use aptos_vm_validator::vm_validator::{TransactionValidation, VMSpeculationResult};
 use std::sync::atomic::Ordering;
@@ -21,12 +21,13 @@ use anyhow::{anyhow, Result, Error};
 use itertools::Itertools;
 use crate::shared_mempool::types::{SYNC_CACHE};
 use once_cell::sync::{Lazy, OnceCell};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::account_address::AccountAddress;
 use aptos_types::write_set::WriteSet;
 use crate::core_mempool::transaction_store::TransactionStore;
 use crate::core_mempool::TxnPointer;
+use aptos_aggregator::transaction::TransactionOutputExt;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
@@ -143,7 +144,7 @@ pub struct DependencyFiller {
     total_estimated_gas: u64,
     full: bool,
 
-    dependency_graph: Vec<HashSet<u16>>,
+    dependency_graph: Vec<FxHashSet<u16>>,
     block: Vec<SignedTransaction>,
     estimated_gas: Vec<u16>,
 }
@@ -217,23 +218,31 @@ impl BlockFiller for DependencyFiller {
         println!("Got x transactions: {}", result.len());
 
         let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
+        let mut skipped_users = HashSet::new();
 
-        result.retain(|ind, (write_set, read_set, gas, tx)| {
+        result.retain(|ind, (writeset, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
                 return true;;
             }
 
             let gas_used = (*gas / 10) as u16;
-            if write_set.is_empty()
+            if writeset.is_empty()
             {
                 println!("bla Empty????");
                 return true;
             }
 
+            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            if skipped_users.contains(&user_state_key)
+            {
+                skipped += 1;
+                return true;
+            }
+
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
-            let mut dependencies = HashSet::new();
+            let mut dependencies = FxHashSet::default();
 
             let mut hot_read_access = 0;
             for read in read_set.iter() {
@@ -251,18 +260,16 @@ impl BlockFiller for DependencyFiller {
 
                     // not skipping anything atm.
                     skipped += 1;
+                    skipped_users.insert(user_state_key);
                     return true;
                 }
             }
 
-            let user_state_key = StateKey::raw(tx.sender().to_vec());
+            let mut founduser = false;
             if let Some((time, key)) = last_touched.get(&user_state_key.get_raw()) {
                 arrival_time = max(arrival_time, *time);
-
-                if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
-                    hot_read_access += 1;
-                }
                 dependencies.insert(*key);
+                founduser = true;
             }
 
             // Check if there is room for the new block.
@@ -271,11 +278,13 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
+                skipped_users.insert(user_state_key);
                 return true;
             }
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
+                //skipped_users.insert(user_state_key);
                 return true;
             }
 
@@ -292,7 +301,7 @@ impl BlockFiller for DependencyFiller {
                 first_iter_tx += 1;
             }
 
-            for write in write_set.iter() {
+            for write in writeset.iter() {
                 let curr_max = last_touched.get(&write.0.get_raw()).unwrap_or(&(0u32, 0)).0;
                 if finish_time > curr_max {
                     last_touched.insert(write.0.get_raw(), (finish_time, current_idx));

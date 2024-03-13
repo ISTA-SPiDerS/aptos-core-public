@@ -1693,6 +1693,7 @@ name = "aptos-mempool"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aptos-aggregator",
  "aptos-bounded-executor",
  "aptos-channels",
  "aptos-compression",
@@ -6531,6 +6532,7 @@ dependencies = [
 name = "language-e2e-testsuite"
 version = "0.1.0"
 dependencies = [
+ "aptos-aggregator",
  "aptos-block-executor",
  "aptos-cached-packages",
  "aptos-crypto",

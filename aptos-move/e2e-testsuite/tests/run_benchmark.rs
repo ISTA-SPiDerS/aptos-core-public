@@ -64,6 +64,7 @@ use aptos_types::write_set::WriteSet;
 use aptos_vm::data_cache::StorageAdapter;
 use statrs::statistics::OrderStatistics;
 use statrs::statistics::Data;
+use aptos_aggregator::transaction::TransactionOutputExt;
 
 const INITIAL_BALANCE: u64 = 9_000_000_000;
 const SEQ_NUM: u64 = 10;
@@ -293,20 +294,6 @@ fn main() {
 fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, num_accounts: usize, block_size: u64, load_type: LoadType, max_gas: usize, mode_two: &str, abort_if_lower: bool) -> u128 {
     let module_path = "test_module_new.move";
 
-    let mut executor = FakeExecutor::from_head_genesis();
-    //executor.set_golden_file(name);
-
-    let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
-
-    let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
-    let mut seq_num = HashMap::new();
-
-    for idx in 0..289023 {
-        seq_num.insert(idx, SEQ_NUM);
-    }
-    seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
-
-
     // This is for the total time
     let mut all_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut block_result;
@@ -318,6 +305,18 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     }
 
     for trial in 0..trial_count {
+        let mut executor = FakeExecutor::from_head_genesis();
+        //executor.set_golden_file(name);
+
+        let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
+
+        let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
+        let mut seq_num = HashMap::new();
+
+        for idx in 0..289023 {
+            seq_num.insert(idx, SEQ_NUM);
+        }
+        seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
         let mut ac_block_size = block_size;
         if !mode_two.is_empty()

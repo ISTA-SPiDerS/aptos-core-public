@@ -713,7 +713,7 @@ impl AptosVM {
                     &mut session,
                     storage,
                     txn,
-                    true,
+                    false,
                     log_context,
                 ) {
                     return discard_error_vm_status(err);
@@ -727,7 +727,7 @@ impl AptosVM {
                         &mut session,
                         storage,
                         txn,
-                        true,
+                        false,
                         log_context,
                     ) {
                         return discard_error_vm_status(err);
@@ -832,7 +832,7 @@ impl AptosVM {
             &mut session,
             storage,
             txn,
-            true,
+            false,
             log_context) {
             return false;
         };

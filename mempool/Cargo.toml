@@ -52,6 +52,7 @@ tokio-stream = { workspace = true }
 kanal = "0.1.0-pre8"
 crossbeam = { workspace = true }
 rustc-hash = "1.1.0"
+aptos-aggregator = { workspace = true }
 
 [dev-dependencies]
 aptos-compression = { workspace = true }
