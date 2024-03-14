@@ -84,12 +84,14 @@ fn main() {
 
     let num_accounts = 100000;
     let block_size = 10000;
-    let core_set = [16];
+    let core_set = [4,8,12,16,20,24,28,32];
     //let core_set = [4,6,8];
 
     let trial_count = 5;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good", ""];
+
+    //50 for 300k skipped
 
     // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
     //
