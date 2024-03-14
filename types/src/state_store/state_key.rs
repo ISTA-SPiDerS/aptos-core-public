@@ -112,6 +112,15 @@ impl StateKey {
         }
     }
 
+
+    pub fn get_raw_ref(&self) -> &[u8] {
+        match &self.inner {
+            StateKeyInner::AccessPath(access_path) => access_path.address.as_ref(),
+            StateKeyInner::TableItem { handle, key } => key,
+            StateKeyInner::Raw(bytes) => bytes,
+        }
+    }
+
     pub fn access_path(access_path: AccessPath) -> Self {
         Self::new(StateKeyInner::AccessPath(access_path))
     }

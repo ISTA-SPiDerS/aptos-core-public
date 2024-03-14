@@ -232,8 +232,8 @@ impl BlockFiller for DependencyFiller {
                 return true;
             }
 
-            let user_state_key = StateKey::raw(tx.sender().to_vec());
-            if skipped_users.contains(&user_state_key)
+            let raw_user_state_key = tx.sender().to_vec();
+            if skipped_users.contains(&raw_user_state_key)
             {
                 skipped += 1;
                 return true;
@@ -255,17 +255,15 @@ impl BlockFiller for DependencyFiller {
                 }
                 if good_block && len >= 1000 && hot_read_access >= 4 {
                     // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
-                    // todo, if I got multiple reads, combining multiple longer paths. Prevent it. I can do something like. total tx to now = x. The total gas to now is x. The paths are long if at least 10%
 
-                    // not skipping anything atm.
                     skipped += 1;
-                    skipped_users.insert(user_state_key);
+                    skipped_users.insert(raw_user_state_key);
                     return true;
                 }
             }
 
             let mut founduser = false;
-            if let Some((time, key)) = last_touched.get(&user_state_key.get_raw()) {
+            if let Some((time, key)) = last_touched.get(&raw_user_state_key) {
                 arrival_time = max(arrival_time, *time);
                 dependencies.insert(*key);
                 founduser = true;
@@ -277,13 +275,13 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
-                skipped_users.insert(user_state_key);
+                skipped_users.insert(raw_user_state_key);
                 return true;
             }
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
-                //skipped_users.insert(user_state_key);
+                skipped_users.insert(raw_user_state_key);
                 return true;
             }
 
@@ -301,15 +299,16 @@ impl BlockFiller for DependencyFiller {
             }
 
             for write in writeset.iter() {
-                let curr_max = last_touched.get(&write.0.get_raw()).unwrap_or(&(0u32, 0)).0;
+                let raw = write.0.get_raw_ref();
+                let curr_max = last_touched.get(raw).unwrap_or(&(0u32, 0)).0;
                 if finish_time > curr_max {
-                    last_touched.insert(write.0.get_raw(), (finish_time, current_idx));
+                    last_touched.insert(raw.to_vec(), (finish_time, current_idx));
                 }
             }
 
-            let curr_max = last_touched.get(&user_state_key.get_raw()).unwrap_or(&(0u32, 0)).0;
+            let curr_max = last_touched.get(&raw_user_state_key).unwrap_or(&(0u32, 0)).0;
             if finish_time > curr_max {
-                last_touched.insert(user_state_key.get_raw(), (finish_time, current_idx));
+                last_touched.insert(raw_user_state_key, (finish_time, current_idx));
             }
 
             len += 1;
