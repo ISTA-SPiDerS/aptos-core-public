@@ -58,6 +58,7 @@ use move_core_types::vm_status::VMStatus;
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use aptos_mempool::shared_mempool::types::{SYNC_CACHE};
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::write_set::WriteSet;
@@ -320,10 +321,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
         seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
 
-        let mut ac_block_size = block_size;
+        let mut multiplier = 1;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64 / 2;
+            multiplier = c as u64;
         }
 
         //todo: Now we want to measure the latency per tx for the initial block.
@@ -333,7 +334,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
         // Generate the workload.
-        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
+        let mut main_block = create_block( block_size, multiplier, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
 
         let mut latvec = vec![];
         let mut total_tx = 0;
@@ -346,7 +347,8 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
             let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty());
 
-            total_tx += first_iter_tx;
+            let dif = first_iter_tx - total_tx;
+            total_tx = first_iter_tx;
             if total_tx >= 10000 {
                 run = false;
             }
@@ -358,7 +360,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 return u128::MAX;
             }
 
-            println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
+            println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size*multiplier, num_accounts, c, print_mode, load_type);
 
             let start = Instant::now();
 
@@ -374,7 +376,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 .unwrap();
 
             let final_time = start.elapsed();
-            latvec.push((first_iter_tx, final_time.as_millis()+filler_time));
+            latvec.push((dif, final_time.as_millis()+filler_time));
 
 
             let mut collected_times = profiler.collective_times.borrow_mut();
@@ -473,7 +475,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
@@ -481,12 +483,43 @@ fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKe
         cores as u32
     );
 
-    let start = Instant::now();
+    let mut first_iter_tx:u16 = 0;
+    let mut total_filler_time = 0;
+    let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
+    let mut skipped_users: FxHashSet<Vec<u8>> = FxHashSet::default();
+    let mut index = 0;
+    let num_blocks = txns.len();
 
-    let first_iter_tx = filler.add_all( txns, good_block);
+    while true
+    {
+        let start = Instant::now();
+        let vec_at_index = txns.get_mut(index).unwrap();
 
-    let elapsed = start.elapsed().as_millis();
-    println!("elapsed: {}", elapsed);
+        filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+
+        let len = filler.get_blockx().len();
+        //todo if the resulting block is smaller than veclen/c, then we have to relax the gas per core for the next run!
+        //todo this atm loops infinitely. But weirdly enough it never crashes? What is happening with the index???
+        if index == 0 {
+            first_iter_tx = (10000 - vec_at_index.len()) as u16;
+        }
+
+        let elapsed = start.elapsed().as_millis();
+        total_filler_time += elapsed;
+        println!("elapsed: {}", total_filler_time);
+
+        if len >= 9990 || index + 1 >= num_blocks {
+            println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
+            break;
+        }
+        index+=1;
+    }
+
+    RAYON_EXEC_POOL.spawn(move || {
+        // Explicit async drops.
+        drop(last_touched);
+        drop(skipped_users);
+    });
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
@@ -495,25 +528,23 @@ fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKe
     // Resetting for next block!
     SYNC_CACHE.lock().unwrap().clear();
 
-    (TransactionRegister::new(txns, gas_estimates, dependencies), elapsed, first_iter_tx)
+    (TransactionRegister::new(txns, gas_estimates, dependencies), total_filler_time, first_iter_tx)
 }
 
 //Create block with coin exchange transactions
 fn create_block(
     size: u64,
+    c: u64,
     owner: AccountData,
     accounts: Vec<Account>,
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
     executor: &FakeExecutor
-) -> BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
+) -> Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>> {
 
     let mut transaction_validation = executor.get_transaction_validation();
-
-
-
-    let mut result = BTreeMap::new();
+    let mut end_result = Vec::new();
 
     let mut rng: ThreadRng = thread_rng();
 
@@ -536,82 +567,82 @@ fn create_block(
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
-    for i in 0..size {
+    for j in 0..c
+    {
+        let mut result = Vec::new();
+        for i in 0..size {
+            let mut sender_id: usize = ((i * j) as usize) % accounts.len();
+            let tx_entry_function;
 
-        let mut sender_id: usize = (i as usize) % accounts.len();
-        let tx_entry_function;
-
-        if matches!(load_type, MIXED)
-        {
-            let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
-            let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
-
-            let mut writes: Vec<u64> = Vec::new();
-            let mut i = 0;
-            while i < write_len_sample {
-                i+=1;
-                writes.push(general_resource_distribution.sample(&mut rng) as u64);
-            }
-
-            let length = max(1, cost_sample.round() as usize);
-
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("loop_exchange").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
-            );
-        }
-        else if matches!(load_type, P2PTX)
-        {
-            let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
-            let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
-
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("exchangetwo").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()],
-            );
-        }
-        else
-        {
-
-            let resource_id = general_resource_distribution.sample(&mut rng);
-            if matches!(load_type, NFT)
+            if matches!(load_type, MIXED)
             {
-                sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
+                let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
+                let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
+
+                let mut writes: Vec<u64> = Vec::new();
+                let mut size_param = 0;
+                while size_param < write_len_sample {
+                    size_param += 1;
+                    writes.push(general_resource_distribution.sample(&mut rng) as u64);
+                }
+
+                let length = max(1, cost_sample.round() as usize);
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("loop_exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+                );
+            } else if matches!(load_type, P2PTX)
+            {
+                let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
+                let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("exchangetwo").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()],
+                );
+            } else {
+                let resource_id = general_resource_distribution.sample(&mut rng);
+                if matches!(load_type, NFT)
+                {
+                    sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
+                }
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&resource_id).unwrap()],
+                );
             }
 
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("exchange").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&resource_id).unwrap()],
-            );
+            let txn = accounts[sender_id]
+                .transaction()
+                .entry_function(tx_entry_function.clone())
+                .sequence_number(seq_num[&sender_id])
+                .sign();
+            seq_num.insert(sender_id, seq_num[&sender_id] + 1);
+
+
+            let ex_result = transaction_validation.speculate_transaction(&txn);
+            let (a, b) = ex_result.unwrap();
+            match b {
+                VMStatus::Executed => {
+                    result.push((a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, txn.clone()));
+                }
+                _ => {
+                    // Do nothing.
+                }
+            }
         }
-
-        let txn = accounts[sender_id]
-            .transaction()
-            .entry_function(tx_entry_function.clone())
-            .sequence_number(seq_num[&sender_id])
-            .sign();
-        seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-
-
-        let ex_result = transaction_validation.speculate_transaction(&txn);
-        let (a, b) = ex_result.unwrap();
-        match b {
-            VMStatus::Executed => {
-                result.insert(i as u32, (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, txn.clone()));
-            }
-            _ => {
-                // Do nothing.
-            }
-        }
+        end_result.push(result);
     }
 
-    result
+    end_result
 }
 
 fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountData, ModuleId) {

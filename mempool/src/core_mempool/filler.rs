@@ -28,12 +28,15 @@ use aptos_types::write_set::WriteSet;
 use crate::core_mempool::transaction_store::TransactionStore;
 use crate::core_mempool::TxnPointer;
 use aptos_aggregator::transaction::TransactionOutputExt;
+use aptos_types::test_helpers::transaction_test_helpers::block;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        previous: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
     ) -> u16;
 
@@ -95,7 +98,9 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        previous: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
     ) -> u16 {
 
@@ -207,20 +212,18 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        result: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        result: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
     ) -> u16 {
 
         let mut skipped = 0;
-        let mut len = 0;
-        let mut first_iter_tx = 0;
+        let mut len = self.block.len() as u64;
 
         println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
-        let mut skipped_users = FxHashSet::default();
-
-        result.retain(|ind, (writeset, read_set, gas, tx)| {
+        result.retain(|(writeset, read_set, gas, tx)| {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
                 return true;;
@@ -231,6 +234,9 @@ impl BlockFiller for DependencyFiller {
             //todo workloads with limited clients are a problem! But the distribution was very clear. It's not just 10k clients, its a wide distribution of clients actually.
 
             //todo: Main cost is the dropping of the old retains + removal, statekey.getraw and hashmap insert
+
+            //todo: Each result set has 10k. We put this in the filler, do the retain. Return, less than 10k transactions, relax, redo, relax redo, etc. So its reinforcement learning each run. So we always put 10k in, we only iterate over 10k, then we relax slightly. Gives us a feeling of how contended is. say, we got out of 10k, 1k, we know we have to go until 100k. etc. 
+
             let gas_used = (*gas / 10) as u16;
             if writeset.is_empty()
             {
@@ -300,10 +306,6 @@ impl BlockFiller for DependencyFiller {
 
             self.block.push(tx.clone());
 
-            if *ind < self.max_txns as u32 {
-                first_iter_tx += 1;
-            }
-
             for write in writeset.iter() {
                 let raw = write.0.get_raw_ref();
                 let curr_max = last_touched.get(raw).unwrap_or(&(0u32, 0)).0;
@@ -325,15 +327,8 @@ impl BlockFiller for DependencyFiller {
             return false;
         });
 
-
-        RAYON_EXEC_POOL.spawn(move || {
-            // Explicit async drops.
-            drop(last_touched);
-            drop(skipped_users);
-        });
-
         println!("skipped: {}", skipped);
-        return first_iter_tx;
+        return 0;
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {

@@ -43,6 +43,7 @@ use anyhow;
 use dashmap::{DashMap, DashSet};
 use futures::pending;
 use kanal::{Receiver, Sender};
+use rustc_hash::{FxHashMap, FxHashSet};
 use aptos_crypto::hash::TestOnlyHash;
 use aptos_types::transaction::RAYON_EXEC_POOL;
 use crate::core_mempool::DependencyFiller;
@@ -343,9 +344,9 @@ impl Mempool {
         if !result.is_empty() {
             let elapsed1 = time.elapsed().as_millis();
             let result_size = index;
-            let mut map = BTreeMap::new();
+            let mut map = Vec::new();
             block_filler.set_gas_per_core(self.last_max_gas);
-            block_filler.add_all(&mut map, true);
+            block_filler.add_all(&mut map, &mut FxHashMap::default(), &mut FxHashSet::default(), true);
 
             let len =  block_filler.get_blockx().len();
             if (len > 0) {
