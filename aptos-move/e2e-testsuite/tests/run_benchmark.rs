@@ -319,7 +319,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         for idx in 0..289023 {
             seq_num.insert(idx, SEQ_NUM);
         }
-        seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
+        seq_num.insert(usize::MAX, SEQ_NUM + 1);
+
+
+        run_warmup(mode, c, block_size, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &executor);
 
         let mut multiplier = 1;
         if !mode_two.is_empty()
@@ -473,6 +476,26 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     println!("#-------------------------------------------------------------------------");
 
     return final_time;
+}
+
+fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadType, max_gas: usize, seq_num: &mut HashMap<usize, u64>, module_owner: AccountData, module_id: &ModuleId, accounts: Vec<Account>, executor: &FakeExecutor) {
+
+    // Generate the workload.
+    let mut main_block = create_block(block_size, 10000, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
+    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false);
+    // Map to user transactions.
+    let block = return_block.map_par_txns(Transaction::UserTransaction);
+
+    let mut profiler = Profiler::new();
+
+    // The actual execution.
+    let block_result = executor
+        .execute_transaction_block_parallel(
+            block.clone(),
+            c as usize,
+            mode, profiler.borrow_mut(),
+        )
+        .unwrap();
 }
 
 fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
