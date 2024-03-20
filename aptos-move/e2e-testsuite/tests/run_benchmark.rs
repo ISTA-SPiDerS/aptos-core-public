@@ -478,46 +478,42 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 }
 
 fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadType, max_gas: usize, seq_num: &mut HashMap<usize, u64>, module_owner: AccountData, module_id: &ModuleId, accounts: Vec<Account>, executor: &mut FakeExecutor) {
-
     println!("start warump");
 
-    for i in 0..3 {
-        // Generate the workload.
-        let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
-        println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
-        let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false);
-        // Map to user transactions.
-        let block = return_block.map_par_txns(Transaction::UserTransaction);
+    // Generate the workload.
+    let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
+    println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
+    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false);
+    // Map to user transactions.
+    let block = return_block.map_par_txns(Transaction::UserTransaction);
 
-        let mut profiler = Profiler::new();
-        // The actual execution.
-        let block_result = executor
-            .execute_transaction_block_parallel(
-                block.clone(),
-                c as usize,
-                mode, profiler.borrow_mut(),
-            )
-            .unwrap();
+    let mut profiler = Profiler::new();
+    // The actual execution.
+    let block_result = executor
+        .execute_transaction_block_parallel(
+            block.clone(),
+            c as usize,
+            mode, profiler.borrow_mut(),
+        )
+        .unwrap();
 
-        for result in block_result {
-            match result.status() {
-                TransactionStatus::Keep(status) => {
-                    executor.apply_write_set(result.write_set());
-                    assert_eq!(
-                        status,
-                        &ExecutionStatus::Success,
-                        "transaction failed with {:?}",
-                        status
-                    );
-                }
-                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-                TransactionStatus::Retry => panic!("transaction status is retry"),
-            };
-        }
+    for result in block_result {
+        match result.status() {
+            TransactionStatus::Keep(status) => {
+                executor.apply_write_set(result.write_set());
+                assert_eq!(
+                    status,
+                    &ExecutionStatus::Success,
+                    "transaction failed with {:?}",
+                    status
+                );
+            }
+            TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+            TransactionStatus::Retry => panic!("transaction status is retry"),
+        };
     }
 
     println!("end warump");
-
 }
 
 fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
@@ -671,7 +667,7 @@ fn create_block(
             } else if matches!(load_type, P2PTX)
             {
                 let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
-                let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
+                sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
 
                 tx_entry_function = EntryFunction::new(
                     module_id.clone(),
