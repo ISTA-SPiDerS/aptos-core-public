@@ -639,7 +639,7 @@ fn create_block(
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
-    for j in 0..c
+    for j in 1..(c+1)
     {
         let mut result = Vec::new();
         for i in 0..size {
