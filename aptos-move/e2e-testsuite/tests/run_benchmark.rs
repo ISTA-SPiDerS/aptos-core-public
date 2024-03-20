@@ -321,11 +321,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
         seq_num.insert(usize::MAX, SEQ_NUM + 1);
 
-        println!("start warump");
         run_warmup(mode, c, 10000, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &mut executor);
-        run_warmup(mode, c, 10000, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &mut executor);
-        run_warmup(mode, c, 10000, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &mut executor);
-        println!("end warump");
 
         let mut multiplier = 1;
         if !mode_two.is_empty()
@@ -483,41 +479,48 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
 fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadType, max_gas: usize, seq_num: &mut HashMap<usize, u64>, module_owner: AccountData, module_id: &ModuleId, accounts: Vec<Account>, executor: &mut FakeExecutor) {
 
-    // Generate the workload.
-    let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
-    println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
-    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false);
-    // Map to user transactions.
-    let block = return_block.map_par_txns(Transaction::UserTransaction);
+    println!("start warump");
 
-    let mut profiler = Profiler::new();
-    // The actual execution.
-    let block_result = executor
-        .execute_transaction_block_parallel(
-            block.clone(),
-            c as usize,
-            mode, profiler.borrow_mut(),
-        )
-        .unwrap();
+    for i in 0..3 {
+        // Generate the workload.
+        let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
+        println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
+        let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false);
+        // Map to user transactions.
+        let block = return_block.map_par_txns(Transaction::UserTransaction);
 
-    for result in block_result {
-        match result.status() {
-            TransactionStatus::Keep(status) => {
-                executor.apply_write_set(result.write_set());
-                assert_eq!(
-                    status,
-                    &ExecutionStatus::Success,
-                    "transaction failed with {:?}",
-                    status
-                );
-            }
-            TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
-            TransactionStatus::Retry => panic!("transaction status is retry"),
-        };
+        let mut profiler = Profiler::new();
+        // The actual execution.
+        let block_result = executor
+            .execute_transaction_block_parallel(
+                block.clone(),
+                c as usize,
+                mode, profiler.borrow_mut(),
+            )
+            .unwrap();
+
+        for result in block_result {
+            match result.status() {
+                TransactionStatus::Keep(status) => {
+                    executor.apply_write_set(result.write_set());
+                    assert_eq!(
+                        status,
+                        &ExecutionStatus::Success,
+                        "transaction failed with {:?}",
+                        status
+                    );
+                }
+                TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+                TransactionStatus::Retry => panic!("transaction status is retry"),
+            };
+        }
     }
+
+    println!("end warump");
+
 }
 
-fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, log: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let goal_qty = 10_000;
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
@@ -575,13 +578,16 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         let elapsed = start.elapsed().as_millis();
         total_filler_time += elapsed;
-        if log {
+        if prod {
             println!("elapsed: {}", total_filler_time);
 
             if len >= 9990 || index + 1 >= num_blocks {
                 println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
                 break;
             }
+        }
+        else {
+            break;
         }
 
         index+=1;
