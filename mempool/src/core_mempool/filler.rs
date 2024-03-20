@@ -247,7 +247,7 @@ impl BlockFiller for DependencyFiller {
             }
 
             let raw_user_state_key = tx.sender().to_vec();
-            if skipped_users.contains(&raw_user_state_key)
+            if good_block && skipped_users.contains(&raw_user_state_key)
             {
                 skipped += 1;
                 return_vec.push((writeset, read_set, gas, tx));
@@ -303,7 +303,6 @@ impl BlockFiller for DependencyFiller {
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
-                skipped_users.insert(raw_user_state_key);
                 return_vec.push((writeset, read_set, gas, tx));
                 continue;
             }
