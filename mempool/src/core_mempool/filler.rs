@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 
 use std::borrow::Borrow;
 use std::cmp::max;
@@ -38,10 +38,10 @@ pub trait BlockFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16;
+    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>;
 
     fn get_block(self) -> Vec<SignedTransaction>;
-    fn get_blockx(&mut self) -> Vec<SignedTransaction>;
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction>;
 
     fn is_full(&self) -> bool;
 
@@ -102,16 +102,16 @@ impl BlockFiller for SimpleFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16 {
+    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
 
-        1
+        Vec::new()
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
     }
-    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
-        self.block.clone()
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction> {
+        &self.block
     }
 
     fn is_full(&self) -> bool {
@@ -216,17 +216,19 @@ impl BlockFiller for DependencyFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16 {
+    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
 
         let mut skipped = 0;
         let mut len = self.block.len() as u64;
 
         println!("Got x transactions: {}", result.len());
 
-        result.retain(|(writeset, read_set, gas, tx)| {
+        let mut return_vec  = Vec::with_capacity(result.len()/2);
+        for (writeset, read_set, gas, tx) in result.drain(0..result.len()) {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
-                return true;;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             //todo: Can we get some better performance out of this?
@@ -237,27 +239,29 @@ impl BlockFiller for DependencyFiller {
 
             //todo: Each result set has 10k. We put this in the filler, do the retain. Return, less than 10k transactions, relax, redo, relax redo, etc. So its reinforcement learning each run. So we always put 10k in, we only iterate over 10k, then we relax slightly. Gives us a feeling of how contended is. say, we got out of 10k, 1k, we know we have to go until 100k. etc. 
 
-            let gas_used = (*gas / 10) as u16;
+            let gas_used = (gas / 10) as u16;
             if writeset.is_empty()
             {
-                println!("bla Empty????");
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             let raw_user_state_key = tx.sender().to_vec();
             if skipped_users.contains(&raw_user_state_key)
             {
                 skipped += 1;
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
             let mut dependencies = FxHashSet::default();
 
+            let mut bail = false;
             let mut hot_read_access = 0;
             for read in read_set.iter() {
-                if let Some((time, key)) = last_touched.get(&read.get_raw()) {
+                if let Some((time, key)) = last_touched.get(read.get_raw_ref()) {
                     arrival_time = max(arrival_time, *time);
 
                     if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
@@ -267,11 +271,16 @@ impl BlockFiller for DependencyFiller {
                 }
                 if good_block && len >= 1000 && hot_read_access >= 4 {
                     // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
-
+                    bail = true;
                     skipped += 1;
-                    skipped_users.insert(raw_user_state_key);
-                    return true;
+                    break;
                 }
+            }
+
+            if bail {
+                skipped_users.insert(raw_user_state_key);
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             let mut founduser = false;
@@ -288,13 +297,15 @@ impl BlockFiller for DependencyFiller {
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
                 skipped_users.insert(raw_user_state_key);
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
                 skipped_users.insert(raw_user_state_key);
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             self.total_estimated_gas += gas_used as u64;
@@ -304,7 +315,7 @@ impl BlockFiller for DependencyFiller {
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
 
-            self.block.push(tx.clone());
+            self.block.push(tx);
 
             for write in writeset.iter() {
                 let raw = write.0.get_raw_ref();
@@ -324,19 +335,18 @@ impl BlockFiller for DependencyFiller {
             if len >= self.max_txns {
                self.full = true;
             }
-            return false;
-        });
+        }
 
         println!("skipped: {}", skipped);
-        return 0;
+        return return_vec;
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
     }
 
-    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
-        self.block.clone()
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction> {
+        &self.block
     }
 
     fn is_full(&self) -> bool {

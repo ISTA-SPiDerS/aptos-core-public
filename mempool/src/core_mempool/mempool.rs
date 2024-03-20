@@ -344,9 +344,9 @@ impl Mempool {
         if !result.is_empty() {
             let elapsed1 = time.elapsed().as_millis();
             let result_size = index;
-            let mut map = Vec::new();
+           // let mut map = Vec::new();
             block_filler.set_gas_per_core(self.last_max_gas);
-            block_filler.add_all(&mut map, &mut FxHashMap::default(), &mut FxHashSet::default(), true);
+            //block_filler.add_all(&mut map, &mut FxHashMap::default(), &mut FxHashSet::default(), true);
 
             let len =  block_filler.get_blockx().len();
             if (len > 0) {

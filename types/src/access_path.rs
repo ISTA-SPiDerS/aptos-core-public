@@ -126,6 +126,9 @@ impl AccessPath {
         &self.path
     }
 
+    pub fn query_path_2(self) -> Vec<u8> {
+        self.path
+    }
 
     /// Extract a StructTag from `self`. Returns Some if this is a resource access
     /// path and None otherwise

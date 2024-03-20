@@ -476,32 +476,59 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 }
 
 fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+    let goal_qty = 10_000;
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
-        10_000,
+        goal_qty,
         cores as u32
     );
+    let min_modifier = usize::min(txns.len(),cores);
+
 
     let mut first_iter_tx:u16 = 0;
     let mut total_filler_time = 0;
+    //let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::with_capacity_and_hasher(txns.len(), Default::default());
+    //let mut skipped_users: FxHashSet<Vec<u8>> = FxHashSet::with_capacity_and_hasher(txns.len(), Default::default());
+
     let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
     let mut skipped_users: FxHashSet<Vec<u8>> = FxHashSet::default();
     let mut index = 0;
     let num_blocks = txns.len();
+    let mut prev_filler_state = 0;
 
     while true
     {
         let start = Instant::now();
-        let vec_at_index = txns.get_mut(index).unwrap();
+        let mut vec_at_index = txns.get_mut(index).unwrap();
+        let startlen = vec_at_index.len();
 
-        filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+        let result = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+        let result_len = result.len();
 
         let len = filler.get_blockx().len();
+        let dif = len - prev_filler_state;
+
+        let per_batch_target = startlen / min_modifier;
+
+        if dif < per_batch_target
+        {
+            filler.set_gas_per_core(((max_gas/cores) * dif)as u64);
+        }
+
+        // okay, I do know the total number of transactions. it's vec_len * vec_at_index_len.  Say it's 12 batches for 12 cores
+        // Then, for block1, out of 10.000 transactions, we only added 1000. I know I got another 12 batches. 10.000/12 = 833, 1000 > 833 => okay. If 1000 < 833. What I want / What I got = 1.2 = multiplier for gas cost.
+
+
+        prev_filler_state = len;
+        std::mem::replace(vec_at_index, result);
+
+        //todo add a way to relax the filter if we added to little transactions from the batch to the block, for the next one.
         //todo if the resulting block is smaller than veclen/c, then we have to relax the gas per core for the next run!
-        //todo this atm loops infinitely. But weirdly enough it never crashes? What is happening with the index???
+        //todo we probably do want to do another flamegraph and see how this is behaving now!
+
         if index == 0 {
-            first_iter_tx = (10000 - vec_at_index.len()) as u16;
+            first_iter_tx = (10000 - result_len) as u16;
         }
 
         let elapsed = start.elapsed().as_millis();
@@ -514,12 +541,6 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         }
         index+=1;
     }
-
-    RAYON_EXEC_POOL.spawn(move || {
-        // Explicit async drops.
-        drop(last_touched);
-        drop(skipped_users);
-    });
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
