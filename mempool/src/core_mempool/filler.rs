@@ -221,7 +221,7 @@ impl BlockFiller for DependencyFiller {
         let mut skipped = 0;
         let mut len = self.block.len() as u64;
 
-        println!("Got x transactions: {}", result.len());
+        //println!("Got x transactions: {}", result.len());
 
         let mut return_vec  = Vec::with_capacity(result.len()/2);
         for (writeset, read_set, gas, tx) in result.drain(0..result.len()) {
