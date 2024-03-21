@@ -544,6 +544,14 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         let mut vec_at_index = txns.get_mut(index).unwrap();
         let startlen = vec_at_index.len();
 
+        if startlen == 0 {
+            if prev_filler_state >= 9990 || index + 1 >= num_blocks {
+                println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
+                break;
+            }
+            index+=1;
+            continue
+        }
         let result = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
         let result_len = result.len();
 

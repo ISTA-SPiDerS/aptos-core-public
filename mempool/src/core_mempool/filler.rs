@@ -243,6 +243,7 @@ impl BlockFiller for DependencyFiller {
             if writeset.is_empty()
             {
                 return_vec.push((writeset, read_set, gas, tx));
+                println!("This should never happen!");
                 continue;
             }
 
