@@ -336,7 +336,7 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
-        println!("skipped: {}", skipped);
+        println!("skipped: {} {}", skipped, len);
         return return_vec;
     }
 
