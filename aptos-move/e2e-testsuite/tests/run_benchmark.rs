@@ -85,8 +85,8 @@ fn main() {
 
     let num_accounts = 100000;
     let block_size = 10000;
-    let core_set = [4,8,12,16,20,24,28,32];
-    //let core_set = [4,6,8];
+    //let core_set = [4,8,12,16,20,24,28,32];
+    let core_set = [20];
 
     let trial_count = 5;
     let modes = [Pythia_Sig];
@@ -102,7 +102,7 @@ fn main() {
     //
     // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    for mode in modes {
+    /*for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
@@ -127,7 +127,7 @@ fn main() {
             }
             println!("#################################################################################");
         }
-    }
+    }*/
 
     for mode in modes {
         for mode_two in additional_modes {
@@ -555,6 +555,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         if dif < per_batch_target
         {
             filler.set_gas_per_core(((max_gas/cores) * dif)as u64);
+            println!("Relax filler! {} {} {}", dif, per_batch_target, len)
         }
 
         // okay, I do know the total number of transactions. it's vec_len * vec_at_index_len.  Say it's 12 batches for 12 cores
@@ -563,10 +564,6 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         prev_filler_state = len;
         std::mem::replace(vec_at_index, result);
-
-        //todo add a way to relax the filter if we added to little transactions from the batch to the block, for the next one.
-        //todo if the resulting block is smaller than veclen/c, then we have to relax the gas per core for the next run!
-        //todo we probably do want to do another flamegraph and see how this is behaving now!
 
         if index == 0 {
             first_iter_tx = (10000 - result_len) as u16;
@@ -577,7 +574,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         if prod {
             println!("elapsed: {}", total_filler_time);
 
-            if len >= 9990 || index + 1 >= num_blocks {
+            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) {
                 println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
                 break;
             }
