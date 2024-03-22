@@ -102,7 +102,7 @@ fn main() {
     //
     // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    for mode in modes {
+    /*for mode in modes {
         for mode_two in additional_modes {
             for c in core_set {
                 let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
@@ -136,7 +136,7 @@ fn main() {
             }
             println!("#################################################################################");
         }
-    }
+    }*/
 
     for mode in modes {
         for mode_two in additional_modes {
