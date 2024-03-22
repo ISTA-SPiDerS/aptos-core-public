@@ -2872,6 +2872,8 @@ dependencies = [
  "rand_core 0.5.1",
  "reqwest",
  "serde 1.0.160",
+ "strum",
+ "strum_macros",
  "tokio",
  "url",
 ]

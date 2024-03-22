@@ -16,7 +16,7 @@ use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
-use std::{fmt, format, fs, str::FromStr, time::Instant, hash::BuildHasherDefault};
+use std::{fmt, format, fs, str::FromStr, time::Instant, hash::BuildHasherDefault, env};
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
@@ -74,6 +74,15 @@ const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let mut has_spec_set = false;
+    if args.len() >= 2 {
+        has_spec_set = true;
+    }
+
+    println!("{:?}", args);
+
     // 750000 for NFT & DEX
     // 4500000 for solana
     // 1500000 for p2p
@@ -102,48 +111,105 @@ fn main() {
     //
     // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
 
-    /*for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+    if has_spec_set {
+        let mut run_spec: LoadType = LoadType::from_str(args[2].as_str()).unwrap();
+        match run_spec {
+            NFT => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
             }
-            println!("#################################################################################");
+            MIXED => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            DEXAVG => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            DEXBURSTY => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            P2PTX => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
         }
     }
-
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+    else {
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }*/
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
+        }
+
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+                }
+                println!("#################################################################################");
+            }
         }
     }
 

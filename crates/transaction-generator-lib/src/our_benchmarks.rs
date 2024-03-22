@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use rand::prelude::*;
 use rand::seq::index::IndexVec::USize;
 use std::collections::{BTreeMap, HashMap};
+use std::str::FromStr;
 use anyhow::anyhow;
 use rand::distributions::WeightedIndex;
 use aptos_framework::named_addresses;
@@ -30,6 +31,7 @@ use crate::account_activity_distribution::{TX_FROM, TX_NFT_FROM, TX_NFT_TO, TX_T
 use crate::publishing::publish_util::PackageHandler;
 use crate::solana_distribution::{COST_DISTR, LEN_DISTR, RES_DISTR};
 use crate::uniswap_distribution::{AVG, BURSTY};
+use strum_macros::EnumString;
 
 pub struct OurBenchmark {
     txn_factory: TransactionFactory,
@@ -44,7 +46,7 @@ pub struct OurBenchmark {
     pub solana_cost_options: Vec<f64>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, EnumString)]
 pub enum LoadType {
     NFT,
     MIXED,
