@@ -271,7 +271,6 @@ impl BlockFiller for DependencyFiller {
                     dependencies.insert(*key);
                 }
                 if good_block && len >= 1000 && hot_read_access >= 4 {
-                    // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
                     bail = true;
                     skipped += 1;
                     break;
