@@ -77,7 +77,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let mut has_spec_set = false;
-    if args.len() >= 2 {
+    if args.len() >= 3 {
         has_spec_set = true;
     }
 
