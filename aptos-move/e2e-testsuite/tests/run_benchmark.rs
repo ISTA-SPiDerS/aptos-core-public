@@ -128,7 +128,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 15000000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
@@ -206,7 +206,7 @@ fn main() {
         for mode in modes {
             for mode_two in additional_modes {
                 for c in core_set {
-                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 15000000, mode_two, false);
                 }
                 println!("#################################################################################");
             }
