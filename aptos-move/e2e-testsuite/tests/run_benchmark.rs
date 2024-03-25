@@ -128,7 +128,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 15000000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 20000000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
@@ -206,7 +206,7 @@ fn main() {
         for mode in modes {
             for mode_two in additional_modes {
                 for c in core_set {
-                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 15000000, mode_two, false);
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 20000000, mode_two, false);
                 }
                 println!("#################################################################################");
             }
@@ -603,6 +603,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     let mut index = 0;
     let num_blocks = txns.len();
     let mut prev_filler_state = 0;
+    let mut relaxed = false;
 
     while true
     {
@@ -628,7 +629,8 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         if dif < per_batch_target
         {
-            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/dif, 25))as u64);
+            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/dif, 100))as u64);
+            relaxed = true;
             println!("Relax filler! {} {} {}", dif, per_batch_target, len)
         }
 
@@ -648,7 +650,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         if prod {
             println!("elapsed: {}", total_filler_time);
 
-            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) {
+            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) || (relaxed && dif <= 1) {
                 println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
                 break;
             }
