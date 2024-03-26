@@ -259,6 +259,7 @@ impl BlockFiller for DependencyFiller {
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
             let mut dependencies = FxHashSet::default();
+            let limit_hot_reads = good_block && len >= 2500 && len <= 9000;
 
             let mut bail = false;
             let mut hot_read_access = 0;
@@ -266,12 +267,12 @@ impl BlockFiller for DependencyFiller {
                 if let Some((time, key)) = last_touched.get(read.get_raw_ref()) {
                     arrival_time = max(arrival_time, *time);
 
-                    if arrival_time > (self.total_estimated_gas / len * hot_read_percentage) as u32 {
+                    if limit_hot_reads && arrival_time > (self.total_estimated_gas / len * hot_read_percentage) as u32 {
                         hot_read_access += 1;
                     }
                     dependencies.insert(*key);
                 }
-                if good_block && len >= 1000 && len <= 9000 && hot_read_access >= 4 {
+                if hot_read_access >= 4 {
                     bail = true;
                     skipped += 1;
                     break;
