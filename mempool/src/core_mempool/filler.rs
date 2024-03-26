@@ -220,7 +220,8 @@ impl BlockFiller for DependencyFiller {
 
         let mut skipped = 0;
         let mut len = self.block.len() as u64;
-        let mut hot_read_percentage = (100/self.cores as u64);
+        //let hot_read_percentage = (100/self.cores as u64);
+        let hot_read_percentage = 10;
 
         //println!("Got x transactions: {}", result.len());
 
