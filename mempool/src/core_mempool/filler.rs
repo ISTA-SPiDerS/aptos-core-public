@@ -220,6 +220,7 @@ impl BlockFiller for DependencyFiller {
 
         let mut skipped = 0;
         let mut len = self.block.len() as u64;
+        let mut hot_read_percentage = (100/self.cores as u64);
 
         //println!("Got x transactions: {}", result.len());
 
@@ -265,12 +266,12 @@ impl BlockFiller for DependencyFiller {
                 if let Some((time, key)) = last_touched.get(read.get_raw_ref()) {
                     arrival_time = max(arrival_time, *time);
 
-                    if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                    if arrival_time > (self.total_estimated_gas / len * hot_read_percentage) as u32 {
                         hot_read_access += 1;
                     }
                     dependencies.insert(*key);
                 }
-                if good_block && len >= 1000 && hot_read_access >= 4 {
+                if good_block && len >= 500 && hot_read_access >= 4 {
                     bail = true;
                     skipped += 1;
                     break;
