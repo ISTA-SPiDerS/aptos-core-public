@@ -271,7 +271,7 @@ impl BlockFiller for DependencyFiller {
                     }
                     dependencies.insert(*key);
                 }
-                if good_block && len >= 500 && hot_read_access >= 4 {
+                if good_block && len >= 1000 && len <= 9000 && hot_read_access >= 4 {
                     bail = true;
                     skipped += 1;
                     break;
