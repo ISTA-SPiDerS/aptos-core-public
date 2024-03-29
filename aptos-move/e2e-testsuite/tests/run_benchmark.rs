@@ -407,6 +407,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         for i in 0..main_block.len() {
             full_block_skip.push(false);
         }
+        println!("{:?}", full_block_skip);
         let mut latvec = vec![];
         let mut total_tx = 0;
 
@@ -618,6 +619,11 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
             }
             println!("Skipping batch {}", index);
             index +=1;
+
+            if index + 1 >= num_blocks {
+                println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
+                break;
+            }
             continue;
         }
 
@@ -635,8 +641,8 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
             continue
         }
         let (result, skipped_last) = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
-        if skipped_last {
-            full_block_skip.insert(index, true);
+        if skipped_last && !full_block_skip.is_empty() {
+            *full_block_skip.get_mut(index).unwrap() = true;
         }
         //todo after getting a skipped_last or majority_skip, we want to add this to full_block_skip and if full_block_skip is set we want to ignore the block.
 
