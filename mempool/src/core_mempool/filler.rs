@@ -38,7 +38,7 @@ pub trait BlockFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>;
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool);
 
     fn get_block(self) -> Vec<SignedTransaction>;
     fn get_blockx(&mut self) -> &Vec<SignedTransaction>;
@@ -102,9 +102,9 @@ impl BlockFiller for SimpleFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool) {
 
-        Vec::new()
+        (Vec::new(), true)
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
@@ -216,12 +216,14 @@ impl BlockFiller for DependencyFiller {
         last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
         skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool) {
 
         let mut skipped = 0;
+        let mut non_user_skip = 0;
+        let input_len = result.len();
         let mut len = self.block.len() as u64;
-        //let hot_read_percentage = (100/self.cores as u64);
-        let hot_read_percentage = 10;
+        let hot_read_percentage = (100/self.cores as u64);
+        //let hot_read_percentage = 10;
 
         //println!("Got x transactions: {}", result.len());
 
@@ -232,14 +234,6 @@ impl BlockFiller for DependencyFiller {
                 return_vec.push((writeset, read_set, gas, tx));
                 continue;
             }
-
-            //todo: Can we get some better performance out of this?
-            //todo should we start with subsets and add more tx later?
-            //todo workloads with limited clients are a problem! But the distribution was very clear. It's not just 10k clients, its a wide distribution of clients actually.
-
-            //todo: Main cost is the dropping of the old retains + removal, statekey.getraw and hashmap insert
-
-            //todo: Each result set has 10k. We put this in the filler, do the retain. Return, less than 10k transactions, relax, redo, relax redo, etc. So its reinforcement learning each run. So we always put 10k in, we only iterate over 10k, then we relax slightly. Gives us a feeling of how contended is. say, we got out of 10k, 1k, we know we have to go until 100k. etc. 
 
             let gas_used = (gas / 10) as u16;
             if writeset.is_empty()
@@ -260,7 +254,7 @@ impl BlockFiller for DependencyFiller {
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
             let mut dependencies = FxHashSet::default();
-            let limit_hot_reads = good_block && len >= 2500 && len <= 9000;
+            let limit_hot_reads = good_block && len >= 1000 && len <= 9000;
 
             let mut bail = false;
             let mut hot_read_access = 0;
@@ -275,7 +269,6 @@ impl BlockFiller for DependencyFiller {
                 }
                 if hot_read_access >= 4 {
                     bail = true;
-                    skipped += 1;
                     break;
                 }
             }
@@ -283,6 +276,8 @@ impl BlockFiller for DependencyFiller {
             if bail {
                 skipped_users.insert(raw_user_state_key);
                 return_vec.push((writeset, read_set, gas, tx));
+                skipped += 1;
+                non_user_skip += 1;
                 continue;
             }
 
@@ -299,6 +294,7 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
+                non_user_skip += 1;
                 skipped_users.insert(raw_user_state_key);
                 return_vec.push((writeset, read_set, gas, tx));
                 continue;
@@ -339,8 +335,9 @@ impl BlockFiller for DependencyFiller {
             }
         }
 
+        //todo we might try to make this the normal skipped as well/
         println!("skipped: {} {}", skipped, len);
-        return return_vec;
+        return (return_vec, input_len >= non_user_skip + 10);
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {

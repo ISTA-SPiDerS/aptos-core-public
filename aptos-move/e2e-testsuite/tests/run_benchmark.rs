@@ -582,7 +582,7 @@ fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadTyp
     println!("end warump");
 }
 
-fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool, full_block_skip: &mut Vec<bool>) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let goal_qty = 10_000;
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
@@ -591,7 +591,6 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         cores as u32
     );
     let min_modifier = usize::min(txns.len(),cores);
-
 
     let mut first_iter_tx:u16 = 0;
     let mut total_filler_time = 0;
@@ -604,12 +603,25 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     let num_blocks = txns.len();
     let mut prev_filler_state = 0;
     let mut relaxed = 0;
-
+    let mut is_first = true;
     while true
     {
         let start = Instant::now();
         let mut vec_at_index = txns.get_mut(index).unwrap();
+        if !is_first {
+
+            for (w, g, tx) in vec_at_index {
+                skipped_users.insert(tx.sender().to_vec());
+            }
+            println!("Skipping batch {}", index);
+            index +=1;
+            continue;
+        }
+
         let startlen = vec_at_index.len();
+        if startlen > 0 {
+            is_first = false;
+        }
 
         if startlen == 0 {
             if prev_filler_state >= 9990 || index + 1 >= num_blocks {
@@ -619,7 +631,12 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
             index+=1;
             continue
         }
-        let result = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+        let (result, skipped_last) = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+        if skipped_last {
+            full_block_skip.insert(index, true);
+        }
+        //todo after getting a skipped_last or majority_skip, we want to add this to full_block_skip and if full_block_skip is set we want to ignore the block.
+
         let result_len = result.len();
 
         let len = filler.get_blockx().len();
