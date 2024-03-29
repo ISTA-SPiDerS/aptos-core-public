@@ -337,7 +337,7 @@ impl BlockFiller for DependencyFiller {
 
         //todo we might try to make this the normal skipped as well/
         println!("skipped: {} {}", skipped, len);
-        return (return_vec, non_user_skip + 10 >= input_len);
+        return (return_vec, non_user_skip + 25 >= input_len);
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
