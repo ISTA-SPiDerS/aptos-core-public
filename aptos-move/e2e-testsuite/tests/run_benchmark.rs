@@ -611,7 +611,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     {
         let start = Instant::now();
         let mut vec_at_index = txns.get_mut(index).unwrap();
-        if !is_first {
+        if !is_first && *full_block_skip.get(index).unwrap() {
 
             for (w, r, g, tx) in vec_at_index {
                 skipped_users.insert(tx.sender().to_vec());
