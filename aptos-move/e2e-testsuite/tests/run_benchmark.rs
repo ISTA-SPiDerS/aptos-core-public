@@ -403,7 +403,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
         // Generate the workload.
         let mut main_block = create_block( block_size, multiplier, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
-
+        let mut full_block_skip = Vec::new();
+        for i in 0..main_block.len() {
+            full_block_skip.push(false);
+        }
         let mut latvec = vec![];
         let mut total_tx = 0;
 
@@ -413,7 +416,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         while run {
             iter+=1;
 
-            let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty(), true);
+            let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty(), true, &mut full_block_skip);
 
             let dif = first_iter_tx - total_tx;
             total_tx = first_iter_tx;
@@ -549,7 +552,7 @@ fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadTyp
     // Generate the workload.
     let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
     println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
-    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false);
+    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false, &mut Vec::new());
     // Map to user transactions.
     let block = return_block.map_par_txns(Transaction::UserTransaction);
 
@@ -610,7 +613,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         let mut vec_at_index = txns.get_mut(index).unwrap();
         if !is_first {
 
-            for (w, g, tx) in vec_at_index {
+            for (w, r, g, tx) in vec_at_index {
                 skipped_users.insert(tx.sender().to_vec());
             }
             println!("Skipping batch {}", index);
