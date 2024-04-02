@@ -103,13 +103,13 @@ fn main() {
 
     //50 for 300k skipped
 
-    // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
-    //
-    // Compare more and less strict models also in terms of execution time.
-    //
-    // Optimize execution time more of the filler calc. We can now more easily evaluate it. As its single threaded even on my pc alone.
-    //
-    // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
+    // We divide input transactions into batches.
+    // We try the first batch and try to schedule transactions, if we scheduled less than expected, we relax the rules for the next batch
+    // If we notice that we tried to schedule a batch and couldn't we mark this batch as "all contended" to be then executed on the critical path later (avoids repetitive scheduling)
+
+    // When scheduling we do the normal read-set/write-set comparison and try to compare this to some max chain length (very greedy)
+    // We also check for transactions that unify more than 4 critical paths and if we're above 1k transactions only schedule them in the next block.
+    // todo: Make this critical path of 10k/cores length as it is already for the "length of critical path calculation"
 
     if has_spec_set {
         let mut run_spec: LoadType = LoadType::from_str(args[2].as_str()).unwrap();
@@ -395,11 +395,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             multiplier = c as u64;
         }
 
-        //todo: Now we want to measure the latency per tx for the initial block.
-        //todo: The other transactions, are they of the same workload? Do we want to have just generic "cheap" transactions added in to allow filling up?
         let mut local_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
-
-        // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
 
         // Generate the workload.
         let mut main_block = create_block( block_size, multiplier, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
@@ -407,7 +403,6 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         for i in 0..main_block.len() {
             full_block_skip.push(false);
         }
-        println!("{:?}", full_block_skip);
         let mut latvec = vec![];
         let mut total_tx = 0;
 
@@ -644,7 +639,6 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         if skipped_last && !full_block_skip.is_empty() {
             *full_block_skip.get_mut(index).unwrap() = true;
         }
-        //todo after getting a skipped_last or majority_skip, we want to add this to full_block_skip and if full_block_skip is set we want to ignore the block.
 
         let result_len = result.len();
 
@@ -653,9 +647,9 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         let per_batch_target = startlen / min_modifier;
 
-        if dif < per_batch_target
+        if dif * 2 < per_batch_target
         {
-            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/dif, 100))as u64);
+            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/dif*2, 100))as u64);
             relaxed += 1;
             println!("Relax filler! {} {} {}", dif, per_batch_target, len)
         }
