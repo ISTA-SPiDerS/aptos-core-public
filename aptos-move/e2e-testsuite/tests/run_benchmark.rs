@@ -649,7 +649,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         if dif * 2 < per_batch_target
         {
-            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/dif*2, 100))as u64);
+            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/(dif*2), 100))as u64);
             relaxed += 1;
             println!("Relax filler! {} {} {}", dif, per_batch_target, len)
         }
