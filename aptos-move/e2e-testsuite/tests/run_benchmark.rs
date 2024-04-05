@@ -643,11 +643,11 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         let result_len = result.len();
 
         let len = filler.get_blockx().len();
-        let mut dif = (len - prev_filler_state) + 1;
+        let mut dif = (len - prev_filler_state);
 
         let per_batch_target = startlen / min_modifier;
 
-        if dif * 2 < per_batch_target
+        if dif > 0 && dif * 2 < per_batch_target
         {
             filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/(dif*2), 100))as u64);
             relaxed += 1;
