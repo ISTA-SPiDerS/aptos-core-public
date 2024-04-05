@@ -34,6 +34,7 @@ use std::{
 use std::collections::{BTreeMap, VecDeque};
 use std::num::Wrapping;
 use dashmap::DashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
@@ -303,8 +304,8 @@ impl Mempool {
         {
             //println!("bla result: {}", result_size);
             //println!("bla seen: {}", seen.len());
-
-            block_filler.add_all(&mut BTreeMap::new(), true);
+            let mut map = Vec::new();
+            block_filler.add_all(&mut map, &mut FxHashMap::default(), &mut FxHashSet::default(), true);
             //println!("bla unsee: {}", off.len());
 
             //println!("bla blocklen: {}", block_filler.get_blockx().len());

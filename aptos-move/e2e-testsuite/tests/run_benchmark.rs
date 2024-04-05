@@ -16,7 +16,7 @@ use aptos_vm_validator::vm_validator::TransactionValidation;
 
 use rand::prelude::*;
 use regex::Regex;
-use std::{fmt, format, fs, str::FromStr, time::Instant, hash::BuildHasherDefault};
+use std::{fmt, format, fs, str::FromStr, time::Instant, hash::BuildHasherDefault, env};
 use std::{thread, time};
 use std::borrow::{Borrow, BorrowMut};
 use std::char::MAX;
@@ -58,6 +58,7 @@ use move_core_types::vm_status::VMStatus;
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use aptos_mempool::shared_mempool::types::{SYNC_CACHE};
 use aptos_types::state_store::state_key::StateKey;
 use aptos_types::write_set::WriteSet;
@@ -73,6 +74,15 @@ const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let mut has_spec_set = false;
+    if args.len() >= 3 {
+        has_spec_set = true;
+    }
+
+    println!("{:?}", args);
+
     // 750000 for NFT & DEX
     // 4500000 for solana
     // 1500000 for p2p
@@ -85,62 +95,121 @@ fn main() {
     let num_accounts = 100000;
     let block_size = 10000;
     let core_set = [4,8,12,16,20,24,28,32];
-    //let core_set = [4,6,8];
+    //let core_set = [20];
 
     let trial_count = 5;
     let modes = [BlockSTM_Sig];
     let additional_modes = ["Good", ""];
 
-    // Give each transaction and index of which batch they are. Record the batch numbers to get calculate latency. Stop once 10k of batch 1 finished.
-    //
-    // Compare more and less strict models also in terms of execution time.
-    //
-    // Optimize execution time more of the filler calc. We can now more easily evaluate it. As its single threaded even on my pc alone.
-    //
-    // Can we do something like "identify popular resources, if tx accesses multiple popular ones, it's okay if it appears in the first 100, or in the last 100, else move up to next block.
+    //50 for 300k skipped
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+    // We divide input transactions into batches.
+    // We try the first batch and try to schedule transactions, if we scheduled less than expected, we relax the rules for the next batch
+    // If we notice that we tried to schedule a batch and couldn't we mark this batch as "all contended" to be then executed on the critical path later (avoids repetitive scheduling)
+
+    // When scheduling we do the normal read-set/write-set comparison and try to compare this to some max chain length (very greedy)
+    // We also check for transactions that unify more than 4 critical paths and if we're above 1k transactions only schedule them in the next block.
+    // todo: Make this critical path of 10k/cores length as it is already for the "length of critical path calculation"
+
+    if has_spec_set {
+        let mut run_spec: LoadType = LoadType::from_str(args[2].as_str()).unwrap();
+        match run_spec {
+            NFT => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
             }
-            println!("#################################################################################");
+            MIXED => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 20000000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            DEXAVG => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            DEXBURSTY => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
+            P2PTX => {
+                for mode in modes {
+                    for mode_two in additional_modes {
+                        for c in core_set {
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+                        }
+                        println!("#################################################################################");
+                    }
+                }
+            }
         }
     }
-
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+    else {
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXAVG, 1300000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
         }
-    }
 
-    for mode in modes {
-        for mode_two in additional_modes {
-            for c in core_set {
-                let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 14500000, mode_two, false);
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+                }
+                println!("#################################################################################");
             }
-            println!("#################################################################################");
+        }
+
+        for mode in modes {
+            for mode_two in additional_modes {
+                for c in core_set {
+                    let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 20000000, mode_two, false);
+                }
+                println!("#################################################################################");
+            }
         }
     }
 
@@ -316,23 +385,24 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         for idx in 0..289023 {
             seq_num.insert(idx, SEQ_NUM);
         }
-        seq_num.insert(usize::MAX, SEQ_NUM + 1); //module owner SEQ_NUM stored in key value usize::MAX
+        seq_num.insert(usize::MAX, SEQ_NUM + 1);
 
-        let mut ac_block_size = block_size;
+        run_warmup(mode, c, 10000, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &mut executor);
+
+        let mut multiplier = 1;
         if !mode_two.is_empty()
         {
-            ac_block_size = block_size * c as u64 * 2;
+            multiplier = c as u64;
         }
 
-        //todo: Now we want to measure the latency per tx for the initial block.
-        //todo: The other transactions, are they of the same workload? Do we want to have just generic "cheap" transactions added in to allow filling up?
         let mut local_stats:BTreeMap<String, Vec<u128>> = BTreeMap::new();
 
-        // I have a list of transactions. I will go through them and pick a bunch of them (mostly the beginning of the queue, but also a bunch in the middle). I want those removed.
-
         // Generate the workload.
-        let mut main_block = create_block( ac_block_size, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
-
+        let mut main_block = create_block( block_size, multiplier, module_owner.clone(), accounts.clone(), &mut seq_num, &module_id, load_type.clone(), &executor);
+        let mut full_block_skip = Vec::new();
+        for i in 0..main_block.len() {
+            full_block_skip.push(false);
+        }
         let mut latvec = vec![];
         let mut total_tx = 0;
 
@@ -342,9 +412,10 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         while run {
             iter+=1;
 
-            let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty());
+            let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty(), true, &mut full_block_skip);
 
-            total_tx += first_iter_tx;
+            let dif = first_iter_tx - total_tx;
+            total_tx = first_iter_tx;
             if total_tx >= 10000 {
                 run = false;
             }
@@ -356,7 +427,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 return u128::MAX;
             }
 
-            println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", ac_block_size, num_accounts, c, print_mode, load_type);
+            println!("block size: {}, accounts: {}, cores: {}, mode: {}, load: {:?}", block_size*multiplier, num_accounts, c, print_mode, load_type);
 
             let start = Instant::now();
 
@@ -372,7 +443,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
                 .unwrap();
 
             let final_time = start.elapsed();
-            latvec.push((first_iter_tx, final_time.as_millis()+filler_time));
+            latvec.push((dif, final_time.as_millis()+filler_time));
 
 
             let mut collected_times = profiler.collective_times.borrow_mut();
@@ -471,20 +542,145 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
     return final_time;
 }
 
-fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadType, max_gas: usize, seq_num: &mut HashMap<usize, u64>, module_owner: AccountData, module_id: &ModuleId, accounts: Vec<Account>, executor: &mut FakeExecutor) {
+    println!("start warump");
+
+    // Generate the workload.
+    let mut main_block = create_block(block_size, 1 as u64, module_owner.clone(), accounts.clone(), seq_num, &module_id, load_type.clone(), &executor);
+    println!("{} {}", main_block.len(), main_block.get(0).unwrap().len());
+    let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, false, false, &mut Vec::new());
+    // Map to user transactions.
+    let block = return_block.map_par_txns(Transaction::UserTransaction);
+
+    let mut profiler = Profiler::new();
+    // The actual execution.
+    let block_result = executor
+        .execute_transaction_block_parallel(
+            block.clone(),
+            c as usize,
+            mode, profiler.borrow_mut(),
+        )
+        .unwrap();
+
+    for result in block_result {
+        match result.status() {
+            TransactionStatus::Keep(status) => {
+                executor.apply_write_set(result.write_set());
+                assert_eq!(
+                    status,
+                    &ExecutionStatus::Success,
+                    "transaction failed with {:?}",
+                    status
+                );
+            }
+            TransactionStatus::Discard(status) => panic!("transaction discarded with {:?}", status),
+            TransactionStatus::Retry => panic!("transaction status is retry"),
+        };
+    }
+
+    println!("end warump");
+}
+
+fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool, full_block_skip: &mut Vec<bool>) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+    let goal_qty = 10_000;
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
         1_000_000_000,
-        10_000,
+        goal_qty,
         cores as u32
     );
+    let min_modifier = usize::min(txns.len(),cores);
 
-    let start = Instant::now();
+    let mut first_iter_tx:u16 = 0;
+    let mut total_filler_time = 0;
+    //let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::with_capacity_and_hasher(txns.len(), Default::default());
+    //let mut skipped_users: FxHashSet<Vec<u8>> = FxHashSet::with_capacity_and_hasher(txns.len(), Default::default());
 
-    let first_iter_tx = filler.add_all( txns, good_block);
+    let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
+    let mut skipped_users: FxHashSet<Vec<u8>> = FxHashSet::default();
+    let mut index = 0;
+    let num_blocks = txns.len();
+    let mut prev_filler_state = 0;
+    let mut relaxed = 0;
+    let mut is_first = true;
+    while true
+    {
+        let start = Instant::now();
+        let mut vec_at_index = txns.get_mut(index).unwrap();
+        if !is_first && *full_block_skip.get(index).unwrap() {
 
-    let elapsed = start.elapsed().as_millis();
-    println!("elapsed: {}", elapsed);
+            for (w, r, g, tx) in vec_at_index {
+                skipped_users.insert(tx.sender().to_vec());
+            }
+            println!("Skipping batch {}", index);
+            index +=1;
+
+            if index + 1 >= num_blocks {
+                println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
+                break;
+            }
+            continue;
+        }
+
+        let startlen = vec_at_index.len();
+        if startlen > 0 {
+            is_first = false;
+        }
+
+        if startlen == 0 {
+            if prev_filler_state >= 9990 || index + 1 >= num_blocks {
+                println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
+                break;
+            }
+            index+=1;
+            continue
+        }
+        let (result, skipped_last) = filler.add_all( vec_at_index, &mut last_touched, &mut skipped_users, good_block);
+        if skipped_last && !full_block_skip.is_empty() {
+            *full_block_skip.get_mut(index).unwrap() = true;
+        }
+
+        let result_len = result.len();
+
+        let len = filler.get_blockx().len();
+        let mut dif = (len - prev_filler_state);
+
+        let per_batch_target = startlen / min_modifier;
+
+        if dif > 0 && dif * 2 < per_batch_target
+        {
+            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/(dif*2), 100))as u64);
+            relaxed += 1;
+            println!("Relax filler! {} {} {}", dif, per_batch_target, len)
+        }
+
+        // okay, I do know the total number of transactions. it's vec_len * vec_at_index_len.  Say it's 12 batches for 12 cores
+        // Then, for block1, out of 10.000 transactions, we only added 1000. I know I got another 12 batches. 10.000/12 = 833, 1000 > 833 => okay. If 1000 < 833. What I want / What I got = 1.2 = multiplier for gas cost.
+
+
+        prev_filler_state = len;
+        std::mem::replace(vec_at_index, result);
+
+        if index == 0 {
+            first_iter_tx = (10000 - result_len) as u16;
+        }
+
+        let elapsed = start.elapsed().as_millis();
+        total_filler_time += elapsed;
+        if prod {
+            println!("elapsed: {}", total_filler_time);
+
+            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) || (relaxed > 2 && dif <= 1) {
+                println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
+                break;
+            }
+        }
+        else {
+            break;
+        }
+
+        index+=1;
+    }
 
     let gas_estimates = filler.get_gas_estimates();
     let dependencies = filler.get_dependency_graph();
@@ -493,25 +689,23 @@ fn get_transaction_register(txns: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKe
     // Resetting for next block!
     SYNC_CACHE.lock().unwrap().clear();
 
-    (TransactionRegister::new(txns, vec![], vec![]), elapsed, first_iter_tx)
+    (TransactionRegister::new(txns, Vec::new(), Vec::new()), total_filler_time, first_iter_tx)
 }
 
 //Create block with coin exchange transactions
 fn create_block(
     size: u64,
+    c: u64,
     owner: AccountData,
     accounts: Vec<Account>,
     seq_num: &mut HashMap<usize, u64>,
     module_id: &ModuleId,
     load_type: LoadType,
     executor: &FakeExecutor
-) -> BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)> {
+) -> Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>> {
 
     let mut transaction_validation = executor.get_transaction_validation();
-
-
-
-    let mut result = BTreeMap::new();
+    let mut end_result = Vec::new();
 
     let mut rng: ThreadRng = thread_rng();
 
@@ -534,82 +728,84 @@ fn create_block(
     let p2p_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_TO).unwrap();
     let nft_sender_distribution: WeightedIndex<f64> = WeightedIndex::new(&TX_NFT_FROM).unwrap();
 
-    for i in 0..size {
+    let mut client_index: usize = 0;
+    for j in 0..c
+    {
+        let mut result = Vec::new();
+        for i in 0..size {
+            client_index+=1;
+            let mut sender_id: usize = client_index % accounts.len();
+            let tx_entry_function;
 
-        let mut sender_id: usize = (i as usize) % accounts.len();
-        let tx_entry_function;
-
-        if matches!(load_type, MIXED)
-        {
-            let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
-            let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
-
-            let mut writes: Vec<u64> = Vec::new();
-            let mut i = 0;
-            while i < write_len_sample {
-                i+=1;
-                writes.push(general_resource_distribution.sample(&mut rng) as u64);
-            }
-
-            let length = max(1, cost_sample.round() as usize);
-
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("loop_exchange").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
-            );
-        }
-        else if matches!(load_type, P2PTX)
-        {
-            let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
-            let sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
-
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("exchangetwo").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()],
-            );
-        }
-        else
-        {
-
-            let resource_id = general_resource_distribution.sample(&mut rng);
-            if matches!(load_type, NFT)
+            if matches!(load_type, MIXED)
             {
-                sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
+                let cost_sample = COST_DISTR[rand::thread_rng().gen_range(0..COST_DISTR.len())];
+                let write_len_sample = LEN_DISTR[rand::thread_rng().gen_range(0..LEN_DISTR.len())] as usize;
+
+                let mut writes: Vec<u64> = Vec::new();
+                let mut size_param = 0;
+                while size_param < write_len_sample {
+                    size_param += 1;
+                    writes.push(general_resource_distribution.sample(&mut rng) as u64);
+                }
+
+                let length = max(1, cost_sample.round() as usize);
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("loop_exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&length).unwrap(), bcs::to_bytes(&writes).unwrap()],
+                );
+            } else if matches!(load_type, P2PTX)
+            {
+                let receiver_id = p2p_receiver_distribution.sample(&mut rng) % accounts.len();
+                sender_id = p2p_sender_distribution.sample(&mut rng) % accounts.len();
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("exchangetwo").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&receiver_id).unwrap(), bcs::to_bytes(&sender_id).unwrap()],
+                );
+            } else {
+                let resource_id = general_resource_distribution.sample(&mut rng);
+                if matches!(load_type, NFT)
+                {
+                    sender_id = nft_sender_distribution.sample(&mut rng) % accounts.len();
+                }
+
+                tx_entry_function = EntryFunction::new(
+                    module_id.clone(),
+                    ident_str!("exchange").to_owned(),
+                    vec![],
+                    vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&resource_id).unwrap()],
+                );
             }
 
-            tx_entry_function = EntryFunction::new(
-                module_id.clone(),
-                ident_str!("exchange").to_owned(),
-                vec![],
-                vec![bcs::to_bytes(owner.address()).unwrap(), bcs::to_bytes(&resource_id).unwrap()],
-            );
+            let txn = accounts[sender_id]
+                .transaction()
+                .entry_function(tx_entry_function.clone())
+                .sequence_number(seq_num[&sender_id])
+                .sign();
+            seq_num.insert(sender_id, seq_num[&sender_id] + 1);
+
+
+            let ex_result = transaction_validation.speculate_transaction(&txn);
+            let (a, b) = ex_result.unwrap();
+            match b {
+                VMStatus::Executed => {
+                    result.push((a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, txn.clone()));
+                }
+                _ => {
+                    // Do nothing.
+                }
+            }
         }
-
-        let txn = accounts[sender_id]
-            .transaction()
-            .entry_function(tx_entry_function.clone())
-            .sequence_number(seq_num[&sender_id])
-            .sign();
-        seq_num.insert(sender_id, seq_num[&sender_id] + 1);
-
-
-        let ex_result = transaction_validation.speculate_transaction(&txn);
-        let (a, b) = ex_result.unwrap();
-        match b {
-            VMStatus::Executed => {
-                result.insert(i as u32, (a.output.txn_output().write_set().clone(), a.input, a.output.txn_output().gas_used() as u32, txn.clone()));
-            }
-            _ => {
-                // Do nothing.
-            }
-        }
+        end_result.push(result);
     }
 
-    result
+    end_result
 }
 
 fn create_module(executor: &mut FakeExecutor, module_path: String) -> (AccountData, ModuleId) {

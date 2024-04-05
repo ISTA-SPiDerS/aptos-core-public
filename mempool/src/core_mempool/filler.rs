@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 
 use std::borrow::Borrow;
 use std::cmp::max;
@@ -19,6 +19,7 @@ use rayon::iter::IndexedParallelIterator;
 use rayon::iter::ParallelIterator;
 use anyhow::{anyhow, Result, Error};
 use itertools::Itertools;
+use crate::shared_mempool::types::{SYNC_CACHE};
 use once_cell::sync::{Lazy, OnceCell};
 use rustc_hash::{FxHashMap, FxHashSet};
 use aptos_crypto::hash::TestOnlyHash;
@@ -27,17 +28,20 @@ use aptos_types::write_set::WriteSet;
 use crate::core_mempool::transaction_store::TransactionStore;
 use crate::core_mempool::TxnPointer;
 use aptos_aggregator::transaction::TransactionOutputExt;
+use aptos_types::test_helpers::transaction_test_helpers::block;
 
 pub trait BlockFiller {
     fn add(&mut self, txn: SignedTransaction) -> bool;
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        previous: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16;
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool);
 
     fn get_block(self) -> Vec<SignedTransaction>;
-    fn get_blockx(&mut self) -> Vec<SignedTransaction>;
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction>;
 
     fn is_full(&self) -> bool;
 
@@ -94,18 +98,20 @@ impl BlockFiller for SimpleFiller {
 
     fn add_all(
         &mut self,
-        previous: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        previous: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16 {
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool) {
 
-        1
+        (Vec::new(), true)
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
     }
-    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
-        self.block.clone()
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction> {
+        &self.block
     }
 
     fn is_full(&self) -> bool {
@@ -206,60 +212,73 @@ impl BlockFiller for DependencyFiller {
 
     fn add_all(
         &mut self,
-        result: &mut BTreeMap<u32, (WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        result: &mut Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>,
+        last_touched: &mut FxHashMap<Vec<u8>, (u32, u16)>,
+        skipped_users: &mut FxHashSet<Vec<u8>>,
         good_block: bool
-    ) -> u16 {
+    ) -> (Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>, bool) {
 
         let mut skipped = 0;
-        let mut len = 0;
-        let mut first_iter_tx = 0;
+        let mut non_user_skip = 0;
+        let input_len = result.len();
+        let mut len = self.block.len() as u64;
+        let hot_read_percentage = (100/self.cores as u64);
+        //let hot_read_percentage = 10;
 
-        println!("Got x transactions: {}", result.len());
+        //println!("Got x transactions: {}", result.len());
 
-        let mut last_touched: FxHashMap<Vec<u8>, (u32, u16)> = FxHashMap::default();
-        let mut skipped_users = HashSet::new();
-
-        result.retain(|ind, (writeset, read_set, gas, tx)| {
+        let mut return_vec  = Vec::with_capacity(result.len()/2);
+        for (writeset, read_set, gas, tx) in result.drain(0..result.len()) {
             //let (speculation, status, tx) = previous.get(ind).unwrap();
             if self.full {
-                return true;;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
-            let gas_used = (*gas / 10) as u16;
+            let gas_used = (gas / 10) as u16;
             if writeset.is_empty()
             {
-                println!("bla Empty????");
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                println!("This should never happen!");
+                continue;
             }
 
             let raw_user_state_key = tx.sender().to_vec();
-            if skipped_users.contains(&raw_user_state_key)
+            if good_block && skipped_users.contains(&raw_user_state_key)
             {
                 skipped += 1;
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             // When transaction can start assuming unlimited resources.
             let mut arrival_time = 0;
             let mut dependencies = FxHashSet::default();
+            let limit_hot_reads = good_block && len >= 1000 && len <= 9000;
 
+            let mut bail = false;
             let mut hot_read_access = 0;
             for read in read_set.iter() {
-                if let Some((time, key)) = last_touched.get(&read.get_raw()) {
+                if let Some((time, key)) = last_touched.get(read.get_raw_ref()) {
                     arrival_time = max(arrival_time, *time);
 
-                    if arrival_time > (self.total_estimated_gas / len * 10) as u32 {
+                    if limit_hot_reads && arrival_time > (self.total_estimated_gas / len * hot_read_percentage) as u32 {
                         hot_read_access += 1;
                     }
                     dependencies.insert(*key);
                 }
-                if good_block && len >= 1000 && hot_read_access >= 4 {
-                    // In here I can detec if a transaction tries to connect two long paths and then just deny it. That's greedy for sure! Just need a good way to measure it.
-
-                    skipped += 1;
-                    skipped_users.insert(raw_user_state_key);
-                    return true;
+                if hot_read_access >= 4 {
+                    bail = true;
+                    break;
                 }
+            }
+
+            if bail {
+                skipped_users.insert(raw_user_state_key);
+                return_vec.push((writeset, read_set, gas, tx));
+                skipped += 1;
+                non_user_skip += 1;
+                continue;
             }
 
             let mut founduser = false;
@@ -275,14 +294,16 @@ impl BlockFiller for DependencyFiller {
                 //self.full = true;
                 //println!("bla skip {} {}", self.total_estimated_gas, finish_time);
                 skipped += 1;
+                non_user_skip += 1;
                 skipped_users.insert(raw_user_state_key);
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             if self.total_estimated_gas + gas_used as u64 > (self.total_max_gas) as u64 {
                 self.full = true;
-                skipped_users.insert(raw_user_state_key);
-                return true;
+                return_vec.push((writeset, read_set, gas, tx));
+                continue;
             }
 
             self.total_estimated_gas += gas_used as u64;
@@ -292,11 +313,7 @@ impl BlockFiller for DependencyFiller {
             // println!("len {}", dependencies.len());
             self.dependency_graph.push(dependencies);
 
-            self.block.push(tx.clone());
-
-            if *ind < self.max_txns as u32 {
-                first_iter_tx += 1;
-            }
+            self.block.push(tx);
 
             for write in writeset.iter() {
                 let raw = write.0.get_raw_ref();
@@ -316,25 +333,19 @@ impl BlockFiller for DependencyFiller {
             if len >= self.max_txns {
                 self.full = true;
             }
-            return false;
-        });
+        }
 
-
-        RAYON_EXEC_POOL.spawn(move || {
-            // Explicit async drops.
-            drop(last_touched);
-        });
-
-        println!("skipped: {}", skipped);
-        return first_iter_tx;
+        //todo we might try to make this the normal skipped as well/
+        println!("skipped: {} {}", skipped, len);
+        return (return_vec, non_user_skip + 25 >= input_len);
     }
 
     fn get_block(self) -> Vec<SignedTransaction> {
         self.block
     }
 
-    fn get_blockx(&mut self) -> Vec<SignedTransaction> {
-        self.block.clone()
+    fn get_blockx(&mut self) -> &Vec<SignedTransaction> {
+        &self.block
     }
 
     fn is_full(&self) -> bool {

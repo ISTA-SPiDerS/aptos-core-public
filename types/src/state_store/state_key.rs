@@ -22,17 +22,17 @@ use thiserror::Error;
 pub struct StateKey {
     inner: StateKeyInner,
     #[derivative(
-        Hash = "ignore",
-        Ord = "ignore",
-        PartialEq = "ignore",
-        PartialOrd = "ignore"
+    Hash = "ignore",
+    Ord = "ignore",
+    PartialEq = "ignore",
+    PartialOrd = "ignore"
     )]
     #[cfg_attr(any(test, feature = "fuzzing"), proptest(value = "OnceCell::new()"))]
     hash: OnceCell<HashValue>,
 }
 
 #[derive(
-    Clone, Debug, CryptoHasher, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd, Hash,
+Clone, Debug, CryptoHasher, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd, Hash,
 )]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[serde(rename = "StateKey")]
@@ -106,16 +106,23 @@ impl StateKey {
 
     pub fn get_raw(&self) -> Vec<u8> {
         match &self.inner {
-            StateKeyInner::AccessPath(access_path) => access_path.address.to_vec(),
+            StateKeyInner::AccessPath(access_path) => access_path.query_path().clone(),
             StateKeyInner::TableItem { handle, key } => key.to_vec(),
             StateKeyInner::Raw(bytes) => bytes.to_vec(),
         }
     }
 
+    pub fn get_full_raw(self) -> Vec<u8> {
+        match self.inner {
+            StateKeyInner::AccessPath(access_path) => access_path.query_path_2(),
+            StateKeyInner::TableItem { handle, key } => key,
+            StateKeyInner::Raw(bytes) => bytes,
+        }
+    }
 
-    pub fn get_raw_ref(&self) -> &[u8] {
+    pub fn get_raw_ref(&self) -> &Vec<u8> {
         match &self.inner {
-            StateKeyInner::AccessPath(access_path) => access_path.address.as_ref(),
+            StateKeyInner::AccessPath(access_path) => access_path.query_path(),
             StateKeyInner::TableItem { handle, key } => key,
             StateKeyInner::Raw(bytes) => bytes,
         }
@@ -174,8 +181,8 @@ impl CryptoHash for StateKey {
 
 impl Serialize for StateKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
+        where
+            S: Serializer,
     {
         self.inner.serialize(serializer)
     }
@@ -183,8 +190,8 @@ impl Serialize for StateKey {
 
 impl<'de> Deserialize<'de> for StateKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
+        where
+            D: Deserializer<'de>,
     {
         let inner = StateKeyInner::deserialize(deserializer)?;
         Ok(Self::new(inner))

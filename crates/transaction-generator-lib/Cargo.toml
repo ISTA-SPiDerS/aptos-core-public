@@ -36,3 +36,5 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
+strum_macros = { workspace = true }
+strum = { workspace = true }

@@ -15,6 +15,7 @@ use rand::seq::index::IndexVec::USize;
 use std::collections::{BTreeMap, HashMap};
 use anyhow::anyhow;
 use rand::distributions::WeightedIndex;
+use strum_macros::EnumString;
 use aptos_framework::named_addresses;
 use aptos_rest_client::aptos_api_types::AccountData;
 use aptos_sdk::bcs;
@@ -38,7 +39,7 @@ pub struct OurBenchmark {
     owner: AccountAddress
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, EnumString)]
 pub enum LoadType {
     NFT,
     MIXED,

@@ -122,6 +122,14 @@ impl AccessPath {
         bcs::from_bytes::<Path>(&self.path).expect("Unexpected serialization error")
     }
 
+    pub fn query_path(&self) -> &Vec<u8> {
+        &self.path
+    }
+
+    pub fn query_path_2(self) -> Vec<u8> {
+        self.path
+    }
+
     /// Extract a StructTag from `self`. Returns Some if this is a resource access
     /// path and None otherwise
     pub fn get_struct_tag(&self) -> Option<StructTag> {
