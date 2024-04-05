@@ -45,6 +45,7 @@ statrs = "0.16.0"
 aptos-aggregator = { workspace = true }
 
 crossbeam-skiplist = "0.1.1"
+rustc-hash = "1.1.0"
 [features]
 default = ["aptos-cached-packages/fuzzing"]
 
