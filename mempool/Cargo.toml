@@ -49,6 +49,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
+kanal = "0.1.0-pre8"
+crossbeam = { workspace = true }
 rustc-hash = "1.1.0"
 aptos-aggregator = { workspace = true }
 
