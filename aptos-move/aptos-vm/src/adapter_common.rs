@@ -56,6 +56,7 @@ pub trait VMAdapter {
         txn: &PreprocessedTransaction,
         data_cache: &S,
         log_context: &AdapterLogSchema,
+        skip_pro_epi: bool
     ) -> Result<(VMStatus, TransactionOutputExt, Option<String>), VMStatus>;
 
     fn validate_signature_checked_transaction<S: MoveResolverExt, SS: MoveResolverExt>(

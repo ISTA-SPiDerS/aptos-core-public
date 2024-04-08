@@ -85,7 +85,7 @@ impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
 
         match self
             .vm
-            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context)
+            .execute_single_transaction(txn, &view.as_move_resolver(), &log_context, false)
         {
             Ok((vm_status, mut output_ext, sender)) => {
                 if materialize_deltas {
