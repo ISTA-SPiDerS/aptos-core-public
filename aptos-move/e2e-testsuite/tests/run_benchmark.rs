@@ -377,7 +377,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut executor = FakeExecutor::from_head_genesis();
         //executor.set_golden_file(name);
 
-        let accounts = executor.create_accounts(289023, INITIAL_BALANCE, SEQ_NUM);
+        let accounts = executor.create_accounts(num_accounts, INITIAL_BALANCE, SEQ_NUM);
 
         let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
         let mut seq_num = HashMap::new();
