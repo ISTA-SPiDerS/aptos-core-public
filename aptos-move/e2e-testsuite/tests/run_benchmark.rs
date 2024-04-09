@@ -382,7 +382,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let (module_owner, module_id) = create_module(&mut executor, module_path.to_string());
         let mut seq_num = HashMap::new();
 
-        for idx in 0..289023 {
+        for idx in 0..num_accounts {
             seq_num.insert(idx, SEQ_NUM);
         }
         seq_num.insert(usize::MAX, SEQ_NUM + 1);
