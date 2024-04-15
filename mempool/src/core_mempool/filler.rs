@@ -236,13 +236,6 @@ impl BlockFiller for DependencyFiller {
             }
 
             let gas_used = (gas / 10) as u16;
-            if writeset.is_empty()
-            {
-                return_vec.push((writeset, read_set, gas, tx));
-                println!("This should never happen!");
-                continue;
-            }
-
             let raw_user_state_key = tx.sender().to_vec();
             if good_block && skipped_users.contains(&raw_user_state_key)
             {
@@ -281,11 +274,9 @@ impl BlockFiller for DependencyFiller {
                 continue;
             }
 
-            let mut founduser = false;
             if let Some((time, key)) = last_touched.get(&raw_user_state_key) {
                 arrival_time = max(arrival_time, *time);
                 dependencies.insert(*key);
-                founduser = true;
             }
 
             // Check if there is room for the new block.
