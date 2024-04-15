@@ -236,6 +236,13 @@ impl BlockFiller for DependencyFiller {
             }
 
             let gas_used = (gas / 10) as u16;
+            if writeset.is_empty()
+            {
+                return_vec.push((writeset, read_set, gas, tx));
+                println!("This should never happen!");
+                continue;
+            }
+
             let raw_user_state_key = tx.sender().to_vec();
             if good_block && skipped_users.contains(&raw_user_state_key)
             {
@@ -273,7 +280,14 @@ impl BlockFiller for DependencyFiller {
                 non_user_skip += 1;
                 continue;
             }
-            
+
+            let mut founduser = false;
+            if let Some((time, key)) = last_touched.get(&raw_user_state_key) {
+                arrival_time = max(arrival_time, *time);
+                dependencies.insert(*key);
+                founduser = true;
+            }
+
             // Check if there is room for the new block.
             let finish_time = arrival_time + gas_used as u32;
             if good_block && finish_time > self.gas_per_core as u32 {
@@ -307,6 +321,11 @@ impl BlockFiller for DependencyFiller {
                 if finish_time > curr_max {
                     last_touched.insert(raw.to_vec(), (finish_time, current_idx));
                 }
+            }
+
+            let curr_max = last_touched.get(&raw_user_state_key).unwrap_or(&(0u32, 0)).0;
+            if finish_time > curr_max {
+                last_touched.insert(raw_user_state_key, (finish_time, current_idx));
             }
 
             len += 1;
