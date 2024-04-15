@@ -487,9 +487,8 @@ impl Scheduler {
     ) -> Option<DependencyCondvar> {
         // Note: Could pre-check that txn dep_txn_idx isn't in an executed state, but the caller
         // usually has just observed the read dependency.
-
         // Create a condition variable associated with the dependency.
-        panic!("This should not be called");
+        self.critical_path_parent[dep_txn_idx].push(txn_idx);
         None
     }
 
