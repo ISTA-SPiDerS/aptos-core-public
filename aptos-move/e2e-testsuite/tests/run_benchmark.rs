@@ -83,33 +83,13 @@ fn main() {
 
     println!("{:?}", args);
 
-    // 750000 for NFT & DEX
-    // 4500000 for solana
-    // 1500000 for p2p
-
-    // Evaluate 5 things:
-    // a) Good blocks Pythia vs Bad blocks Pythia (hint based/pessimistic) = 2
-    // b) Good blocks BlockSTM vs Good blocks BlockSTM (optimistic) = 2
-    // c) Varying workload and how we adjust to it.
-
-    let num_accounts = 100_000;
+    let num_accounts = 100000;
     let block_size = 10000;
     let core_set = [4,8,12,16,20,24,28,32];
-    //let core_set = [20];
 
     let trial_count = 5;
     let modes = [Pythia_Sig];
     let additional_modes = ["Good", ""];
-
-    //50 for 300k skipped
-
-    // We divide input transactions into batches.
-    // We try the first batch and try to schedule transactions, if we scheduled less than expected, we relax the rules for the next batch
-    // If we notice that we tried to schedule a batch and couldn't we mark this batch as "all contended" to be then executed on the critical path later (avoids repetitive scheduling)
-
-    // When scheduling we do the normal read-set/write-set comparison and try to compare this to some max chain length (very greedy)
-    // We also check for transactions that unify more than 4 critical paths and if we're above 1k transactions only schedule them in the next block.
-    // todo: Make this critical path of 10k/cores length as it is already for the "length of critical path calculation"
 
     if has_spec_set {
         let mut run_spec: LoadType = LoadType::from_str(args[2].as_str()).unwrap();
@@ -118,7 +98,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1700000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, NFT, 1300000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
@@ -128,7 +108,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 20000000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, MIXED, 18000000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
@@ -148,7 +128,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1500000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, DEXBURSTY, 1300000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
@@ -158,7 +138,7 @@ fn main() {
                 for mode in modes {
                     for mode_two in additional_modes {
                         for c in core_set {
-                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2300000, mode_two, false);
+                            let mut time = runExperimentWithSetting(mode, c, trial_count, num_accounts, block_size, P2PTX, 2000000, mode_two, false);
                         }
                         println!("#################################################################################");
                     }
