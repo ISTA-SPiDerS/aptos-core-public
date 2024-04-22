@@ -97,7 +97,7 @@ fn main() {
     let core_set = [4,8,12,16,20,24,28,32];
     //let core_set = [20];
 
-    let trial_count = 5;
+    let trial_count = 10;
     let modes = [BlockSTM_Sig];
     let additional_modes = ["Good", ""];
 
