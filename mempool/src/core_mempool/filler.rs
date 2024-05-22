@@ -250,11 +250,12 @@ impl BlockFiller for DependencyFiller {
 
             let mut bail = false;
             let mut hot_read_access = 0;
+            let hot_read_limit = (self.total_estimated_gas as u32) / self.cores;
             for read in read_set.iter() {
                 if let Some((time, key)) = last_touched.get(read.get_raw_ref()) {
                     arrival_time = max(arrival_time, *time);
 
-                    if limit_hot_reads && *time > (self.total_estimated_gas as u32) / self.cores {
+                    if limit_hot_reads && *time > hot_read_limit {
                         hot_read_access += 1;
                     }
                     dependencies.insert(*key);
