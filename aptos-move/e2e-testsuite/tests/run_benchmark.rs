@@ -650,7 +650,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
 
         if dif > 0 && dif * 2 < per_batch_target
         {
-            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/(dif*2), 100))as u64);
+            filler.set_gas_per_core(((max_gas/cores) * usize::min(per_batch_target/(dif*2), 20))as u64);
             relaxed += 1;
             println!("Relax filler! {} {} {}", dif, per_batch_target, len)
         }
@@ -671,7 +671,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         if prod {
             println!("elapsed: {}", total_filler_time);
 
-            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) || (relaxed > 2 && dif <= 1) {
+            if len >= 9990 || index + 1 >= num_blocks || (startlen == 10000 && dif == 0) || (relaxed > 1 && dif <= 1) {
                 println!("done {} {} {} {}", len, index, num_blocks, first_iter_tx);
                 break;
             }
