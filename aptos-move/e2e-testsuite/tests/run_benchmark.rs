@@ -94,12 +94,12 @@ fn main() {
 
     let num_accounts = 100000;
     let block_size = 10000;
-    let core_set = [4,8,12,16,20,24,28,32];
+    let core_set = [2,4,8,12,16,20,24,28,32];
     //let core_set = [20];
 
     let trial_count = 10;
     let modes = [Pythia_Sig];
-    let additional_modes = ["Good", ""];
+    let additional_modes = [""];
 
     //50 for 300k skipped
 
