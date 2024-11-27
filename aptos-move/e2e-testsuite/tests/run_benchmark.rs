@@ -690,7 +690,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     // Resetting for next block!
     SYNC_CACHE.lock().unwrap().clear();
 
-    (TransactionRegister::new(txns, Vec::new(), Vec::new()), total_filler_time, first_iter_tx)
+    (TransactionRegister::new(txns, gas_estimates, dependencies), total_filler_time, first_iter_tx)
 }
 
 //Create block with coin exchange transactions
