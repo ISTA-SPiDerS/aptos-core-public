@@ -1,25 +1,19 @@
-<a href="https://aptos.dev">
-	<img width="100%" src="./.assets/aptos_banner.png" alt="Aptos Banner" />
-</a>
+# Pythia:
 
----
+This is a fork of the Aptos-Core Repository:
+- [Aptos Core Repository](https://github.com/aptos-labs/aptos-core)
+- [Aptos Labs](https://aptoslabs.com/)
 
-[![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
-[![Lint+Test](https://github.com/aptos-labs/aptos-core/actions/workflows/lint-test.yaml/badge.svg)](https://github.com/aptos-labs/aptos-core/actions/workflows/lint-test.yaml)
-[![codecov](https://codecov.io/gh/aptos-labs/aptos-core/branch/main/graph/badge.svg?token=X01RKXSGDE)](https://codecov.io/gh/aptos-labs/aptos-core)
-[![Discord chat](https://img.shields.io/discord/945856774056083548?style=flat-square)](https://discord.gg/aptoslabs)
 
-Aptos is a layer 1 blockchain bringing a paradigm shift to Web3 through better technology and user experience. Built with Move to create a home for developers building next-gen applications.
+The workload files can be found under:
+- [Solana/Mixed](aptos-move/e2e-tests/src/solana_distribution.rs)
+- [P2P/NFT](aptos-move/e2e-tests/src/account_activity_distribution.rs)
+- [DEX](aptos-move/e2e-tests/src/uniswap_distribution.rs)
 
-## Getting Started
+The benchmark is invoked in: [Run_Benchmark](aptos-move/e2e-testsuite/tests/run_benchmark.rs)
+and the changes to the scheduler can be found in: [Scheduler](aptos-move/block-executor/src/scheduler.rs) and [Executor](aptos-move/block-executor/src/executor.rs)
 
-* [Aptos Labs](https://aptoslabs.com/)
-* [Aptos Developer Network](https://aptos.dev)
-* [Getting Started](https://aptos.dev/guides/getting-started)
-* Join us on the [Aptos Discord](https://discord.gg/aptoslabs).
+To run the benchmark enter [Benchmark folder](aptos-move/e2e-testsuite) and run: "cargo test main --release | grep "#" > output.txt"
+Make sure to get the results from both the Pythia-Benchmark branch as well as the BlockSTM-Benchmark branch
+ 
 
-## Contributing
-
-You can learn more about contributing to the Aptos project by reading our [Contribution Guide](https://github.com/aptos-labs/aptos-core/blob/main/CONTRIBUTING.md) and by viewing our [Code of Conduct](https://github.com/aptos-labs/aptos-core/blob/main/CODE_OF_CONDUCT.md).
-
-Aptos Core is licensed under [Apache 2.0](https://github.com/aptos-labs/aptos-core/blob/main/LICENSE).
