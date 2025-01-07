@@ -73,6 +73,8 @@ const SEQ_NUM: u64 = 10;
 const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
+const BATCHES: usize = 3;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -421,7 +423,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             let dif = first_iter_tx - total_tx;
             total_tx += dif;
             println!("total: {}", total_tx);
-            if total_tx >= 30000 {
+            if total_tx >= BATCHES as u16 * 10000 {
                 run = false;
             }
 
@@ -516,7 +518,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         local_stats.insert("p90".to_string(), vec![dataFrame.percentile(90) as u128]);
         local_stats.insert("p95".to_string(), vec![dataFrame.percentile(95) as u128]);
 
-        let avg = total/10000;
+        let avg = total/(BATCHES as u128 * 10000);
         local_stats.insert("mean_latency".to_string(), vec![avg.into()]);
 
         for (key, value) in local_stats
@@ -677,7 +679,8 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         prev_filler_state = len;
         std::mem::replace(vec_at_index, result);
 
-        if index <= 2 {
+        // If index is startindex do
+        if index <= (BATCHES-1) {
             first_iter_tx += (10000 - result_len) as u16;
         }
 
