@@ -94,7 +94,7 @@ fn main() {
 
     let num_accounts = 100000;
     let block_size = 10000;
-    let core_set = [4,8,12,16,20,24,28,32];
+    let core_set = [16];
     //let core_set = [20];
 
     let trial_count = 10;
@@ -416,13 +416,13 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
             let dif = first_iter_tx - total_tx;
             total_tx = first_iter_tx;
-            if total_tx >= 10000 {
+            if total_tx >= 30000 {
                 run = false;
             }
 
             // Map to user transactions.
             let block = return_block.map_par_txns(Transaction::UserTransaction);
-            if block.len() < 10000 && abort_if_lower {
+            if block.len() < 30000 && abort_if_lower {
                 println!("Only {} in block: {}", block.len(), filler_time);
                 return u128::MAX;
             }
@@ -504,6 +504,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
 
         let mut dataFrame = Data::new(data);
+        local_stats.insert("p25".to_string(), vec![dataFrame.percentile(25) as u128]);
         local_stats.insert("p50".to_string(), vec![dataFrame.percentile(50) as u128]);
         local_stats.insert("p75".to_string(), vec![dataFrame.percentile(75) as u128]);
         local_stats.insert("p90".to_string(), vec![dataFrame.percentile(90) as u128]);
@@ -662,7 +663,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         prev_filler_state = len;
         std::mem::replace(vec_at_index, result);
 
-        if index == 0 {
+        if index <= 2 {
             first_iter_tx = (10000 - result_len) as u16;
         }
 
