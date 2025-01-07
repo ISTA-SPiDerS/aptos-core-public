@@ -414,15 +414,21 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
             let (return_block, filler_time, first_iter_tx) = get_transaction_register(&mut main_block, &executor, c, max_gas, !mode_two.is_empty(), true, &mut full_block_skip);
 
+            // 5k transactions were included
+            // 7k transactions were included
+            // 9k transactions were included
+            // 10k transactions were included
             let dif = first_iter_tx - total_tx;
-            total_tx = first_iter_tx;
+            total_tx += dif;
+            println!("total: {}", total_tx);
             if total_tx >= 30000 {
                 run = false;
             }
 
+
             // Map to user transactions.
             let block = return_block.map_par_txns(Transaction::UserTransaction);
-            if block.len() < 30000 && abort_if_lower {
+            if block.len() < 10000 && abort_if_lower {
                 println!("Only {} in block: {}", block.len(), filler_time);
                 return u128::MAX;
             }
@@ -583,7 +589,13 @@ fn run_warmup(mode: ExecutionMode, c: usize, block_size: u64, load_type: LoadTyp
     println!("end warump");
 }
 
-fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>, executor: &FakeExecutor, cores: usize, max_gas: usize, good_block: bool, prod: bool, full_block_skip: &mut Vec<bool>) -> (TransactionRegister<SignedTransaction>, u128, u16) {
+fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u32, SignedTransaction)>>,
+                            executor: &FakeExecutor,
+                            cores: usize,
+                            max_gas: usize,
+                            good_block: bool,
+                            prod: bool,
+                            full_block_skip: &mut Vec<bool>) -> (TransactionRegister<SignedTransaction>, u128, u16) {
     let goal_qty = 10_000;
     let mut filler: DependencyFiller = DependencyFiller::new(
         (max_gas / cores) as u64,
@@ -609,6 +621,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     {
         let start = Instant::now();
         let mut vec_at_index = txns.get_mut(index).unwrap();
+
         if !is_first && *full_block_skip.get(index).unwrap() {
 
             for (w, r, g, tx) in vec_at_index {
@@ -630,6 +643,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         }
 
         if startlen == 0 {
+            first_iter_tx += 10000;
             if prev_filler_state >= 9990 || index + 1 >= num_blocks {
                 println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
                 break;
@@ -664,7 +678,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
         std::mem::replace(vec_at_index, result);
 
         if index <= 2 {
-            first_iter_tx = (10000 - result_len) as u16;
+            first_iter_tx += (10000 - result_len) as u16;
         }
 
         let elapsed = start.elapsed().as_millis();
