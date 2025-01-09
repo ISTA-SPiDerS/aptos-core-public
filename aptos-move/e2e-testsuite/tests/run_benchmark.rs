@@ -73,7 +73,7 @@ const SEQ_NUM: u64 = 10;
 const MAX_COIN_NUM: usize = 1000;
 const CORES: u64 = 10;
 
-const BATCHES: usize = 3;
+const BATCHES: usize = 1;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
