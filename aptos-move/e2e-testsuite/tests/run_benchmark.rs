@@ -391,7 +391,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
 
         run_warmup(mode, c, 10000, load_type, max_gas, &mut seq_num, module_owner.clone(), &module_id, accounts.clone(), &mut executor);
 
-        let mut multiplier = 1;
+        let mut multiplier = BATCHES as u64;
         if !mode_two.is_empty()
         {
             multiplier = c as u64;
@@ -423,7 +423,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             println!("total: {} {}", total_tx, first_iter_tx);
             let dif = first_iter_tx - total_tx;
             total_tx = first_iter_tx;
-            if total_tx >= BATCHES as u16 * 10000 || mode_two.is_empty() {
+            if total_tx >= BATCHES as u16 * 10000 {
                 run = false;
             }
 
@@ -502,11 +502,11 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         let mut data = vec![];
         let mut lat = 0;
         let mut total = 0;
-        for (key, value) in latvec
+        for (qty, latency) in latvec
         {
-            lat = lat + value;
-            total+= key as u128 * lat;
-            for i in 0..key {
+            lat = lat + latency;
+            total+= qty as u128 * lat;
+            for i in 0..qty {
                 data.push(lat as f64);
             }
         }
