@@ -423,7 +423,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             let dif = first_iter_tx - total_tx;
             total_tx += dif;
             println!("total: {}", total_tx);
-            if total_tx >= BATCHES as u16 * 10000 {
+            if total_tx >= BATCHES as u16 * 10000 || mode_two.is_empty() {
                 run = false;
             }
 
