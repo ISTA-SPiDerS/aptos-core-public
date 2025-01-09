@@ -420,9 +420,9 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
             // 7k transactions were included
             // 9k transactions were included
             // 10k transactions were included
+            println!("total: {} {}", total_tx, first_iter_tx);
             let dif = first_iter_tx - total_tx;
-            total_tx += dif;
-            println!("total: {}", total_tx);
+            total_tx = first_iter_tx;
             if total_tx >= BATCHES as u16 * 10000 || mode_two.is_empty() {
                 run = false;
             }
@@ -623,6 +623,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
     {
         let start = Instant::now();
         let mut vec_at_index = txns.get_mut(index).unwrap();
+        let startlen = vec_at_index.len();
 
         if !is_first && *full_block_skip.get(index).unwrap() {
 
@@ -631,7 +632,7 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
             }
             println!("Skipping batch {}", index);
             index +=1;
-
+            first_iter_tx += 10000 - startlen as u16;
             if index + 1 >= num_blocks {
                 println!("done {} {} {} {}", prev_filler_state, index, num_blocks, first_iter_tx);
                 break;
@@ -639,7 +640,6 @@ fn get_transaction_register(txns: &mut Vec<Vec<(WriteSet, BTreeSet<StateKey>, u3
             continue;
         }
 
-        let startlen = vec_at_index.len();
         if startlen > 0 {
             is_first = false;
         }
