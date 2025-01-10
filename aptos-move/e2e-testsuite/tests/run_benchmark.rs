@@ -512,6 +512,7 @@ fn runExperimentWithSetting(mode: ExecutionMode, c: usize, trial_count: usize, n
         }
 
         let mut dataFrame = Data::new(data);
+        local_stats.insert("p10".to_string(), vec![dataFrame.percentile(10) as u128]);
         local_stats.insert("p25".to_string(), vec![dataFrame.percentile(25) as u128]);
         local_stats.insert("p50".to_string(), vec![dataFrame.percentile(50) as u128]);
         local_stats.insert("p75".to_string(), vec![dataFrame.percentile(75) as u128]);
