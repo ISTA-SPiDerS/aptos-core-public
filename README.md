@@ -1,4 +1,4 @@
-# Anthemius[Chrion]:
+# Anthemius[BlockSTM]:
 
 This is a fork of the Aptos-Core Repository:
 - [Aptos Core Repository](https://github.com/aptos-labs/aptos-core)
